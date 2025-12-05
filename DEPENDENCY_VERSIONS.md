@@ -92,7 +92,20 @@ These dependencies were added for Vite Plugin Foundation & Router Infrastructure
 |------------|---------|---------|-------|
 | `chokidar` | `^5.0.0` | vite-plugin-ixflare | File watching for route changes (ESM-only, Node 20+) |
 | `fast-glob` | `^3.3.3` | vite-plugin-ixflare | File discovery for routes |
-| `miniflare` | `^4.20251202.1` | vite-plugin-ixflare (devDep) | Local Workers runtime simulation - to be integrated in Epic 6 |
+| `@cloudflare/vite-plugin` | `^1.0.0` | vite-plugin-ixflare (peerDep), templates | Workers runtime integration - see ADR-001 |
+
+### Removed Dependencies (ADR-001, 2025-12-05)
+
+| Dependency | Previous Version | Reason |
+|------------|------------------|--------|
+| ~~`miniflare`~~ | `^4.20251202.1` | **REMOVED** - Miniflare is "lower level API for tools creators". Use `@cloudflare/vite-plugin` instead, which handles Miniflare internally. |
+
+**ADR-001 Rationale:**
+- Cloudflare recommends using `@cloudflare/vite-plugin` for Vite-based frameworks
+- The Cloudflare plugin runs workerd for production parity
+- Bindings (D1, KV, R2) configured via `wrangler.toml`
+- All major frameworks (React Router v7, TanStack Start) use this approach
+- See: `docs/architecture/adr-001-cloudflare-vite-plugin-integration.md`
 
 ---
 

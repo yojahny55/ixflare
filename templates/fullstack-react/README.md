@@ -15,6 +15,57 @@ npm run build
 npm run deploy
 ```
 
+## Architecture
+
+This template uses a **plugin composition** pattern for local development:
+
+```typescript
+// vite.config.ts
+import { cloudflare } from '@cloudflare/vite-plugin'
+import { ixflare } from 'vite-plugin-ixflare'
+
+export default defineConfig({
+  plugins: [
+    cloudflare(),  // Workers runtime: D1, KV, R2, workerd
+    react(),       // React JSX/TSX support
+    ixflare(),     // File-based routing
+  ],
+})
+```
+
+**Plugin Responsibilities:**
+- **@cloudflare/vite-plugin**: Runs actual `workerd` runtime for production parity. Provides D1, KV, R2, Durable Objects bindings. Reads configuration from `wrangler.toml`.
+- **vite-plugin-ixflare**: Discovers routes from `src/routes/`, generates route manifest, handles route-specific HMR.
+- **@vitejs/plugin-react**: React JSX/TSX compilation, Fast Refresh for component HMR.
+
+## Bindings Configuration
+
+Configure Cloudflare bindings in `wrangler.toml`. They're automatically available in local development:
+
+```toml
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "my-database"
+
+# KV Namespace
+[[kv_namespaces]]
+binding = "CACHE"
+
+# R2 Bucket
+[[r2_buckets]]
+binding = "STORAGE"
+```
+
+Access bindings in your route handlers:
+
+```typescript
+export async function GET({ env }: RouteContext) {
+  const result = await env.DB.prepare('SELECT * FROM users').all()
+  return Response.json(result)
+}
+```
+
 ## First-Time Deployment
 
 Deploy your React application to Cloudflare Workers in minutes! The CLI handles all the complexity.

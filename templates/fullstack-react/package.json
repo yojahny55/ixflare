@@ -21,6 +21,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.0.0",
     "@cloudflare/workers-types": "^4.0.0",
     "@ixflare/tsconfig": "workspace:*",
     "@types/react": "^19.0.0",

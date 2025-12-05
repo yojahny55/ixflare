@@ -1,15 +1,36 @@
 /**
  * @module plugin
- * @description Main Vite plugin implementation with router infrastructure
+ * @description Main Vite plugin for file-based routing
+ *
+ * This plugin focuses on file-based route discovery and manifest generation.
+ * Workers runtime (D1, KV, R2, workerd) is handled by @cloudflare/vite-plugin.
+ *
+ * Usage:
+ * ```typescript
+ * import { cloudflare } from '@cloudflare/vite-plugin'
+ * import { ixflare } from 'vite-plugin-ixflare'
+ *
+ * export default defineConfig({
+ *   plugins: [
+ *     cloudflare(),  // Workers runtime
+ *     ixflare(),     // File-based routing
+ *   ],
+ * })
+ * ```
+ *
+ * See: docs/architecture/adr-001-cloudflare-vite-plugin-integration.md
  */
 
 import { join } from 'node:path'
-import type { Plugin, ViteDevServer } from 'vite'
+import type { Plugin, ViteDevServer, ModuleNode } from 'vite'
 import type { IxflarePluginOptions } from './types'
 import { discoverRoutes, detectRouteConflicts, generateRouteManifest, type RouteManifest } from './router-codegen'
 import { createDevServer, type DevServer } from './dev-server'
 import { buildRoutes, bundleManifest, optimizeRoutes } from './build'
-import { setupHMR, handleRouteHMR, invalidateRouteModule } from './hmr'
+import { setupHMR, handleRouteHMR } from './hmr'
+
+const VIRTUAL_MODULE_ID = 'virtual:ixflare-routes'
+const RESOLVED_VIRTUAL_MODULE_ID = '\0' + VIRTUAL_MODULE_ID
 
 export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
   const routesDir = options.routesDir || 'src/routes'
@@ -18,11 +39,12 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
   let devServer: DevServer | null = null
   let viteServer: ViteDevServer | null = null
   let routeManifest: RouteManifest | null = null
+  let resolvedRoutesDir: string = ''
 
   return {
     name: 'vite-plugin-ixflare',
 
-    config(config, { command: _command }) {
+    config(config) {
       return {
         ...config,
         build: {
@@ -32,21 +54,39 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
       }
     },
 
+    // Resolve virtual module ID
+    resolveId(id) {
+      if (id === VIRTUAL_MODULE_ID) {
+        return RESOLVED_VIRTUAL_MODULE_ID
+      }
+      return null
+    },
+
+    // Load virtual module content
+    load(id) {
+      if (id === RESOLVED_VIRTUAL_MODULE_ID) {
+        if (routeManifest) {
+          return bundleManifest(routeManifest)
+        }
+        // Return empty manifest if not yet initialized
+        return `export const routeManifest = { routes: [], generatedAt: ${Date.now()}, version: "1.0.0" };`
+      }
+      return null
+    },
+
     async configureServer(server: ViteDevServer) {
       viteServer = server
+      resolvedRoutesDir = join(server.config.root, routesDir)
 
-      // Setup HMR
+      // Setup HMR for route manifest
       if (hmrEnabled) {
         setupHMR(server, { enabled: true })
       }
 
-      // Create dev server with file watching
-      const resolvedRoutesDir = join(server.config.root, routesDir)
-
+      // Create dev server with file watching for route changes
       devServer = createDevServer({
         routesDir: resolvedRoutesDir,
         port: server.config.server.port || 5173,
-        miniflare: options.miniflare,
         onRouteChange: async (result) => {
           if (result.regenerateManifest) {
             // Regenerate route manifest
@@ -54,9 +94,21 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
             detectRouteConflicts(routes)
             routeManifest = generateRouteManifest(routes)
 
-            // Invalidate modules for HMR
-            if (hmrEnabled && viteServer) {
-              invalidateRouteModule(result.path, viteServer)
+            // Invalidate the virtual module to trigger HMR
+            const virtualModule = server.moduleGraph.getModuleById(RESOLVED_VIRTUAL_MODULE_ID)
+            if (virtualModule) {
+              server.moduleGraph.invalidateModule(virtualModule)
+
+              // Send HMR update for the virtual module
+              server.ws.send({
+                type: 'update',
+                updates: [{
+                  type: 'js-update',
+                  path: VIRTUAL_MODULE_ID,
+                  acceptedPath: VIRTUAL_MODULE_ID,
+                  timestamp: Date.now(),
+                }],
+              })
             }
 
             server.config.logger.info(
@@ -78,52 +130,47 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
       )
     },
 
+    async buildStart() {
+      // For build mode, we need to generate manifest even without configureServer
+      if (!viteServer) {
+        // Running in build mode, not dev mode
+        // We'll generate manifest in buildEnd when we have access to config
+      }
+    },
+
     async buildEnd() {
       // Production build - generate optimized route manifest
-      if (viteServer) {
-        const resolvedRoutesDir = join(viteServer.config.root, routesDir)
-        const outputDir = viteServer.config.build.outDir
+      // This runs in both dev and build modes
+      if (resolvedRoutesDir) {
+        try {
+          const routes = await discoverRoutes(resolvedRoutesDir)
+          detectRouteConflicts(routes)
+          const manifest = generateRouteManifest(routes)
 
-        const result = await buildRoutes({
-          routesDir: resolvedRoutesDir,
-          outputDir,
-          sourceMaps: viteServer.config.build.sourcemap !== false,
-        })
+          // Optimize routes for production (sort by specificity)
+          routeManifest = optimizeRoutes(manifest)
 
-        // Optimize routes for production
-        const optimized = optimizeRoutes(result.manifest)
-
-        // Bundle manifest as importable module
-        const bundled = bundleManifest(optimized)
-
-        // Log build info
-        this.info(
-          `[ixflare] Built ${optimized.routes.length} routes for production`
-        )
-
-        // Emit manifest as virtual module (will be handled by transform hook)
-        routeManifest = optimized
-      }
-    },
-
-    transform(code, id) {
-      // Serve virtual route manifest module
-      if (id === 'virtual:ixflare-routes') {
-        if (routeManifest) {
-          return {
-            code: bundleManifest(routeManifest),
-            map: null,
-          }
+          this.info(
+            `[ixflare] Built ${routeManifest.routes.length} routes for production`
+          )
+        } catch (error) {
+          // Route discovery might fail if routesDir doesn't exist yet
+          this.warn('[ixflare] Could not discover routes: ' + (error as Error).message)
         }
       }
-
-      return null
     },
 
-    handleHotUpdate({ file, server }) {
+    handleHotUpdate({ file, server }): ModuleNode[] | void {
       // Handle HMR for route files
       if (hmrEnabled && file.includes(routesDir)) {
         const modules = handleRouteHMR(file, server)
+
+        // Also invalidate virtual module if it exists
+        const virtualModule = server.moduleGraph.getModuleById(RESOLVED_VIRTUAL_MODULE_ID)
+        if (virtualModule && modules) {
+          return [...modules, virtualModule]
+        }
+
         return modules
       }
 

@@ -1,23 +1,37 @@
 /**
  * @module dev-server
- * @description Development server with file watching and Miniflare integration
+ * @description Development server with file watching for route changes
  * @node-only
+ *
+ * Note: Workers runtime simulation (D1, KV, R2, workerd) is handled by @cloudflare/vite-plugin.
+ * This module focuses solely on file watching for route changes.
+ * See docs/architecture/adr-001-cloudflare-vite-plugin-integration.md
  */
 
 import chokidar, { type FSWatcher } from 'chokidar'
 import { basename, extname } from 'node:path'
 
+/**
+ * @deprecated MiniflareConfig is no longer used. Workers runtime is handled by @cloudflare/vite-plugin.
+ * Bindings should be configured in wrangler.toml.
+ */
 export interface MiniflareConfig {
+  /** @deprecated Use wrangler.toml [[d1_databases]] */
   d1Databases?: string[]
+  /** @deprecated Use wrangler.toml [[kv_namespaces]] */
   kvNamespaces?: string[]
+  /** @deprecated Use wrangler.toml [[r2_buckets]] */
   r2Buckets?: string[]
+  /** @deprecated Use wrangler.toml [[durable_objects.bindings]] */
   durableObjects?: Record<string, string>
+  /** @deprecated Use wrangler.toml compatibility_date */
   compatibilityDate?: string
 }
 
 export interface DevServerConfig {
   routesDir: string
   port?: number
+  /** @deprecated Use @cloudflare/vite-plugin for Workers runtime */
   miniflare?: MiniflareConfig
   onRouteChange?: (event: RouteChangeResult) => void
 }
@@ -51,7 +65,7 @@ export function setupFileWatching(routesDir: string): FSWatcher {
       '**/node_modules/**',
       '**/.git/**',
       '**/.*', // dot files
-      '**/_*', // underscore-prefixed files
+      '**/_*', // underscore-prefixed files (layouts, middleware)
     ],
     awaitWriteFinish: {
       stabilityThreshold: 100,
@@ -65,7 +79,7 @@ export function setupFileWatching(routesDir: string): FSWatcher {
 /**
  * Handle route file change events
  */
-export function handleRouteChange(event: WatchEvent, routesDir: string): RouteChangeResult {
+export function handleRouteChange(event: WatchEvent, _routesDir: string): RouteChangeResult {
   const fileName = basename(event.path)
   const fileExt = extname(event.path)
 
@@ -97,7 +111,10 @@ export function handleRouteChange(event: WatchEvent, routesDir: string): RouteCh
 }
 
 /**
- * Create development server with file watching and Miniflare
+ * Create development server with file watching for route changes
+ *
+ * Note: Workers runtime (D1, KV, R2) is handled by @cloudflare/vite-plugin.
+ * This creates only the file watcher for route manifest regeneration.
  */
 export function createDevServer(config: DevServerConfig): DevServer {
   const watcher = setupFileWatching(config.routesDir)
@@ -128,12 +145,30 @@ export function createDevServer(config: DevServerConfig): DevServer {
 }
 
 /**
- * Setup Miniflare for local Workers simulation
- * Note: Actual Miniflare initialization will be done in the plugin's configureServer hook
- * This is a placeholder for configuration validation
+ * @deprecated Use @cloudflare/vite-plugin for Workers runtime simulation.
+ * This function is kept for backwards compatibility but does nothing useful.
+ *
+ * Configure Workers bindings in wrangler.toml instead:
+ * ```toml
+ * [[d1_databases]]
+ * binding = "DB"
+ * database_name = "my-db"
+ *
+ * [[kv_namespaces]]
+ * binding = "CACHE"
+ *
+ * [[r2_buckets]]
+ * binding = "STORAGE"
+ * ```
+ *
+ * See: docs/architecture/adr-001-cloudflare-vite-plugin-integration.md
  */
 export function setupMiniflare(config: MiniflareConfig): MiniflareConfig {
-  // Validate and return config
+  console.warn(
+    '[vite-plugin-ixflare] setupMiniflare is deprecated. ' +
+    'Use @cloudflare/vite-plugin for Workers runtime. ' +
+    'Configure bindings in wrangler.toml. See ADR-001.'
+  )
   return {
     d1Databases: config.d1Databases || [],
     kvNamespaces: config.kvNamespaces || [],
