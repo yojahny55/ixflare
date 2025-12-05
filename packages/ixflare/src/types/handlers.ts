@@ -82,3 +82,26 @@ export type ErrorHandler<Env = Record<string, unknown>> = (
   error: Error,
   context: EdgeContext<Env>
 ) => Promise<Response> | Response
+
+/**
+ * Arguments passed to layout loader functions
+ *
+ * @template TParams - Type of route parameters (inferred from Zod schema or Record<string, string>)
+ * @template Env - Type of environment bindings
+ */
+export type LayoutLoaderArgs<
+  TParams = Record<string, string>,
+  Env = Record<string, unknown>
+> = LoaderArgs<TParams, Env>
+
+/**
+ * Props passed to layout components
+ *
+ * @template TData - Type of data returned by layout loader
+ */
+export interface LayoutProps<TData = unknown> {
+  children: React.ReactNode
+  data?: TData
+  params?: Record<string, unknown>
+  request?: Request
+}

@@ -15,6 +15,9 @@ export {
   validateParams,
   matchRouteWithParams,
 } from './core/params'
+export { useLayoutData } from './core/layout'
+export { executeLoaders, executeLayoutLoaders } from './core/layout-loader'
+export type { LayoutLoaderFunction } from './core/layout-loader'
 
 // Config exports (primary API)
 export { defineConfig } from './config/define-config'
@@ -65,7 +68,7 @@ export {
 } from './types'
 
 // Handler type aliases (backward compatibility)
-export type { LoaderArgs, ActionArgs } from './types'
+export type { LoaderArgs, ActionArgs, LayoutLoaderArgs, LayoutProps } from './types'
 
 // Utility exports
 export { redactSecrets, redactString, isSensitiveKey } from './utils/redact'

@@ -7,6 +7,7 @@
 import { readFile } from 'node:fs/promises'
 import { relative, basename } from 'node:path'
 import fg from 'fast-glob'
+import { discoverLayouts, extractLayoutChain } from './layout-discovery'
 
 export interface RouteParam {
   name: string
@@ -21,7 +22,8 @@ export interface Route {
   params: RouteParam[]
   handlers: HttpMethod[]
   hasParamsSchema?: boolean // True if route exports 'params' Zod schema
-  layout?: string
+  layoutChain?: string[] // Array of layout paths from root to innermost
+  layoutHasLoader?: boolean[] // True for each layout that exports a loader function
   middleware?: string[]
 }
 
@@ -127,6 +129,9 @@ export async function parseRouteFile(filePath: string, routesDir: string): Promi
  * Discover all route files in a directory using fast-glob
  */
 export async function discoverRoutes(routesDir: string): Promise<Route[]> {
+  // First, discover all layouts to build hierarchy
+  const layouts = await discoverLayouts(routesDir)
+
   // Find all .ts, .tsx, .js, .jsx files, excluding:
   // - Files starting with underscore (_layout, _middleware)
   // - node_modules
@@ -143,6 +148,20 @@ export async function discoverRoutes(routesDir: string): Promise<Route[]> {
   for (const file of files) {
     try {
       const route = await parseRouteFile(file, routesDir)
+
+      // Compute layout chain for this route
+      const layoutChain = extractLayoutChain(route.file, layouts)
+      if (layoutChain.length > 0) {
+        route.layoutChain = layoutChain
+
+        // Map layout chain to loader flags
+        const layoutHasLoader = layoutChain.map((layoutFile) => {
+          const layout = layouts.find((l) => l.file === layoutFile)
+          return layout?.hasLoader ?? false
+        })
+        route.layoutHasLoader = layoutHasLoader
+      }
+
       routes.push(route)
     } catch (error) {
       // Only ignore expected errors (underscore-prefixed files)

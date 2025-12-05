@@ -107,14 +107,86 @@ src/routes/
     └── [slug].tsx      → /blog/:slug
 ```
 
+### Nested Layouts
+
+Use `_layout.tsx` files to wrap routes in your directory structure:
+
+```
+src/routes/
+├── _layout.tsx              → Root layout (wraps all routes)
+├── index.tsx                → / (wrapped by root layout)
+├── dashboard/
+│   ├── _layout.tsx          → Dashboard layout
+│   ├── index.tsx            → /dashboard (wrapped by root + dashboard)
+│   └── settings/
+│       ├── _layout.tsx      → Settings layout
+│       └── profile.tsx      → /dashboard/settings/profile (all 3 layouts)
+```
+
+**Layout Component:**
+```typescript
+// src/routes/dashboard/_layout.tsx
+import type { LayoutProps } from 'ixflare'
+
+export default function DashboardLayout({ children }: LayoutProps) {
+  return (
+    <div className="dashboard">
+      <Sidebar />
+      <main>{children}</main>
+    </div>
+  )
+}
+```
+
+**Layout with Loader (Data Fetching):**
+```typescript
+// src/routes/dashboard/_layout.tsx
+import type { LayoutProps, LayoutLoaderArgs } from 'ixflare'
+
+// Loader runs in parallel with page loader for optimal performance
+export async function loader({ env }: LayoutLoaderArgs) {
+  const user = await getCurrentUser(env)
+  return { user, theme: 'dark' }
+}
+
+export default function DashboardLayout({
+  children,
+  data
+}: LayoutProps<Awaited<ReturnType<typeof loader>>>) {
+  return (
+    <div data-theme={data.theme}>
+      <header>Welcome, {data.user.name}</header>
+      {children}
+    </div>
+  )
+}
+```
+
+**Accessing Layout Data in Child Components:**
+```typescript
+// Any child page/component can access parent layout data
+import { useLayoutData } from 'ixflare'
+
+function ProfilePage() {
+  const { user, theme } = useLayoutData<{ user: User; theme: string }>()
+  return <div>Current theme: {theme}</div>
+}
+```
+
+**Key Features:**
+- Layouts nest from outermost (root) to innermost
+- Layout loaders execute in **parallel** with page loaders for performance
+- Layouts preserve state during navigation (no unnecessary re-renders)
+- Deep nesting supported (5+ levels)
+
 ### Ignored Files
 
 Files starting with `_` are ignored and not treated as routes:
 
 ```
 src/routes/
-├── _layout.tsx         → Ignored (layout component)
-├── _middleware.ts      → Ignored (middleware)
+├── _layout.tsx         → Layout component (wraps routes)
+├── _middleware.ts      → Middleware (not a route)
 └── index.tsx           → / (route)
 ```
 

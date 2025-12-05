@@ -40,6 +40,8 @@ export type {
   RouteHandler,
   MiddlewareFunction,
   ErrorHandler,
+  LayoutLoaderArgs,
+  LayoutProps,
 } from './handlers'
 
 // Note: Cloudflare Workers types now provided by @cloudflare/workers-types
