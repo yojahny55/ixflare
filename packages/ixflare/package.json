@@ -48,6 +48,16 @@
         "types": "./dist/ssr.d.cts",
         "default": "./dist/ssr.cjs"
       }
+    },
+    "./config": {
+      "import": {
+        "types": "./dist/config.d.mts",
+        "default": "./dist/config.mjs"
+      },
+      "require": {
+        "types": "./dist/config.d.cts",
+        "default": "./dist/config.cjs"
+      }
     }
   },
   "files": [

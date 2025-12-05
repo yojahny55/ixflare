@@ -60,16 +60,19 @@ function formatIssue(issue: ZodIssue): ConfigIssue {
   let message = issue.message
 
   // Enhance message based on issue code
+  // Note: Zod 4.x uses 'origin' instead of 'type' for too_small/too_big issues
   if (issue.code === 'invalid_type') {
-    message = `Expected ${issue.expected}, received ${issue.received}`
+    message = `Expected ${issue.expected}, received ${typeof issue.input}`
   } else if (issue.code === 'too_small') {
-    if (issue.type === 'string') {
+    const origin = 'origin' in issue ? issue.origin : undefined
+    if (origin === 'string') {
       message = `String must be at least ${issue.minimum} character(s)`
-    } else if (issue.type === 'number') {
+    } else if (origin === 'number' || origin === 'int') {
       message = `Number must be greater than or equal to ${issue.minimum}`
     }
   } else if (issue.code === 'too_big') {
-    if (issue.type === 'string') {
+    const origin = 'origin' in issue ? issue.origin : undefined
+    if (origin === 'string') {
       message = `String must be at most ${issue.maximum} character(s)`
     }
   }
@@ -78,7 +81,7 @@ function formatIssue(issue: ZodIssue): ConfigIssue {
     path: path || 'config',
     message,
     expected: 'expected' in issue ? String(issue.expected) : undefined,
-    received: 'received' in issue ? String(issue.received) : undefined,
+    received: 'input' in issue ? String(typeof issue.input) : undefined,
   }
 }
 

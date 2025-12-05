@@ -283,10 +283,11 @@ export async function loadConfig(
   }
 
   // Merge environment variables into config
+  const rawEnv = (rawConfig as Record<string, unknown>).env
   const configWithEnv = {
     ...rawConfig,
     env: {
-      ...(rawConfig as Record<string, unknown>).env,
+      ...(rawEnv && typeof rawEnv === 'object' ? rawEnv : {}),
       ...mergedEnv,
     },
   }
