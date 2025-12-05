@@ -332,10 +332,18 @@ interface RouteManifest {
 }
 
 interface Route {
-  path: string          // /blog/:slug
-  file: string          // blog/[slug].tsx
-  params: RouteParam[]  // [{ name: 'slug', type: 'dynamic' }]
-  handlers: HttpMethod[] // ['GET', 'POST']
+  path: string              // /blog/:slug
+  file: string              // blog/[slug].tsx
+  params: RouteParam[]      // [{ name: 'slug', type: 'dynamic' }]
+  handlers: HttpMethod[]    // ['GET', 'POST']
+  hasParamsSchema?: boolean // True if route exports 'params' Zod schema
+  layoutChain?: string[]    // Layout files from root to innermost (e.g., ['_layout.tsx', 'dashboard/_layout.tsx'])
+  layoutHasLoader?: boolean[] // True for each layout that exports a loader function
+}
+
+interface RouteParam {
+  name: string
+  type: 'static' | 'dynamic' | 'catch-all'
 }
 ```
 

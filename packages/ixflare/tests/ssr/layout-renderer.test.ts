@@ -4,6 +4,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { renderLayoutChain, renderWithoutLayouts } from '../../src/ssr/layout-renderer'
+import { useLayoutData } from '../../src/core/layout'
 import { renderToString } from 'react-dom/server'
 import * as React from 'react'
 import type { LayoutProps } from '../../src/types/handlers'
@@ -215,6 +216,58 @@ describe('Layout Renderer', () => {
 
       expect(html).toContain('No data')
       expect(html).toContain('Content')
+    })
+
+    it('should accumulate context data correctly from parent to child', () => {
+      // This test verifies the fix for Issue #1: context data accumulation
+      // Each layout should see data from itself AND all parent layouts
+
+      function RootLayout({ children }: LayoutProps) {
+        const ctx = useLayoutData<{ root?: string }>()
+        return React.createElement(
+          'div',
+          { 'data-root-ctx': ctx.root || 'missing' },
+          children
+        )
+      }
+
+      function DashboardLayout({ children }: LayoutProps) {
+        const ctx = useLayoutData<{ root?: string; dashboard?: string }>()
+        return React.createElement(
+          'div',
+          {
+            'data-dash-root': ctx.root || 'missing',
+            'data-dash-dashboard': ctx.dashboard || 'missing',
+          },
+          children
+        )
+      }
+
+      function PageComponent() {
+        const ctx = useLayoutData<{ root?: string; dashboard?: string }>()
+        return React.createElement(
+          'p',
+          {},
+          `Page sees root=${ctx.root}, dashboard=${ctx.dashboard}`
+        )
+      }
+
+      const layouts = [RootLayout, DashboardLayout]
+      const layoutData = [{ root: 'rootValue' }, { dashboard: 'dashValue' }]
+      const pageContent = React.createElement(PageComponent)
+
+      const element = renderLayoutChain(layouts, layoutData, pageContent)
+      const html = renderToString(element)
+
+      // Root layout should see its own data
+      expect(html).toContain('data-root-ctx="rootValue"')
+
+      // Dashboard layout should see root + dashboard data
+      expect(html).toContain('data-dash-root="rootValue"')
+      expect(html).toContain('data-dash-dashboard="dashValue"')
+
+      // Page should see all accumulated data
+      expect(html).toContain('Page sees root=rootValue, dashboard=dashValue')
     })
   })
 

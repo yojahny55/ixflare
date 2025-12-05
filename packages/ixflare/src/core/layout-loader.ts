@@ -5,6 +5,7 @@
  */
 
 import type { LayoutLoaderArgs } from '../types/handlers'
+import { NotFoundError, AuthError, ForbiddenError, AppError } from '../errors'
 
 /**
  * Layout loader function signature
@@ -12,6 +13,61 @@ import type { LayoutLoaderArgs } from '../types/handlers'
 export type LayoutLoaderFunction<TData = unknown, Env = Record<string, unknown>> = (
   args: LayoutLoaderArgs<Record<string, string>, Env>
 ) => Promise<TData> | TData
+
+/**
+ * Error thrown during layout loader execution
+ * Preserves the original error and adds context about which layout failed
+ */
+export class LayoutLoaderError extends AppError {
+  constructor(
+    public readonly layoutIndex: number,
+    public readonly layoutFile: string | undefined,
+    public readonly originalError: Error
+  ) {
+    super(
+      'LAYOUT.LOADER_FAILED',
+      `Layout loader failed${layoutFile ? ` (${layoutFile})` : ` at index ${layoutIndex}`}: ${originalError.message}`,
+      originalError instanceof AppError ? originalError.status : 500
+    )
+    this.name = 'LayoutLoaderError'
+  }
+}
+
+/**
+ * Convert known error types to appropriate HTTP responses
+ * This integrates with the typed error classes from the architecture
+ */
+export function getLoaderErrorResponse(error: Error): Response {
+  if (error instanceof NotFoundError) {
+    return Response.json(
+      { error: { code: error.code, message: error.message, status: 404 } },
+      { status: 404 }
+    )
+  }
+  if (error instanceof AuthError) {
+    return Response.json(
+      { error: { code: error.code, message: error.message, status: 401 } },
+      { status: 401 }
+    )
+  }
+  if (error instanceof ForbiddenError) {
+    return Response.json(
+      { error: { code: error.code, message: error.message, status: 403 } },
+      { status: 403 }
+    )
+  }
+  if (error instanceof AppError) {
+    return Response.json(
+      { error: { code: error.code, message: error.message, status: error.status } },
+      { status: error.status }
+    )
+  }
+  // Unknown error - return 500
+  return Response.json(
+    { error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred', status: 500 } },
+    { status: 500 }
+  )
+}
 
 /**
  * Execute layout loaders in parallel with page loader
@@ -22,7 +78,9 @@ export type LayoutLoaderFunction<TData = unknown, Env = Record<string, unknown>>
  * @param layoutLoaders - Array of layout loader functions to execute
  * @param pageLoader - Optional page loader function
  * @param args - Arguments to pass to all loaders (request, params, env, etc.)
+ * @param layoutFiles - Optional array of layout file paths for error context
  * @returns Tuple of [layoutData[], pageData] where layoutData matches order of layoutLoaders
+ * @throws LayoutLoaderError if any loader fails (preserves original error type for handling)
  *
  * @example
  * ```typescript
@@ -39,14 +97,21 @@ export type LayoutLoaderFunction<TData = unknown, Env = Record<string, unknown>>
 export async function executeLoaders<Env = Record<string, unknown>>(
   layoutLoaders: LayoutLoaderFunction<unknown, Env>[],
   pageLoader: LayoutLoaderFunction<unknown, Env> | undefined,
-  args: LayoutLoaderArgs<Record<string, string>, Env>
+  args: LayoutLoaderArgs<Record<string, string>, Env>,
+  layoutFiles?: string[]
 ): Promise<[unknown[], unknown]> {
   // Execute ALL loaders in parallel using Promise.all
   const loaderPromises: Promise<unknown>[] = []
 
-  // Add layout loaders
-  for (const loader of layoutLoaders) {
-    loaderPromises.push(Promise.resolve(loader(args)))
+  // Add layout loaders with error wrapping for better context
+  for (let i = 0; i < layoutLoaders.length; i++) {
+    const loader = layoutLoaders[i]
+    const layoutFile = layoutFiles?.[i]
+    loaderPromises.push(
+      Promise.resolve(loader(args)).catch((error: Error) => {
+        throw new LayoutLoaderError(i, layoutFile, error)
+      })
+    )
   }
 
   // Add page loader at the end

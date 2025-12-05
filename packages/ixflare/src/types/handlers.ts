@@ -98,10 +98,18 @@ export type LayoutLoaderArgs<
  * Props passed to layout components
  *
  * @template TData - Type of data returned by layout loader
+ *
+ * Note: `data`, `params`, and `request` are marked optional for flexibility
+ * when layouts don't have loaders or when testing. In runtime, these will
+ * always be provided by the layout renderer.
  */
 export interface LayoutProps<TData = unknown> {
+  /** Child content to render within the layout */
   children: React.ReactNode
+  /** Data from the layout's loader function (undefined if no loader) */
   data?: TData
-  params?: Record<string, unknown>
+  /** Route parameters extracted from the URL path */
+  params?: Record<string, string>
+  /** The original Request object */
   request?: Request
 }

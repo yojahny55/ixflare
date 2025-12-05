@@ -16,7 +16,7 @@ export {
   matchRouteWithParams,
 } from './core/params'
 export { useLayoutData } from './core/layout'
-export { executeLoaders, executeLayoutLoaders } from './core/layout-loader'
+export { executeLoaders, executeLayoutLoaders, getLoaderErrorResponse, LayoutLoaderError } from './core/layout-loader'
 export type { LayoutLoaderFunction } from './core/layout-loader'
 
 // Config exports (primary API)

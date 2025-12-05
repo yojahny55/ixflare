@@ -20,7 +20,7 @@ export type LayoutComponent<TData = unknown> = React.ComponentType<LayoutProps<T
  * wrapping the next one via the `children` prop.
  *
  * Layout data is accumulated and provided via LayoutContext, allowing child
- * components to access data from any parent layout.
+ * components to access data from all PARENT layouts (not siblings or children).
  *
  * @param layoutChain - Array of layout components (outermost first)
  * @param layoutData - Array of data objects (one per layout)
@@ -34,13 +34,18 @@ export type LayoutComponent<TData = unknown> = React.ComponentType<LayoutProps<T
  * const layouts = [RootLayout, DashboardLayout, SettingsLayout]
  * const data = [{ theme: 'dark' }, { dashboard: {...} }, { settings: {...} }]
  * const element = renderLayoutChain(layouts, data, <Page />, {}, request)
+ * // Context at each level:
+ * // - RootLayout sees: { theme: 'dark' }
+ * // - DashboardLayout sees: { theme: 'dark', dashboard: {...} }
+ * // - SettingsLayout sees: { theme: 'dark', dashboard: {...}, settings: {...} }
+ * // - Page sees all accumulated data
  * ```
  */
 export function renderLayoutChain(
   layoutChain: LayoutComponent[],
   layoutData: unknown[],
   pageContent: React.ReactNode,
-  params: Record<string, unknown> = {},
+  params: Record<string, string> = {},
   request?: Request
 ): React.ReactElement {
   // Base case: no layouts, return page content wrapped in fragment
@@ -48,23 +53,35 @@ export function renderLayoutChain(
     return React.createElement(React.Fragment, {}, pageContent)
   }
 
-  // Accumulate layout data for context
-  const accumulatedData: Record<string, unknown> = {}
+  // Pre-compute accumulated data at each level (outermost to innermost)
+  // This ensures each layout's context includes all PARENT data, not child data
+  const accumulatedDataAtLevel: Record<string, unknown>[] = []
+  let accumulated: Record<string, unknown> = {}
+
+  for (let i = 0; i < layoutChain.length; i++) {
+    const data = layoutData[i]
+    if (data && typeof data === 'object') {
+      accumulated = { ...accumulated, ...(data as Record<string, unknown>) }
+    }
+    accumulatedDataAtLevel[i] = { ...accumulated }
+  }
 
   // Build nested structure from innermost to outermost (reverse order)
   let children: React.ReactNode = pageContent
+
+  // Wrap page content with full accumulated context (all layout data)
+  children = React.createElement(
+    LayoutContextProvider,
+    { value: accumulated },
+    children
+  )
 
   // Process layouts in reverse (innermost first) so we build the tree bottom-up
   for (let i = layoutChain.length - 1; i >= 0; i--) {
     const Layout = layoutChain[i]
     const data = layoutData[i]
 
-    // Accumulate data for this level
-    if (data && typeof data === 'object') {
-      Object.assign(accumulatedData, data)
-    }
-
-    // Create layout element with accumulated context
+    // Create layout element with its own data prop
     const layoutProps: LayoutProps = {
       children,
       data,
@@ -72,9 +89,10 @@ export function renderLayoutChain(
       request,
     }
 
+    // Each layout gets context with accumulated data up to and including its level
     children = React.createElement(
       LayoutContextProvider,
-      { value: accumulatedData },
+      { value: accumulatedDataAtLevel[i] },
       React.createElement(Layout, layoutProps)
     )
   }
