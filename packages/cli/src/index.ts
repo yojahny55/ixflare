@@ -31,11 +31,12 @@ async function main(): Promise<void> {
   Usage: ix <command>
 
   Commands:
-    dev       Start development server
-    build     Build for production
-    deploy    Deploy to Cloudflare Workers
-    migrate   Run database migrations
-    generate  Generate code (model, migration, component)
+    dev            Start development server
+    build          Build for production
+    deploy         Deploy to Cloudflare Workers
+    migrate        Run database migrations
+    generate       Generate code (model, migration, component)
+    generate:env   Generate TypeScript types from .env.example
 
   Options:
     --help    Show help

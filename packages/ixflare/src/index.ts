@@ -50,5 +50,8 @@ export {
   getParam,
 } from './types'
 
-// Legacy type exports (backward compatibility)
-export type { Middleware, LoaderArgs, ActionArgs, Env } from './types'
+// Handler type aliases (backward compatibility)
+export type { LoaderArgs, ActionArgs } from './types'
+
+// Utility exports
+export { redactSecrets, redactString, isSensitiveKey } from './utils/redact'
