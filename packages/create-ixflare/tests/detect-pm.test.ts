@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import {
   detectPackageManager,
+  detectPackageManagerWithDefault,
   detectFromLockfile,
   detectFromPackageJson,
   detectFromEnvironment,
@@ -203,12 +204,12 @@ describe('detectPackageManager', () => {
     process.env = originalEnv
   })
 
-  it('should return npm as default when nothing detected', () => {
+  it('should return null when nothing detected', () => {
     vi.mocked(existsSync).mockReturnValue(false)
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ name: 'test' }))
 
     const result = detectPackageManager('/test')
-    expect(result).toBe('npm')
+    expect(result).toBeNull()
   })
 
   it('should detect from lockfile first', () => {
@@ -226,6 +227,37 @@ describe('detectPackageManager', () => {
 
     const result = detectPackageManager('/test')
     expect(result).toBe('bun')
+  })
+})
+
+describe('detectPackageManagerWithDefault', () => {
+  const originalEnv = process.env
+
+  beforeEach(() => {
+    vi.resetAllMocks()
+    process.env = { ...originalEnv }
+    delete process.env.npm_config_user_agent
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
+  })
+
+  it('should return npm as default when nothing detected', () => {
+    vi.mocked(existsSync).mockReturnValue(false)
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ name: 'test' }))
+
+    const result = detectPackageManagerWithDefault('/test')
+    expect(result).toBe('npm')
+  })
+
+  it('should return detected PM when available', () => {
+    vi.mocked(existsSync).mockImplementation((path) => {
+      return String(path).endsWith('pnpm-lock.yaml')
+    })
+
+    const result = detectPackageManagerWithDefault('/test')
+    expect(result).toBe('pnpm')
   })
 })
 

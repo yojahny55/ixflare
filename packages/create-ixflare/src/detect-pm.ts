@@ -92,9 +92,9 @@ export function detectFromEnvironment(): PackageManager | null {
  * 1. Lockfile in current directory
  * 2. packageManager field in package.json
  * 3. Environment variable (npm_config_user_agent)
- * 4. Default to npm
+ * 4. Returns null if no detection (caller decides default)
  */
-export function detectPackageManager(cwd: string = process.cwd()): PackageManager {
+export function detectPackageManager(cwd: string = process.cwd()): PackageManager | null {
   // 1. Check lockfiles first (most reliable)
   const fromLockfile = detectFromLockfile(cwd)
   if (fromLockfile) {
@@ -113,8 +113,16 @@ export function detectPackageManager(cwd: string = process.cwd()): PackageManage
     return fromEnv
   }
 
-  // 4. Default fallback
-  return DEFAULT_PACKAGE_MANAGER
+  // 4. No detection - return null (caller decides default)
+  return null
+}
+
+/**
+ * Detect package manager with fallback to default
+ * Use this when you always need a value
+ */
+export function detectPackageManagerWithDefault(cwd: string = process.cwd()): PackageManager {
+  return detectPackageManager(cwd) ?? DEFAULT_PACKAGE_MANAGER
 }
 
 /**

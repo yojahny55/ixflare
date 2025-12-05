@@ -7,7 +7,7 @@ import { resolve } from 'node:path'
 import type { ParsedArgs, PackageManager, Template } from './types'
 import { TEMPLATES, PACKAGE_MANAGERS, DEFAULT_TEMPLATE, ScaffoldError } from './types'
 import { displayBanner, displayHelp, colors, getProjectNameError } from './utils'
-import { detectPackageManager, getRunCommand } from './detect-pm'
+import { detectPackageManager, detectPackageManagerWithDefault, getRunCommand } from './detect-pm'
 import { runPrompts } from './prompts'
 import { scaffold } from './scaffold'
 import { installDependencies } from './install-deps'
@@ -117,7 +117,7 @@ export async function main(): Promise<void> {
     // Display welcome banner
     displayBanner()
 
-    // Detect package manager from environment
+    // Detect package manager from environment (returns null if not detected)
     const detectedPm = detectPackageManager()
 
     let projectName: string
@@ -142,7 +142,7 @@ export async function main(): Promise<void> {
 
       projectName = args.projectName
       template = args.template ?? DEFAULT_TEMPLATE
-      packageManager = args.packageManager ?? detectedPm
+      packageManager = args.packageManager ?? detectedPm ?? detectPackageManagerWithDefault()
     } else if (args.projectName && args.template && args.packageManager) {
       // All options provided via flags - skip prompts
       const nameError = getProjectNameError(args.projectName)
@@ -155,12 +155,16 @@ export async function main(): Promise<void> {
       template = args.template
       packageManager = args.packageManager
     } else {
+      // Only skip PM prompt if explicitly provided via flag OR auto-detected from lockfile/env
+      // If detectedPm is null, we want to prompt the user
+      const effectivePackageManager = args.packageManager ?? detectedPm ?? undefined
+
       // Run interactive prompts for missing options
       const responses = await runPrompts({
         projectName: args.projectName,
         template: args.template,
-        packageManager: args.packageManager,
-        detectedPm,
+        packageManager: effectivePackageManager,
+        detectedPm: detectedPm ?? undefined,
       })
 
       if (!responses) {
