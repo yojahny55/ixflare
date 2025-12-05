@@ -11,28 +11,9 @@
 import chokidar, { type FSWatcher } from 'chokidar'
 import { basename, extname } from 'node:path'
 
-/**
- * @deprecated MiniflareConfig is no longer used. Workers runtime is handled by @cloudflare/vite-plugin.
- * Bindings should be configured in wrangler.toml.
- */
-export interface MiniflareConfig {
-  /** @deprecated Use wrangler.toml [[d1_databases]] */
-  d1Databases?: string[]
-  /** @deprecated Use wrangler.toml [[kv_namespaces]] */
-  kvNamespaces?: string[]
-  /** @deprecated Use wrangler.toml [[r2_buckets]] */
-  r2Buckets?: string[]
-  /** @deprecated Use wrangler.toml [[durable_objects.bindings]] */
-  durableObjects?: Record<string, string>
-  /** @deprecated Use wrangler.toml compatibility_date */
-  compatibilityDate?: string
-}
-
 export interface DevServerConfig {
   routesDir: string
   port?: number
-  /** @deprecated Use @cloudflare/vite-plugin for Workers runtime */
-  miniflare?: MiniflareConfig
   onRouteChange?: (event: RouteChangeResult) => void
 }
 
@@ -141,39 +122,5 @@ export function createDevServer(config: DevServerConfig): DevServer {
     async stop() {
       await watcher.close()
     },
-  }
-}
-
-/**
- * @deprecated Use @cloudflare/vite-plugin for Workers runtime simulation.
- * This function is kept for backwards compatibility but does nothing useful.
- *
- * Configure Workers bindings in wrangler.toml instead:
- * ```toml
- * [[d1_databases]]
- * binding = "DB"
- * database_name = "my-db"
- *
- * [[kv_namespaces]]
- * binding = "CACHE"
- *
- * [[r2_buckets]]
- * binding = "STORAGE"
- * ```
- *
- * See: docs/architecture/adr-001-cloudflare-vite-plugin-integration.md
- */
-export function setupMiniflare(config: MiniflareConfig): MiniflareConfig {
-  console.warn(
-    '[vite-plugin-ixflare] setupMiniflare is deprecated. ' +
-    'Use @cloudflare/vite-plugin for Workers runtime. ' +
-    'Configure bindings in wrangler.toml. See ADR-001.'
-  )
-  return {
-    d1Databases: config.d1Databases || [],
-    kvNamespaces: config.kvNamespaces || [],
-    r2Buckets: config.r2Buckets || [],
-    durableObjects: config.durableObjects || {},
-    compatibilityDate: config.compatibilityDate || '2025-01-01',
   }
 }

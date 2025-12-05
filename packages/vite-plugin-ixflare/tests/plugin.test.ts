@@ -9,7 +9,7 @@ describe('Vite Plugin', () => {
   })
 
   it('should accept options', () => {
-    const plugin = ixflarePlugin({ ssr: true })
+    const plugin = ixflarePlugin({ routesDir: 'app/routes', hmr: false })
 
     expect(plugin).toBeDefined()
   })

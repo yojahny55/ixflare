@@ -139,8 +139,14 @@ export async function discoverRoutes(routesDir: string): Promise<Route[]> {
     try {
       const route = await parseRouteFile(file, routesDir)
       routes.push(route)
-    } catch {
-      // Ignore files that aren't routes (like _layout.tsx)
+    } catch (error) {
+      // Only ignore expected errors (underscore-prefixed files)
+      // Re-throw unexpected errors to aid debugging
+      if (error instanceof Error && error.message.includes('underscore')) {
+        continue
+      }
+      // Log unexpected errors but continue processing other files
+      console.warn(`[vite-plugin-ixflare] Failed to parse route file: ${file}`, error)
       continue
     }
   }

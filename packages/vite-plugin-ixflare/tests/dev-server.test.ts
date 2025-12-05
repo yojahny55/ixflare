@@ -171,35 +171,15 @@ describe('dev-server', () => {
       expect(server.watcher.closed).toBe(true)
     })
 
-    it('should support custom D1 database bindings', () => {
+    it('should accept port configuration', () => {
       const config: DevServerConfig = {
         routesDir: testDir,
         port: 8787,
-        miniflare: {
-          d1Databases: ['DB'],
-        },
       }
 
       const server = createDevServer(config)
 
-      expect(server.config.miniflare?.d1Databases).toContain('DB')
-
-      server.stop()
-    })
-
-    it('should support custom KV namespace bindings', () => {
-      const config: DevServerConfig = {
-        routesDir: testDir,
-        port: 8787,
-        miniflare: {
-          kvNamespaces: ['CACHE', 'SESSIONS'],
-        },
-      }
-
-      const server = createDevServer(config)
-
-      expect(server.config.miniflare?.kvNamespaces).toContain('CACHE')
-      expect(server.config.miniflare?.kvNamespaces).toContain('SESSIONS')
+      expect(server.config.port).toBe(8787)
 
       server.stop()
     })

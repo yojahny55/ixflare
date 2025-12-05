@@ -34,9 +34,3 @@ export type { IxflarePluginOptions } from './types'
 export type { Route, RouteManifest, RouteParam, HttpMethod } from './router-codegen'
 export type { DevServerConfig, DevServer } from './dev-server'
 export type { BuildConfig, BuildResult } from './build'
-
-/**
- * @deprecated MiniflareConfig is no longer used. Workers runtime is handled by @cloudflare/vite-plugin.
- * Configure bindings in wrangler.toml instead.
- */
-export type { MiniflareConfig } from './types'
