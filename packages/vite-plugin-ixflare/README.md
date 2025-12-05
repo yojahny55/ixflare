@@ -193,24 +193,83 @@ src/routes/
 
 ## HTTP Method Handlers
 
-Export named functions for HTTP methods:
+Define handlers for different HTTP methods in the same route file:
+
+### Function Export Pattern
 
 ```typescript
 // src/routes/api/users.ts
+import type { EdgeContext } from 'ixflare'
 
-export async function GET(ctx: RouteContext) {
+export async function GET(ctx: EdgeContext) {
   const users = await db.users.findMany()
   return Response.json(users)
 }
 
-export async function POST(ctx: RouteContext) {
+export async function POST(ctx: EdgeContext) {
   const data = await ctx.request.json()
   const user = await db.users.create(data)
   return Response.json(user, { status: 201 })
 }
+
+export async function DELETE(ctx: EdgeContext) {
+  const { id } = await ctx.request.json()
+  await db.users.delete(id)
+  return new Response(null, { status: 204 })
+}
 ```
 
-Supported methods: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`
+### Const Export Pattern (Alternative)
+
+```typescript
+// src/routes/api/posts.ts
+import type { RouteHandler } from 'ixflare'
+
+export const GET: RouteHandler = async (ctx) => {
+  const posts = await db.posts.findMany()
+  return Response.json(posts)
+}
+
+export const POST: RouteHandler = async (ctx) => {
+  const data = await ctx.request.json()
+  const post = await db.posts.create(data)
+  return Response.json(post, { status: 201 })
+}
+```
+
+### Supported Methods
+
+- `GET` - Retrieve resources
+- `POST` - Create resources
+- `PUT` - Replace resources
+- `PATCH` - Partially update resources
+- `DELETE` - Remove resources
+- `HEAD` - Auto-generated from GET (returns headers only)
+- `OPTIONS` - Auto-generated (returns allowed methods)
+
+### Automatic HEAD and OPTIONS
+
+If you define a `GET` handler, a `HEAD` handler is automatically generated that returns the same headers but with an empty body.
+
+An `OPTIONS` handler is also auto-generated for all routes, returning a 204 status with an `Allow` header listing all supported methods.
+
+### 405 Method Not Allowed
+
+If a request uses an unsupported method, the router automatically returns a 405 response with:
+- Proper error JSON body
+- `Allow` header listing supported methods
+- RFC 9110 compliant response format
+
+```json
+{
+  "error": {
+    "code": "ROUTING.METHOD_NOT_ALLOWED",
+    "message": "Method DELETE not allowed. Allowed: GET, HEAD, OPTIONS, POST",
+    "status": 405,
+    "timestamp": 1733400000000
+  }
+}
+```
 
 ## Parameter Validation
 

@@ -38,6 +38,7 @@ export type {
   LoaderFunction,
   ActionFunction,
   RouteHandler,
+  MethodHandlers,
   MiddlewareFunction,
   ErrorHandler,
   LayoutLoaderArgs,

@@ -65,6 +65,29 @@ export type RouteHandler<Env = Record<string, unknown>> = (
 ) => Promise<Response> | Response
 
 /**
+ * Object-style method handlers for convenience
+ *
+ * @template Env - Type of environment bindings
+ *
+ * @example
+ * ```typescript
+ * const handlers: MethodHandlers = {
+ *   GET: async (ctx) => Response.json({ users: [] }),
+ *   POST: async (ctx) => Response.json({ created: true }, { status: 201 })
+ * }
+ * ```
+ */
+export type MethodHandlers<Env = Record<string, unknown>> = {
+  GET?: RouteHandler<Env>
+  POST?: RouteHandler<Env>
+  PUT?: RouteHandler<Env>
+  DELETE?: RouteHandler<Env>
+  PATCH?: RouteHandler<Env>
+  HEAD?: RouteHandler<Env>
+  OPTIONS?: RouteHandler<Env>
+}
+
+/**
  * Middleware function that can modify request/response
  *
  * @template Env - Type of environment bindings

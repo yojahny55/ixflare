@@ -139,6 +139,45 @@ export function OPTIONS() {}`
 
       await expect(parseRouteFile(file, testDir)).rejects.toThrow()
     })
+
+    it('should detect const export pattern for methods', async () => {
+      const file = join(testDir, 'api-const.ts')
+      await writeFile(
+        file,
+        `import type { RouteHandler } from 'ixflare'
+
+export const GET: RouteHandler = async (ctx) => {
+  return new Response('GET')
+}
+
+export const POST = async (ctx) => {
+  return new Response('POST')
+}`
+      )
+
+      const route = await parseRouteFile(file, testDir)
+
+      expect(route.handlers).toContain('GET')
+      expect(route.handlers).toContain('POST')
+    })
+
+    it('should detect mixed function and const export patterns', async () => {
+      const file = join(testDir, 'mixed.ts')
+      await writeFile(
+        file,
+        `export const GET = async () => new Response('GET')
+export function POST() { return new Response('POST') }
+export async function PUT() { return new Response('PUT') }
+export const DELETE: RouteHandler = async () => new Response('DELETE')`
+      )
+
+      const route = await parseRouteFile(file, testDir)
+
+      expect(route.handlers).toContain('GET')
+      expect(route.handlers).toContain('POST')
+      expect(route.handlers).toContain('PUT')
+      expect(route.handlers).toContain('DELETE')
+    })
   })
 
   describe('discoverRoutes', () => {

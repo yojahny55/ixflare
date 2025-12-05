@@ -5,25 +5,24 @@
  */
 
 import type { ZodSchema } from 'zod'
+import type { EdgeContext } from '../types/context'
+import { createEdgeContext } from '../types/context'
 import { extractParamsFromUrl, parseCatchAllParam, validateParams } from './params'
 
-export interface Route {
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS'
+
+export interface Route<Env = unknown> {
   path: string
-  handler: RouteHandler
+  handler: RouteHandler<Env>
+  /** HTTP methods this route handles */
+  methods?: HttpMethod[]
   /** Name of catch-all parameter (e.g., 'path' from [...path].tsx) */
   catchAllParam?: string
   /** Zod schema for parameter validation */
   paramsSchema?: ZodSchema
 }
 
-export type RouteHandler = (context: RouteContext) => Response | Promise<Response>
-
-export interface RouteContext {
-  request: Request
-  /** Route params - may include coerced types (number, boolean) after Zod validation */
-  params: Record<string, unknown>
-  env: unknown
-}
+export type RouteHandler<Env = unknown> = (context: EdgeContext<Env>) => Response | Promise<Response>
 
 /** Zod v4 error issue structure */
 interface ZodIssue {
@@ -74,8 +73,8 @@ function formatValidationErrorResponse(error: { issues: ZodIssue[] }): Response 
   )
 }
 
-export class Router {
-  private routes: Route[] = []
+export class Router<Env = unknown> {
+  private routes: Route<Env>[] = []
 
   /**
    * Add a route to the router
@@ -83,49 +82,157 @@ export class Router {
    * @param path - Route pattern (e.g., '/users/:userId')
    * @param handler - Route handler function
    * @param options - Optional route configuration
+   * @param options.methods - HTTP methods this route handles (defaults to all methods if not specified)
    * @param options.catchAllParam - Name of catch-all parameter (e.g., 'path' from [...path].tsx)
    * @param options.paramsSchema - Zod schema for automatic parameter validation
    */
   add(
     path: string,
-    handler: RouteHandler,
-    options?: { catchAllParam?: string; paramsSchema?: ZodSchema }
+    handler: RouteHandler<Env>,
+    options?: { methods?: HttpMethod[]; catchAllParam?: string; paramsSchema?: ZodSchema }
   ): this {
     this.routes.push({
       path,
       handler,
+      methods: options?.methods,
       catchAllParam: options?.catchAllParam,
       paramsSchema: options?.paramsSchema,
     })
     return this
   }
 
-  async handle(request: Request, env: unknown): Promise<Response> {
+  async handle(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
+    // Create a minimal ExecutionContext if not provided (for backwards compatibility)
+    const executionContext: ExecutionContext = ctx || {
+      waitUntil: () => {},
+      passThroughOnException: () => {},
+      props: {} as ExecutionContext['props'],
+    }
+
     const url = new URL(request.url)
+    const method = request.method.toUpperCase() as HttpMethod
+
+    // Find all routes that match the path
+    const matchingRoutes: Array<{ route: Route<Env>; params: Record<string, string | string[]> }> = []
 
     for (const route of this.routes) {
       const params = this.matchRoute(route.path, url.pathname, route.catchAllParam)
       if (params !== null) {
-        // If route has a params schema, validate and coerce
-        if (route.paramsSchema) {
-          try {
-            const validatedParams = validateParams(params, route.paramsSchema) as Record<string, unknown>
-            return route.handler({ request, params: validatedParams, env })
-          } catch (error) {
-            // Check if it's a ZodError (Zod v4 uses 'issues' array)
-            if (isZodError(error)) {
-              return formatValidationErrorResponse(error)
-            }
-            // Re-throw unexpected errors
-            throw error
-          }
-        }
-
-        return route.handler({ request, params, env })
+        matchingRoutes.push({ route, params })
       }
     }
 
-    return new Response('Not Found', { status: 404 })
+    // No matching path found
+    if (matchingRoutes.length === 0) {
+      return new Response('Not Found', { status: 404 })
+    }
+
+    // Collect all supported methods for this path
+    const allMethods = new Set<HttpMethod>()
+    let matchedHandler: RouteHandler<Env> | null = null
+    let matchedParams: Record<string, string | string[]> | null = null
+    let matchedSchema: ZodSchema | undefined
+
+    for (const { route, params } of matchingRoutes) {
+      // If route has no method restrictions, it supports all methods
+      const routeMethods = route.methods || ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
+
+      for (const m of routeMethods) {
+        allMethods.add(m)
+      }
+
+      // Check if this route handles the current method
+      if (!route.methods || route.methods.includes(method)) {
+        matchedHandler = route.handler
+        matchedParams = params
+        matchedSchema = route.paramsSchema
+      }
+    }
+
+    // Auto-generate HEAD handler if we have GET but not explicit HEAD
+    if (method === 'HEAD' && !matchedHandler && allMethods.has('GET')) {
+      // Find the GET handler
+      for (const { route, params } of matchingRoutes) {
+        if (!route.methods || route.methods.includes('GET')) {
+          const getHandler = route.handler
+          matchedParams = params
+          matchedSchema = route.paramsSchema
+
+          // Create HEAD handler that calls GET and removes body
+          matchedHandler = async (context: EdgeContext<Env>) => {
+            const getResponse = await getHandler(context)
+            return new Response(null, {
+              status: getResponse.status,
+              statusText: getResponse.statusText,
+              headers: getResponse.headers,
+            })
+          }
+          break
+        }
+      }
+      allMethods.add('HEAD')
+    }
+
+    // Auto-generate OPTIONS handler if not explicitly defined
+    if (method === 'OPTIONS' && !matchedHandler) {
+      allMethods.add('OPTIONS')
+      // Auto-add HEAD if GET exists
+      if (allMethods.has('GET')) {
+        allMethods.add('HEAD')
+      }
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Allow': Array.from(allMethods).sort().join(', '),
+        },
+      })
+    }
+
+    // Method not allowed - return 405
+    if (!matchedHandler) {
+      // Auto-add HEAD and OPTIONS to the Allow header
+      if (allMethods.has('GET')) {
+        allMethods.add('HEAD')
+      }
+      allMethods.add('OPTIONS')
+
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: 'ROUTING.METHOD_NOT_ALLOWED',
+            message: `Method ${method} not allowed. Allowed: ${Array.from(allMethods).sort().join(', ')}`,
+            status: 405,
+            timestamp: Date.now(),
+          },
+        }),
+        {
+          status: 405,
+          headers: {
+            'Content-Type': 'application/json',
+            'Allow': Array.from(allMethods).sort().join(', '),
+          },
+        }
+      )
+    }
+
+    // Create EdgeContext with validated params
+    let finalParams: Record<string, string> = matchedParams as Record<string, string>
+
+    if (matchedSchema && matchedParams) {
+      try {
+        finalParams = validateParams(matchedParams, matchedSchema) as Record<string, string>
+      } catch (error) {
+        // Check if it's a ZodError (Zod v4 uses 'issues' array)
+        if (isZodError(error)) {
+          return formatValidationErrorResponse(error)
+        }
+        // Re-throw unexpected errors
+        throw error
+      }
+    }
+
+    const edgeContext = createEdgeContext(request, env, executionContext, finalParams)
+    return await matchedHandler(edgeContext)
   }
 
   private matchRoute(
@@ -154,6 +261,6 @@ export class Router {
   }
 }
 
-export function createRouter(): Router {
-  return new Router()
+export function createRouter<Env = unknown>(): Router<Env> {
+  return new Router<Env>()
 }

@@ -85,8 +85,15 @@ export async function parseRouteFile(filePath: string, routesDir: string): Promi
   const methods: HttpMethod[] = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
 
   for (const method of methods) {
-    const regex = new RegExp(`export\\s+(?:async\\s+)?function\\s+${method}\\s*\\(`, 'g')
-    if (regex.test(content)) {
+    // Match both function exports and const exports:
+    // - export async function GET(...)
+    // - export function GET(...)
+    // - export const GET = ...
+    // - export const GET: RouteHandler = ...
+    const functionRegex = new RegExp(`export\\s+(?:async\\s+)?function\\s+${method}\\s*\\(`, 'g')
+    const constRegex = new RegExp(`export\\s+const\\s+${method}\\s*[:=]`, 'g')
+
+    if (functionRegex.test(content) || constRegex.test(content)) {
       handlers.push(method)
     }
   }

@@ -6,6 +6,7 @@
 
 // Core exports
 export { createRouter, Router } from './core/router'
+export type { HttpMethod } from './core/router'
 export { createMiddleware, compose } from './core/middleware'
 export { createContext, type Context } from './core/context'
 export { json, html, redirect, notFound } from './core/helpers'
@@ -54,6 +55,7 @@ export type {
   LoaderFunction,
   ActionFunction,
   RouteHandler as EdgeRouteHandler,
+  MethodHandlers,
   MiddlewareFunction,
   ErrorHandler,
   ResponseInit,
