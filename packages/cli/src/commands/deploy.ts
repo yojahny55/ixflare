@@ -3,9 +3,9 @@
  * @description Deploy to Cloudflare Workers command
  */
 
-import { HooksRunner, HookError } from '../hooks/index'
-import { detectAuthMethod } from '../utils/wrangler'
-import { executeWranglerDeploy } from '../utils/wrangler-exec'
+import { HooksRunner, HookError } from '@/hooks/index'
+import { detectAuthMethod } from '@/utils/wrangler'
+import { executeWranglerDeploy } from '@/utils/wrangler-exec'
 import {
   verifyDeploymentReadiness,
   validateBundleSize,

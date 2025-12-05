@@ -4,7 +4,6 @@
  * @node-only
  */
 
-import type { Plugin } from 'vite'
 import { ixflarePlugin } from './plugin'
 
 export { ixflarePlugin }

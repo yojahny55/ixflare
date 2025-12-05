@@ -6,7 +6,7 @@
 import prompts from 'prompts'
 import type { PackageManager, Template, PromptResponses } from './types'
 import { TEMPLATES, PACKAGE_MANAGERS } from './types'
-import { isValidProjectName, getProjectNameError, colors } from './utils'
+import { getProjectNameError, colors } from './utils'
 
 /** Template display configuration */
 const TEMPLATE_CHOICES = [

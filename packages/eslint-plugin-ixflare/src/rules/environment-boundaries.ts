@@ -8,27 +8,6 @@ import type { Node, ImportDeclaration } from 'estree'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
-interface CommentNode {
-  type: string
-  value: string
-}
-
-/**
- * Extract JSDoc environment tags from comments
- */
-function getEnvironmentTag(comments: CommentNode[] | undefined): string | null {
-  if (!comments) return null
-
-  for (const comment of comments) {
-    const value = comment.value.trim()
-    if (value.includes('@node-only')) return 'node-only'
-    if (value.includes('@worker-only')) return 'worker-only'
-    if (value.includes('@universal')) return 'universal'
-  }
-
-  return null
-}
-
 /**
  * Read file content and extract environment tag from JSDoc comments
  */

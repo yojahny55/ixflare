@@ -3,8 +3,6 @@
  * @description Type-safe query builder
  */
 
-import type { QueryOptions } from './types'
-
 export class QueryBuilder<T> {
   private conditions: Array<{ field: string; operator: string; value: unknown }> = []
   private orderByField?: string

@@ -83,7 +83,7 @@ export function redactString(str: string, sensitiveKeys?: RegExp[]): string {
   // Pattern to match KEY=value or KEY: value
   const valuePattern = /(\w+)\s*[=:]\s*([^\s,;)}\]]+)/g
 
-  result = result.replace(valuePattern, (match, key, value) => {
+  result = result.replace(valuePattern, (match, key) => {
     if (patterns.some((pattern) => pattern.test(key))) {
       return `${key}=[REDACTED]`
     }

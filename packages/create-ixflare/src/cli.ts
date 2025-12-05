@@ -5,8 +5,8 @@
 
 import { resolve } from 'node:path'
 import type { ParsedArgs, PackageManager, Template } from './types'
-import { TEMPLATES, PACKAGE_MANAGERS, DEFAULT_TEMPLATE, DEFAULT_PACKAGE_MANAGER, ScaffoldError } from './types'
-import { displayBanner, displayHelp, colors, isValidProjectName, getProjectNameError } from './utils'
+import { TEMPLATES, PACKAGE_MANAGERS, DEFAULT_TEMPLATE, ScaffoldError } from './types'
+import { displayBanner, displayHelp, colors, getProjectNameError } from './utils'
 import { detectPackageManager, getRunCommand } from './detect-pm'
 import { runPrompts } from './prompts'
 import { scaffold } from './scaffold'

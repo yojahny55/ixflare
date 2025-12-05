@@ -54,8 +54,7 @@ function parseEnvExample(content: string): EnvVariable[] {
       continue
     }
 
-    const [, commentPrefix, key, value] = match
-    const isCommented = commentPrefix === '#'
+    const [, , key, value] = match
 
     // Infer type from value
     let type: 'string' | 'number' | 'boolean' = 'string'

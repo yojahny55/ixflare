@@ -3,7 +3,7 @@
  * @description Error classes with typed error codes and secret redaction
  */
 
-import { redactString } from '../utils/redact'
+import { redactString } from '@/utils/redact'
 
 export class AppError extends Error {
   readonly code: string

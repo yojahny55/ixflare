@@ -4,6 +4,7 @@
  */
 
 import { spawn } from 'child_process'
+import { rmSync } from 'fs'
 
 export interface DeploymentResult {
   success: boolean
@@ -140,7 +141,6 @@ export async function executeWranglerDryRun(): Promise<DeploymentResult> {
  */
 function cleanupDryRunOutput(): void {
   try {
-    const { rmSync } = require('fs')
     rmSync('.wrangler-dry-run', { recursive: true, force: true })
   } catch {
     // Ignore cleanup errors

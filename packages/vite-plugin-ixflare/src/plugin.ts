@@ -6,11 +6,11 @@
 import type { Plugin } from 'vite'
 import type { IxflarePluginOptions } from './types'
 
-export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
+export function ixflarePlugin(_options: IxflarePluginOptions = {}): Plugin {
   return {
     name: 'vite-plugin-ixflare',
 
-    config(config, { command }) {
+    config(config, { command: _command }) {
       // Placeholder - will be enhanced in Epic 2 & 4
       return {
         ...config,
@@ -21,11 +21,11 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
       }
     },
 
-    configureServer(server) {
+    configureServer(_server) {
       // Placeholder - dev server with Miniflare (Epic 6)
     },
 
-    transform(code, id) {
+    transform(_code, _id) {
       // Placeholder - file-based routing transform (Epic 2)
       return null
     },

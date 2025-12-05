@@ -3,8 +3,8 @@
  * @description Pre-deploy validation utilities
  */
 
-import { isWranglerInstalled, detectAuthMethod, hasAccountId } from '../../utils/wrangler'
-import { executeWranglerDryRun } from '../../utils/wrangler-exec'
+import { isWranglerInstalled, detectAuthMethod, hasAccountId } from '@/utils/wrangler'
+import { executeWranglerDryRun } from '@/utils/wrangler-exec'
 
 export interface ValidationResult {
   ready: boolean
@@ -107,7 +107,7 @@ export async function validateBundleSize(): Promise<ValidationIssue | null> {
       message: 'Could not determine bundle size from wrangler output',
       remediation: 'Run "wrangler deploy --dry-run" manually to check bundle size',
     }
-  } catch (error) {
+  } catch {
     return {
       type: 'error',
       code: 'DRY_RUN_FAILED',

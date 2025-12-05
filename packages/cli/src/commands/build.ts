@@ -3,7 +3,7 @@
  * @description Production build command
  */
 
-import { HooksRunner, HookError } from '../hooks/index'
+import { HooksRunner, HookError } from '@/hooks/index'
 
 export async function build(): Promise<void> {
   const projectRoot = process.cwd()
