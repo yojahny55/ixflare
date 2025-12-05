@@ -1,0 +1,6 @@
+packages:
+  - 'packages/*'
+  # Templates are user-facing scaffolds, not workspace packages
+  # They reference published packages (ixflare, vite-plugin-ixflare)
+  # Uncomment below line only for template integration testing after packages are published
+  # - 'templates/*'

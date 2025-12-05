@@ -1,0 +1,72 @@
+{
+  "name": "ixflare",
+  "version": "0.0.1",
+  "description": "Edge-native fullstack framework for Cloudflare Workers",
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "edge",
+    "fullstack",
+    "framework",
+    "ssr",
+    "react",
+    "orm"
+  ],
+  "license": "MIT",
+  "author": "Ixflare Team",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./orm": {
+      "import": {
+        "types": "./dist/orm.d.mts",
+        "default": "./dist/orm.mjs"
+      },
+      "require": {
+        "types": "./dist/orm.d.cts",
+        "default": "./dist/orm.cjs"
+      }
+    },
+    "./ssr": {
+      "import": {
+        "types": "./dist/ssr.d.mts",
+        "default": "./dist/ssr.mjs"
+      },
+      "require": {
+        "types": "./dist/ssr.d.cts",
+        "default": "./dist/ssr.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "peerDependencies": {},
+  "sideEffects": false
+}
