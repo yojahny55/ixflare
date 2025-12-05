@@ -1,3 +1,9 @@
+
+#Documentation
+docs/
+.claude/
+.bmad/
+
 # Dependencies
 node_modules/
 .pnpm-store/
