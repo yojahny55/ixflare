@@ -139,7 +139,7 @@ export function matchRouteWithParams<T = Record<string, string>>(
   if (schema) {
     try {
       return validateParams(params, schema)
-    } catch (error) {
+    } catch {
       // Validation failed - return null to indicate no match
       // The router should try the next route
       return null
