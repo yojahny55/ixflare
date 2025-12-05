@@ -6,9 +6,6 @@ export default defineConfig({
   dts: true,
   clean: true,
   external: ['ixflare'],
-  banner: {
-    js: '#!/usr/bin/env node',
-  },
   outExtension() {
     return { js: '.cjs' }
   },
