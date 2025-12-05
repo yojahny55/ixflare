@@ -10,9 +10,21 @@ export { createMiddleware, compose } from './core/middleware'
 export { createContext, type Context } from './core/context'
 export { json, html, redirect, notFound } from './core/helpers'
 
-// Config exports
+// Config exports (primary API)
 export { defineConfig } from './config/define-config'
-export type { IxflareConfig } from './config/types'
+export { ConfigError } from './config/errors'
+
+// Config type exports
+export type {
+  IxflareConfig,
+  IxflareConfigInput,
+  DatabaseConfig,
+  CacheConfig,
+  SecurityConfig,
+  HooksConfig,
+  CommandConfig,
+  EnvConfig,
+} from './config/types'
 
 // Error exports
 export { AppError, AuthError, ValidationError, NotFoundError, ForbiddenError, ConflictError, InfraError, HttpError } from './errors'
