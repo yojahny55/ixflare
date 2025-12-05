@@ -191,9 +191,10 @@ function detectEnvironment(): 'development' | 'production' {
  *
  * Environment variables are merged with the following precedence (highest to lowest):
  * 1. wrangler.toml [vars] section (highest priority)
- * 2. .env.production (production environment only)
- * 3. .env.local (local overrides, typically gitignored)
- * 4. .env (default values, typically committed)
+ * 2. .dev.vars (development only - Cloudflare Workers local secrets, gitignored)
+ * 3. .env.production (production environment only)
+ * 4. .env.local (local overrides, typically gitignored)
+ * 5. .env (default values, typically committed)
  *
  * @example
  * ```typescript
@@ -247,7 +248,13 @@ export async function loadConfig(
       ? await loadEnvFile(join(resolvedRoot, '.env.production'))
       : { vars: {} }
 
-  // 4. wrangler.toml [vars] (highest priority)
+  // 4. .dev.vars (development only - Cloudflare Workers local secrets)
+  const devVars =
+    environment === 'development'
+      ? await loadEnvFile(join(resolvedRoot, '.dev.vars'))
+      : { vars: {} }
+
+  // 5. wrangler.toml [vars] (highest priority)
   const wranglerVars = await loadWranglerVars(join(resolvedRoot, 'wrangler.toml'))
 
   // Merge environment variables (later overrides earlier)
@@ -255,6 +262,7 @@ export async function loadConfig(
     ...baseEnv.vars,
     ...localEnv.vars,
     ...prodEnv.vars,
+    ...devVars.vars,
     ...wranglerVars.vars,
   }
 
@@ -323,12 +331,17 @@ export async function loadEnv(
     env === 'production'
       ? await loadEnvFile(join(resolvedRoot, '.env.production'))
       : { vars: {} }
+  const devVars =
+    env === 'development'
+      ? await loadEnvFile(join(resolvedRoot, '.dev.vars'))
+      : { vars: {} }
   const wranglerVars = await loadWranglerVars(join(resolvedRoot, 'wrangler.toml'))
 
   return {
     ...baseEnv.vars,
     ...localEnv.vars,
     ...prodEnv.vars,
+    ...devVars.vars,
     ...wranglerVars.vars,
   }
 }

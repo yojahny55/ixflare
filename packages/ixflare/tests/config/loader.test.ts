@@ -124,6 +124,43 @@ describe('loadEnv', () => {
     expect(env.C).toBe('prod')
     expect(env.D).toBe('wrangler')
   })
+
+  it('should load .dev.vars in development mode', async () => {
+    await writeFile(join(tempDir, '.env'), 'SHARED=base')
+    await writeFile(join(tempDir, '.dev.vars'), 'SHARED=devvars\nDEV_SECRET=secret123')
+
+    const env = await loadEnv(tempDir, 'development')
+
+    expect(env.SHARED).toBe('devvars') // .dev.vars overrides .env in development
+    expect(env.DEV_SECRET).toBe('secret123')
+  })
+
+  it('should NOT load .dev.vars in production mode', async () => {
+    await writeFile(join(tempDir, '.env'), 'SHARED=base')
+    await writeFile(join(tempDir, '.dev.vars'), 'SHARED=devvars\nDEV_SECRET=secret123')
+
+    const env = await loadEnv(tempDir, 'production')
+
+    expect(env.SHARED).toBe('base') // .dev.vars NOT loaded in production
+    expect(env.DEV_SECRET).toBeUndefined()
+  })
+
+  it('should apply full precedence chain with .dev.vars in development', async () => {
+    // Create all env files with overlapping vars
+    await writeFile(join(tempDir, '.env'), 'A=base\nB=base\nC=base\nD=base\nE=base')
+    await writeFile(join(tempDir, '.env.local'), 'B=local\nC=local\nD=local\nE=local')
+    await writeFile(join(tempDir, '.dev.vars'), 'C=devvars\nD=devvars\nE=devvars')
+    await writeFile(join(tempDir, 'wrangler.toml'), '[vars]\nE = "wrangler"')
+
+    const env = await loadEnv(tempDir, 'development')
+
+    // Precedence: wrangler > .dev.vars > .env.local > .env
+    expect(env.A).toBe('base')
+    expect(env.B).toBe('local')
+    expect(env.C).toBe('devvars')
+    expect(env.D).toBe('devvars')
+    expect(env.E).toBe('wrangler')
+  })
 })
 
 describe('loadConfig', () => {

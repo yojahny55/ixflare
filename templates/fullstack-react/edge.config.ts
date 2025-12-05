@@ -6,9 +6,10 @@ import { defineConfig } from 'ixflare'
  * This file configures your Ixflare application. Environment variables are loaded
  * with the following precedence (highest to lowest):
  * 1. wrangler.toml [vars]
- * 2. .env.production (production only)
- * 3. .env.local (local overrides, gitignored)
- * 4. .env (defaults)
+ * 2. .dev.vars (development only - Cloudflare Workers local secrets)
+ * 3. .env.production (production only)
+ * 4. .env.local (local overrides, gitignored)
+ * 5. .env (defaults)
  */
 export default defineConfig({
   // Application name (required)
