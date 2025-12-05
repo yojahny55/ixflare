@@ -5,7 +5,7 @@
  */
 
 import { readFile } from 'node:fs/promises'
-import { relative, join, extname, basename } from 'node:path'
+import { relative, basename } from 'node:path'
 import fg from 'fast-glob'
 
 export interface RouteParam {
@@ -139,7 +139,7 @@ export async function discoverRoutes(routesDir: string): Promise<Route[]> {
     try {
       const route = await parseRouteFile(file, routesDir)
       routes.push(route)
-    } catch (err) {
+    } catch {
       // Ignore files that aren't routes (like _layout.tsx)
       continue
     }
@@ -174,7 +174,7 @@ export function detectRouteConflicts(routes: Route[]): void {
   }
 
   // Check for conflicts
-  for (const [_normalizedPath, routesForPath] of pathMap) {
+  for (const [, routesForPath] of pathMap) {
     if (routesForPath.length > 1) {
       const path = routesForPath[0].path
       const fileList = routesForPath.map(r => `  • ${r.file}`).join('\n')

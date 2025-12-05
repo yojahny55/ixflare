@@ -26,7 +26,7 @@ import type { Plugin, ViteDevServer, ModuleNode } from 'vite'
 import type { IxflarePluginOptions } from './types'
 import { discoverRoutes, detectRouteConflicts, generateRouteManifest, type RouteManifest } from './router-codegen'
 import { createDevServer, type DevServer } from './dev-server'
-import { buildRoutes, bundleManifest, optimizeRoutes } from './build'
+import { bundleManifest, optimizeRoutes } from './build'
 import { setupHMR, handleRouteHMR } from './hmr'
 
 const VIRTUAL_MODULE_ID = 'virtual:ixflare-routes'
