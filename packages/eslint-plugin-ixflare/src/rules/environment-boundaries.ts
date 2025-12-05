@@ -1,10 +1,12 @@
 /**
  * @fileoverview Enforce environment boundaries between @node-only and @worker-only code
- * @worker-only
+ * @node-only
  */
 
 import type { Rule } from 'eslint'
 import type { Node, ImportDeclaration } from 'estree'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 
 interface CommentNode {
   type: string
@@ -32,7 +34,6 @@ function getEnvironmentTag(comments: CommentNode[] | undefined): string | null {
  */
 function getFileEnvironmentTag(filename: string): string | null {
   try {
-    const fs = require('fs')
     const content = fs.readFileSync(filename, 'utf-8')
 
     // Match JSDoc comments at the top of the file
@@ -49,7 +50,7 @@ function getFileEnvironmentTag(filename: string): string | null {
     if (lineCommentMatch) {
       return lineCommentMatch[1]
     }
-  } catch (error) {
+  } catch {
     // File doesn't exist or can't be read
     return null
   }
@@ -67,12 +68,10 @@ function resolveImportPath(importPath: string, currentFile: string): string | nu
   }
 
   try {
-    const path = require('path')
     const dir = path.dirname(currentFile)
     const resolved = path.resolve(dir, importPath)
 
     // Try common extensions
-    const fs = require('fs')
     const extensions = ['', '.ts', '.tsx', '.js', '.jsx']
 
     for (const ext of extensions) {
@@ -89,7 +88,7 @@ function resolveImportPath(importPath: string, currentFile: string): string | nu
         return indexPath
       }
     }
-  } catch (error) {
+  } catch {
     return null
   }
 
