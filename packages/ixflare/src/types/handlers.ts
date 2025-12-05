@@ -8,16 +8,33 @@ import type { EdgeContext } from './context'
 /**
  * Arguments passed to loader functions
  *
+ * @template TParams - Type of route parameters (inferred from Zod schema or Record<string, string>)
  * @template Env - Type of environment bindings
  */
-export type LoaderArgs<Env = Record<string, unknown>> = EdgeContext<Env>
+export interface LoaderArgs<
+  TParams = Record<string, string>,
+  Env = Record<string, unknown>
+> {
+  request: Request
+  params: TParams
+  env: Env
+  ctx: ExecutionContext
+  query: URLSearchParams
+  url: URL
+  method: string
+  headers: Headers
+}
 
 /**
  * Arguments passed to action functions
  *
+ * @template TParams - Type of route parameters (inferred from Zod schema or Record<string, string>)
  * @template Env - Type of environment bindings
  */
-export type ActionArgs<Env = Record<string, unknown>> = EdgeContext<Env>
+export type ActionArgs<
+  TParams = Record<string, string>,
+  Env = Record<string, unknown>
+> = LoaderArgs<TParams, Env>
 
 /**
  * Loader function for GET requests

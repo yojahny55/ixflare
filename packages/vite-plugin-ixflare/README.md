@@ -139,6 +139,105 @@ export async function POST(ctx: RouteContext) {
 
 Supported methods: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`
 
+## Parameter Validation
+
+### Type-Safe Parameters with Zod
+
+Validate and coerce route parameters using Zod schemas:
+
+```typescript
+// src/routes/users/[userId].tsx
+import { z } from 'zod'
+import type { LoaderArgs } from 'ixflare'
+
+// Export params schema for validation
+export const params = z.object({
+  userId: z.coerce.number().int().positive(),
+})
+
+// TypeScript automatically infers params type from schema
+export async function GET({ params }: LoaderArgs<z.infer<typeof params>>) {
+  // params.userId is typed as number (not string!)
+  const user = await db.users.findById(params.userId)
+  return Response.json(user)
+}
+```
+
+### Multiple Parameters
+
+```typescript
+// src/routes/[org]/[repo]/issues/[id].tsx
+import { z } from 'zod'
+
+export const params = z.object({
+  org: z.string().regex(/^[a-z0-9-]+$/i),
+  repo: z.string().regex(/^[a-z0-9-]+$/i),
+  id: z.coerce.number().int().positive(),
+})
+
+export async function GET({ params }: LoaderArgs<z.infer<typeof params>>) {
+  const { org, repo, id } = params // All typed correctly
+  return Response.json({ org, repo, issueId: id })
+}
+```
+
+### Catch-All with Validation
+
+```typescript
+// src/routes/docs/[...path].tsx
+import { z } from 'zod'
+
+export const params = z.object({
+  path: z.array(z.string().min(1)), // Validates each segment
+})
+
+export async function GET({ params }: LoaderArgs<z.infer<typeof params>>) {
+  // params.path is string[] (e.g., ['guides', 'routing', 'basics'])
+  const docPath = params.path.join('/')
+  return Response.json({ path: docPath })
+}
+```
+
+### URL Param Coercion
+
+Since all URL params arrive as strings, use `z.coerce` for type conversion:
+
+```typescript
+export const params = z.object({
+  // Numbers
+  userId: z.coerce.number().int().positive(),
+  price: z.coerce.number().min(0),
+
+  // Booleans (use custom transform)
+  active: z.string().transform(v => v === 'true' || v === '1'),
+
+  // Enums
+  sort: z.enum(['asc', 'desc']).default('asc'),
+
+  // String formats
+  slug: z.string().regex(/^[a-z0-9-]+$/i).min(1).max(100),
+})
+```
+
+### Error Handling
+
+Invalid parameters automatically return `400 Bad Request` with validation errors:
+
+```typescript
+// Request: /users/invalid
+// Response: 400 Bad Request
+{
+  "error": {
+    "code": "VALIDATION.INVALID_PARAMS",
+    "message": "Parameter validation failed",
+    "status": 400,
+    "details": {
+      "userId": ["Expected number, received string"]
+    }
+  }
+}
+```
+
 ## Virtual Module
 
 Access the route manifest in your application:

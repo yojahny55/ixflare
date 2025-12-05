@@ -9,6 +9,12 @@ export { createRouter, Router } from './core/router'
 export { createMiddleware, compose } from './core/middleware'
 export { createContext, type Context } from './core/context'
 export { json, html, redirect, notFound } from './core/helpers'
+export {
+  extractParamsFromUrl,
+  parseCatchAllParam,
+  validateParams,
+  matchRouteWithParams,
+} from './core/params'
 
 // Config exports (primary API)
 export { defineConfig } from './config/define-config'

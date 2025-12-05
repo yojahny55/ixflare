@@ -134,6 +134,9 @@ importers:
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
+      urlpattern-polyfill:
+        specifier: ^10.1.0
+        version: 10.1.0
       vitest:
         specifier: ^4.0.0
         version: 4.0.15(@types/node@20.19.25)
@@ -2121,6 +2124,9 @@ packages:
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
 
+  urlpattern-polyfill@10.1.0:
+    resolution: {integrity: sha512-IGjKp/o0NL3Bso1PymYURCJxMPNAf/ILOpendP9f5B6e1rTJgdgiOvgfoT8VxCAdY+Wisb9uhGaJJf3yZ2V9nw==}
+
   vite@6.4.1:
     resolution: {integrity: sha512-+Oxm7q9hDoLMyJOYfUYBuHQo+dkAloi33apOPP56pzj+vsdJDzr+j1NISE5pyaAuKL4A3UD34qd0lx5+kfKp2g==}
     engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
@@ -3092,6 +3098,14 @@ snapshots:
       chai: 6.2.1
       tinyrainbow: 3.0.3
 
+  '@vitest/mocker@4.0.15(vite@6.4.1(@types/node@20.19.25))':
+    dependencies:
+      '@vitest/spy': 4.0.15
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 6.4.1(@types/node@20.19.25)
+
   '@vitest/mocker@4.0.15(vite@6.4.1(@types/node@22.19.1))':
     dependencies:
       '@vitest/spy': 4.0.15
@@ -4042,6 +4056,8 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
+  urlpattern-polyfill@10.1.0: {}
+
   vite@6.4.1(@types/node@20.19.25):
     dependencies:
       esbuild: 0.25.12
@@ -4069,7 +4085,7 @@ snapshots:
   vitest@4.0.15(@types/node@20.19.25):
     dependencies:
       '@vitest/expect': 4.0.15
-      '@vitest/mocker': 4.0.15(vite@6.4.1(@types/node@22.19.1))
+      '@vitest/mocker': 4.0.15(vite@6.4.1(@types/node@20.19.25))
       '@vitest/pretty-format': 4.0.15
       '@vitest/runner': 4.0.15
       '@vitest/snapshot': 4.0.15

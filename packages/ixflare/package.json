@@ -77,11 +77,11 @@
     "@types/node": "^20.0.0",
     "tsup": "^8.5.0",
     "typescript": "^5.5.0",
+    "urlpattern-polyfill": "^10.1.0",
     "vitest": "^4.0.0"
   },
   "dependencies": {
     "zod": "^4.0.0"
   },
-  "peerDependencies": {},
   "sideEffects": false
 }

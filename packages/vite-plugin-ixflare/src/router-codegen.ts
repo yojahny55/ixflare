@@ -20,6 +20,7 @@ export interface Route {
   file: string
   params: RouteParam[]
   handlers: HttpMethod[]
+  hasParamsSchema?: boolean // True if route exports 'params' Zod schema
   layout?: string
   middleware?: string[]
 }
@@ -88,6 +89,9 @@ export async function parseRouteFile(filePath: string, routesDir: string): Promi
     }
   }
 
+  // Detect exported params schema for validation
+  const hasParamsSchema = /export\s+(?:const|let)\s+params\s*=/.test(content)
+
   // Extract dynamic params
   const params = extractDynamicParams(relativePath)
 
@@ -115,6 +119,7 @@ export async function parseRouteFile(filePath: string, routesDir: string): Promi
     file: relativePath,
     params,
     handlers,
+    hasParamsSchema,
   }
 }
 

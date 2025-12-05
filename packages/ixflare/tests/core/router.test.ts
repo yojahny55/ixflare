@@ -1,3 +1,6 @@
+// Import URLPattern polyfill for Node.js test environment
+import 'urlpattern-polyfill'
+
 import { describe, it, expect } from 'vitest'
 import { Router, createRouter } from '../../src/core/router'
 
@@ -23,7 +26,7 @@ describe('Router', () => {
 
   it('should extract route params', async () => {
     const router = createRouter()
-    let capturedParams: Record<string, string> = {}
+    let capturedParams: Record<string, string | string[]> = {}
 
     router.add('/users/:id', ({ params }) => {
       capturedParams = params
