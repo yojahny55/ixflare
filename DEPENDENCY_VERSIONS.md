@@ -84,15 +84,15 @@ This document defines the **canonical versions** for all dependencies used acros
 
 ---
 
-## Dependencies for Epic 2 (To Be Added)
+## Dependencies Added in Epic 2 (Story 2.0)
 
-These dependencies will be needed for Story 2.0 (Vite Plugin Foundation):
+These dependencies were added for Vite Plugin Foundation & Router Infrastructure:
 
-| Dependency | Recommended Version | Purpose |
-|------------|---------------------|---------|
-| `chokidar` | `^4.0.0` | File watching for route changes |
-| `miniflare` | `^3.20241106.0` | Local Workers simulation |
-| `fast-glob` | `^3.3.0` | File discovery for routes |
+| Dependency | Version | Used In | Notes |
+|------------|---------|---------|-------|
+| `chokidar` | `^5.0.0` | vite-plugin-ixflare | File watching for route changes (ESM-only, Node 20+) |
+| `fast-glob` | `^3.3.3` | vite-plugin-ixflare | File discovery for routes |
+| `miniflare` | `^4.20251202.1` | vite-plugin-ixflare (devDep) | Local Workers runtime simulation - to be integrated in Epic 6 |
 
 ---
 

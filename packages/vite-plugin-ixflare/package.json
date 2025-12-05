@@ -40,6 +40,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "chokidar": "^5.0.0",
+    "fast-glob": "^3.3.3",
     "ixflare": "workspace:*"
   },
   "devDependencies": {
