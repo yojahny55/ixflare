@@ -165,7 +165,8 @@ export default function DashboardLayout({
 **Accessing Layout Data in Child Components:**
 ```typescript
 // Any child page/component can access parent layout data
-import { useLayoutData } from 'ixflare'
+// Note: Import from 'ixflare/ssr' to avoid React dependency in API-only apps
+import { useLayoutData } from 'ixflare/ssr'
 
 function ProfilePage() {
   const { user, theme } = useLayoutData<{ user: User; theme: string }>()

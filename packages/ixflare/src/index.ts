@@ -15,7 +15,9 @@ export {
   validateParams,
   matchRouteWithParams,
 } from './core/params'
-export { useLayoutData } from './core/layout'
+
+// Layout exports moved to 'ixflare/ssr' to avoid React dependency in API-only apps
+// Use: import { useLayoutData, executeLoaders } from 'ixflare/ssr'
 export { executeLoaders, executeLayoutLoaders, getLoaderErrorResponse, LayoutLoaderError } from './core/layout-loader'
 export type { LayoutLoaderFunction } from './core/layout-loader'
 

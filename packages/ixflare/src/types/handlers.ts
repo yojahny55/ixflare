@@ -4,6 +4,7 @@
  */
 
 import type { EdgeContext } from './context'
+import type { ReactNode } from 'react'
 
 /**
  * Arguments passed to loader functions
@@ -105,7 +106,7 @@ export type LayoutLoaderArgs<
  */
 export interface LayoutProps<TData = unknown> {
   /** Child content to render within the layout */
-  children: React.ReactNode
+  children: ReactNode
   /** Data from the layout's loader function (undefined if no loader) */
   data?: TData
   /** Route parameters extracted from the URL path */
