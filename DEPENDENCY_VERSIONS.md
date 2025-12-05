@@ -1,0 +1,178 @@
+# Dependency Versions - Single Source of Truth
+
+This document defines the **canonical versions** for all dependencies used across the Ixflare monorepo. All packages and templates MUST use these exact versions to prevent inconsistencies.
+
+**Last Updated:** 2025-12-05
+**Created From:** Epic 1 Retrospective Action Item #1
+
+---
+
+## Core Runtime Dependencies
+
+| Dependency | Version | Used In | Notes |
+|------------|---------|---------|-------|
+| `zod` | `^4.0.0` | ixflare, templates | Validation library - Zod 4.x for 14x faster string parsing |
+| `react` | `^19.0.0` | fullstack-react template | React 19 with Server Components |
+| `react-dom` | `^19.0.0` | fullstack-react template | React DOM for SSR/hydration |
+
+---
+
+## Build & Development Tools
+
+| Dependency | Version | Used In | Notes |
+|------------|---------|---------|-------|
+| `typescript` | `^5.9.3` | ALL packages & templates | TypeScript 5.x with strict mode |
+| `tsup` | `^8.5.0` | ALL packages | Build tool (consider tsdown migration - see technical debt) |
+| `vitest` | `^4.0.0` | ALL packages & templates | Test runner |
+| `vite` | `^6.0.0` | vite-plugin, templates | Build tool and dev server |
+| `turbo` | `^2.6.3` | root | Monorepo build orchestration |
+| `prettier` | `^3.7.4` | root | Code formatting |
+| `eslint` | `^9.39.1` | root, templates | Linting (ESLint 9.x flat config) |
+
+---
+
+## TypeScript & Type Definitions
+
+| Dependency | Version | Used In | Notes |
+|------------|---------|---------|-------|
+| `@types/node` | `^22.19.1` | packages (root, cli, create-ixflare) | Node.js types |
+| `@types/node` | `^20.0.0` | ixflare package | Slightly older for Workers compat |
+| `@types/react` | `^19.0.0` | fullstack-react template | React 19 types |
+| `@types/react-dom` | `^19.0.0` | fullstack-react template | React DOM types |
+| `@types/prompts` | `^2.4.9` | cli, create-ixflare | Prompts library types |
+| `@typescript-eslint/eslint-plugin` | `^8.48.1` | root | TypeScript ESLint plugin |
+| `@typescript-eslint/parser` | `^8.48.1` | root | TypeScript ESLint parser |
+
+---
+
+## Cloudflare & Deployment
+
+| Dependency | Version | Used In | Notes |
+|------------|---------|---------|-------|
+| `@cloudflare/workers-types` | `^4.0.0` | ixflare, templates | Workers runtime types |
+| `wrangler` | `^4.53.0` | templates | Cloudflare CLI for deployment |
+
+---
+
+## UI & Styling
+
+| Dependency | Version | Used In | Notes |
+|------------|---------|---------|-------|
+| `tailwindcss` | `^4.0.0` | fullstack-react template | CSS framework |
+| `@vitejs/plugin-react` | `^4.3.0` | fullstack-react template | Vite React plugin |
+
+---
+
+## CLI & Utilities
+
+| Dependency | Version | Used In | Notes |
+|------------|---------|---------|-------|
+| `prompts` | `^2.4.2` | cli, create-ixflare | Interactive CLI prompts |
+| `@changesets/cli` | `^2.29.8` | root | Version management |
+
+---
+
+## ESLint Plugins
+
+| Dependency | Version | Used In | Notes |
+|------------|---------|---------|-------|
+| `@eslint/js` | `^9.39.1` | root | ESLint JavaScript config |
+| `@typescript-eslint/eslint-plugin` | `^8.0.0` | templates | TypeScript ESLint for templates |
+| `@typescript-eslint/parser` | `^8.0.0` | templates | TypeScript parser for templates |
+| `eslint-plugin-import` | `^2.31.0` | templates | Import ordering/validation |
+| `typescript-eslint` | `^8.48.1` | root | TypeScript ESLint integration |
+
+---
+
+## Dependencies for Epic 2 (To Be Added)
+
+These dependencies will be needed for Story 2.0 (Vite Plugin Foundation):
+
+| Dependency | Recommended Version | Purpose |
+|------------|---------------------|---------|
+| `chokidar` | `^4.0.0` | File watching for route changes |
+| `miniflare` | `^3.20241106.0` | Local Workers simulation |
+| `fast-glob` | `^3.3.0` | File discovery for routes |
+
+---
+
+## Version Update Process
+
+When updating a dependency version:
+
+1. **Update this file first** - Change the version in this document
+2. **Update root package.json** - For shared dev dependencies
+3. **Update all package.json files** - In packages/ that use the dependency
+4. **Update all template package.json files** - In templates/ that use the dependency
+5. **Run `pnpm install`** - To update lockfile
+6. **Run `pnpm test`** - Verify no regressions
+7. **Create PR** - With clear changelog
+
+---
+
+## Package Manager
+
+| Tool | Version | Notes |
+|------|---------|-------|
+| `pnpm` | `>=10.0.0` | Required package manager |
+| `node` | `>=18.0.0` | Minimum Node.js version |
+
+---
+
+## Type Export Patterns (Standardized)
+
+All packages MUST use this export pattern for proper CJS/ESM dual support:
+
+```json
+{
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  }
+}
+```
+
+**Key Rules:**
+- ESM types use `.d.ts` extension
+- CJS types use `.d.cts` extension
+- Never use `.d.mts` (causes resolution issues)
+- Always specify `types` before `default` in conditional exports
+
+---
+
+## Technical Debt Notes
+
+### tsup → tsdown Migration
+- **Status:** Planned for Epic 2 or 3
+- **Reason:** tsup is no longer actively maintained
+- **Alternative:** tsdown (actively maintained fork)
+- **Impact:** All packages using tsup need migration
+
+### Zod Function Type Casts
+- **Status:** Low priority
+- **Location:** `packages/cli/src/hooks/index.ts`
+- **Issue:** HooksRunner requires type casts for Zod function types
+- **Workaround:** Using `as unknown as` pattern
+
+---
+
+## Validation Script
+
+Run this command to check for version mismatches:
+
+```bash
+# Check all package.json files for version consistency
+pnpm exec turbo run typecheck
+```
+
+---
+
+*This document is the single source of truth for dependency versions. When in doubt, refer to this file.*
