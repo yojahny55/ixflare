@@ -97,9 +97,16 @@ export async function validateBundleSize(): Promise<ValidationIssue | null> {
             'Move configs to KV/R2, use Workers Static Assets, or upgrade to paid plan',
         }
       }
+      return null
     }
 
-    return null
+    // Dry-run succeeded but we couldn't parse bundle size
+    return {
+      type: 'warning',
+      code: 'BUNDLE_SIZE_UNKNOWN',
+      message: 'Could not determine bundle size from wrangler output',
+      remediation: 'Run "wrangler deploy --dry-run" manually to check bundle size',
+    }
   } catch (error) {
     return {
       type: 'error',
@@ -112,17 +119,14 @@ export async function validateBundleSize(): Promise<ValidationIssue | null> {
 
 /**
  * Validate request size limits
+ * Note: Request validation happens at runtime by Cloudflare.
+ * This function is reserved for future implementation when we can
+ * analyze the codebase for potential request size issues.
  */
 export function validateRequestLimits(): ValidationIssue | null {
-  // This is informational - actual validation happens at runtime
-  // Including here for first-time user guidance
-  return {
-    type: 'warning',
-    code: 'REQUEST_SIZE_INFO',
-    message: 'Request size validation:',
-    remediation: `Max request body: 100MB (Cloudflare limit)
-Tip: Large file uploads should use R2 presigned URLs.`,
-  }
+  // Request size validation happens at runtime by Cloudflare
+  // Return null as we don't have static analysis for this yet
+  return null
 }
 
 /**

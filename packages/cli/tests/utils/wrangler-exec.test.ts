@@ -141,6 +141,22 @@ describe('wrangler-exec', () => {
       expect(result.exitCode).toBe(1)
       expect(result.success).toBe(false)
     })
+
+    it('should handle spawn error event', async () => {
+      const mockProcess = createMockChildProcess()
+
+      vi.mocked(spawn).mockReturnValue(mockProcess as any)
+
+      const deployPromise = executeWranglerDeploy()
+
+      mockProcess.emit('error', new Error('spawn ENOENT'))
+
+      const result = await deployPromise
+
+      expect(result.success).toBe(false)
+      expect(result.exitCode).toBe(1)
+      expect(result.stderr).toContain('spawn ENOENT')
+    })
   })
 
   describe('executeWranglerDryRun', () => {
@@ -187,6 +203,22 @@ describe('wrangler-exec', () => {
       expect(result.success).toBe(false)
       expect(result.exitCode).toBe(1)
       expect(result.stderr).toContain('Build error')
+    })
+
+    it('should handle spawn error event in dry-run', async () => {
+      const mockProcess = createMockChildProcess()
+
+      vi.mocked(spawn).mockReturnValue(mockProcess as any)
+
+      const dryRunPromise = executeWranglerDryRun()
+
+      mockProcess.emit('error', new Error('spawn ENOENT'))
+
+      const result = await dryRunPromise
+
+      expect(result.success).toBe(false)
+      expect(result.exitCode).toBe(1)
+      expect(result.stderr).toContain('spawn ENOENT')
     })
   })
 })

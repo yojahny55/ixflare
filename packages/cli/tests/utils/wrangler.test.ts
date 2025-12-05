@@ -137,23 +137,23 @@ describe('wrangler utilities', () => {
   })
 
   describe('isAuthenticated', () => {
-    it('should return true when wrangler whoami succeeds', async () => {
+    it('should return true when wrangler whoami succeeds', () => {
       vi.mocked(execSync).mockReturnValue(
         Buffer.from('You are logged in with an API Token')
       )
 
-      const result = await isAuthenticated()
+      const result = isAuthenticated()
 
       expect(result).toBe(true)
       expect(execSync).toHaveBeenCalledWith('wrangler whoami', { stdio: 'pipe' })
     })
 
-    it('should return false when wrangler whoami fails', async () => {
+    it('should return false when wrangler whoami fails', () => {
       vi.mocked(execSync).mockImplementation(() => {
         throw new Error('Not authenticated')
       })
 
-      const result = await isAuthenticated()
+      const result = isAuthenticated()
 
       expect(result).toBe(false)
     })

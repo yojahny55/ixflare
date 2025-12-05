@@ -18,7 +18,14 @@ export interface DeployOptions {
   environment?: string
 }
 
-export async function deploy(options: DeployOptions = {}): Promise<void> {
+export interface DeployResult {
+  success: boolean
+  url?: string
+  versionId?: string
+  exitCode: number
+}
+
+export async function deploy(options: DeployOptions = {}): Promise<DeployResult> {
   const projectRoot = process.cwd()
   const runner = new HooksRunner()
 
@@ -33,7 +40,7 @@ export async function deploy(options: DeployOptions = {}): Promise<void> {
       const setupSuccess = await showFirstTimeGuide()
       if (!setupSuccess) {
         // User needs to complete setup manually
-        process.exit(0)
+        return { success: false, exitCode: 0 }
       }
     }
   }
@@ -45,7 +52,7 @@ export async function deploy(options: DeployOptions = {}): Promise<void> {
   if (!validation.ready) {
     console.error(formatValidationIssues(validation.issues))
     console.error('Cannot proceed with deployment. Please fix the errors above.\n')
-    process.exit(1)
+    return { success: false, exitCode: 1 }
   }
 
   // Show warnings if any
@@ -61,7 +68,7 @@ export async function deploy(options: DeployOptions = {}): Promise<void> {
     if (bundleIssue.type === 'error') {
       console.error(formatValidationIssues([bundleIssue]))
       console.error('Cannot proceed with deployment due to bundle size.\n')
-      process.exit(1)
+      return { success: false, exitCode: 1 }
     } else {
       console.log(formatValidationIssues([bundleIssue]))
     }
@@ -76,7 +83,7 @@ export async function deploy(options: DeployOptions = {}): Promise<void> {
       if (error instanceof HookError) {
         console.error(`\n❌ ${error.message}`)
         console.error('\nDeployment stopped due to hook failure.\n')
-        process.exit(1)
+        return { success: false, exitCode: 1 }
       }
       // If no config file, continue without hooks
       if (!(error instanceof Error && error.message.includes('Configuration file not found'))) {
@@ -92,7 +99,7 @@ export async function deploy(options: DeployOptions = {}): Promise<void> {
       console.error('\n❌ Deployment failed\n')
       console.error('Wrangler output:\n')
       console.error(result.stderr || result.stdout)
-      process.exit(result.exitCode)
+      return { success: false, exitCode: result.exitCode }
     }
 
     // Display success message with deployment URL
@@ -116,11 +123,13 @@ export async function deploy(options: DeployOptions = {}): Promise<void> {
       if (error instanceof HookError) {
         console.error(`\n❌ ${error.message}`)
         console.error('\nDeployment completed but post-deploy hook failed.\n')
-        process.exit(1)
+        return { success: false, url: result.url, versionId: result.versionId, exitCode: 1 }
       }
     }
+
+    return { success: true, url: result.url, versionId: result.versionId, exitCode: 0 }
   } catch (error) {
     console.error('\n❌ Deployment error:', error instanceof Error ? error.message : error)
-    process.exit(1)
+    return { success: false, exitCode: 1 }
   }
 }

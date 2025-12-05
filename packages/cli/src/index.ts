@@ -13,7 +13,13 @@ const command = args[0]
 const commands: Record<string, () => Promise<void>> = {
   dev: () => import('./commands/dev').then(m => m.dev()),
   build: () => import('./commands/build').then(m => m.build()),
-  deploy: () => import('./commands/deploy').then(m => m.deploy()),
+  deploy: async () => {
+    const m = await import('./commands/deploy')
+    const result = await m.deploy()
+    if (!result.success) {
+      process.exit(result.exitCode)
+    }
+  },
   migrate: () => import('./commands/migrate').then(m => m.migrate()),
   generate: () => import('./commands/generate').then(m => m.generate()),
   'generate:env': () => import('./commands/generate-env-types').then(m => m.generateEnvCommand({})),

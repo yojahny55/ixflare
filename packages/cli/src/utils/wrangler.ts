@@ -56,8 +56,9 @@ export function getWranglerConfigPath(): string {
 
 /**
  * Check if currently authenticated to Cloudflare
+ * Note: This is synchronous as it uses execSync internally
  */
-export async function isAuthenticated(): Promise<boolean> {
+export function isAuthenticated(): boolean {
   try {
     execSync('wrangler whoami', { stdio: 'pipe' })
     return true

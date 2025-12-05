@@ -45,6 +45,15 @@ export async function executeWranglerDeploy(environment?: string): Promise<Deplo
       process.stderr.write(text)
     })
 
+    wrangler.on('error', (err) => {
+      resolve({
+        success: false,
+        stdout,
+        stderr: stderr || err.message,
+        exitCode: 1,
+      })
+    })
+
     wrangler.on('close', (exitCode) => {
       const result = {
         success: exitCode === 0,
@@ -101,6 +110,15 @@ export async function executeWranglerDryRun(): Promise<DeploymentResult> {
       stderr += data.toString()
     })
 
+    wrangler.on('error', (err) => {
+      resolve({
+        success: false,
+        stdout,
+        stderr: stderr || err.message,
+        exitCode: 1,
+      })
+    })
+
     wrangler.on('close', (exitCode) => {
       const result = {
         success: exitCode === 0,
@@ -109,7 +127,22 @@ export async function executeWranglerDryRun(): Promise<DeploymentResult> {
         exitCode: exitCode ?? 1,
       }
 
+      // Clean up dry-run output directory
+      cleanupDryRunOutput()
+
       resolve(result)
     })
   })
+}
+
+/**
+ * Clean up the dry-run output directory
+ */
+function cleanupDryRunOutput(): void {
+  try {
+    const { rmSync } = require('fs')
+    rmSync('.wrangler-dry-run', { recursive: true, force: true })
+  } catch {
+    // Ignore cleanup errors
+  }
 }

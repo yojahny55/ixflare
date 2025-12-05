@@ -177,17 +177,29 @@ describe('validation', () => {
       expect(result?.type).toBe('error')
       expect(result?.code).toBe('DRY_RUN_FAILED')
     })
-  })
 
-  describe('validateRequestLimits', () => {
-    it('should return informational warning', () => {
-      const result = validateRequestLimits()
+    it('should warn when bundle size cannot be determined from output', async () => {
+      vi.mocked(wranglerExec.executeWranglerDryRun).mockResolvedValue({
+        success: true,
+        stdout: 'Deployment successful but no size info',
+        stderr: '',
+        exitCode: 0,
+      })
+
+      const result = await validateBundleSize()
 
       expect(result).not.toBeNull()
       expect(result?.type).toBe('warning')
-      expect(result?.code).toBe('REQUEST_SIZE_INFO')
-      expect(result?.remediation).toContain('100MB')
-      expect(result?.remediation).toContain('R2 presigned URLs')
+      expect(result?.code).toBe('BUNDLE_SIZE_UNKNOWN')
+      expect(result?.message).toContain('Could not determine bundle size')
+    })
+  })
+
+  describe('validateRequestLimits', () => {
+    it('should return null as request validation happens at runtime', () => {
+      const result = validateRequestLimits()
+
+      expect(result).toBeNull()
     })
   })
 
