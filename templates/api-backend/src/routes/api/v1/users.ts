@@ -2,7 +2,6 @@
  * Users API Endpoint
  * Demonstrates RESTful API patterns with Zod validation
  */
-import { z } from 'zod'
 import type { RouteContext } from '@/types'
 import { UserService } from '@/services/user-service'
 import { createUserSchema, updateUserSchema, userQuerySchema } from '@/schemas/user'
@@ -39,7 +38,16 @@ export async function GET(ctx: RouteContext) {
 }
 
 export async function POST(ctx: RouteContext) {
-  const body = await ctx.request.json()
+  let body: unknown
+  try {
+    body = await ctx.request.json()
+  } catch {
+    return Response.json(
+      { error: { code: 'INVALID_JSON', message: 'Request body must be valid JSON' } },
+      { status: 400 }
+    )
+  }
+
   const result = createUserSchema.safeParse(body)
 
   if (!result.success) {
@@ -72,7 +80,16 @@ export async function PUT(ctx: RouteContext) {
     )
   }
 
-  const body = await ctx.request.json()
+  let body: unknown
+  try {
+    body = await ctx.request.json()
+  } catch {
+    return Response.json(
+      { error: { code: 'INVALID_JSON', message: 'Request body must be valid JSON' } },
+      { status: 400 }
+    )
+  }
+
   const result = updateUserSchema.safeParse(body)
 
   if (!result.success) {

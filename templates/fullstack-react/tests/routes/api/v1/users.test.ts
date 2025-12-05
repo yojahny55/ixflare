@@ -1,131 +1,111 @@
 /**
  * Users API Endpoint Tests
  * Tests for /api/v1/users endpoint
+ *
+ * These tests validate the route handler exports and schema validation.
+ * For full integration tests with Miniflare, see the integration test suite.
  */
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
+import { createUserSchema, updateUserSchema } from '../../../../src/schemas/user'
+import * as usersRoute from '../../../../src/routes/api/v1/users'
 
-describe('GET /api/v1/users', () => {
-  it('should return empty array when no users exist', async () => {
-    // Test implementation
-    // In a real test, this would use Miniflare to simulate the Worker
-    const users: unknown[] = []
-    expect(users).toEqual([])
+describe('Users Route Exports', () => {
+  it('should export GET handler', () => {
+    expect(typeof usersRoute.GET).toBe('function')
   })
 
-  it('should return paginated users list', async () => {
-    // Test implementation
-    const response = {
-      data: [
-        { id: '1', email: 'alice@example.com', name: 'Alice' },
-        { id: '2', email: 'bob@example.com', name: 'Bob' },
-      ],
-      pagination: {
-        page: 1,
-        limit: 20,
-        total: 2,
-        totalPages: 1,
-        hasNext: false,
-        hasPrev: false,
-      },
-    }
-    expect(response.data).toHaveLength(2)
-    expect(response.pagination.total).toBe(2)
+  it('should export POST handler', () => {
+    expect(typeof usersRoute.POST).toBe('function')
+  })
+
+  it('should export PUT handler', () => {
+    expect(typeof usersRoute.PUT).toBe('function')
+  })
+
+  it('should export DELETE handler', () => {
+    expect(typeof usersRoute.DELETE).toBe('function')
   })
 })
 
-describe('POST /api/v1/users', () => {
-  it('should create user with valid data', async () => {
-    // Test implementation
-    const input = { email: 'new@example.com', name: 'New User' }
-    const created = {
-      id: 'generated-uuid',
-      ...input,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }
-    expect(created.email).toBe(input.email)
-    expect(created.name).toBe(input.name)
-    expect(created.id).toBeDefined()
+describe('User Schema Validation', () => {
+  describe('createUserSchema', () => {
+    it('should accept valid user data', () => {
+      const result = createUserSchema.safeParse({
+        email: 'test@example.com',
+        name: 'Test User',
+      })
+      expect(result.success).toBe(true)
+    })
+
+    it('should reject invalid email', () => {
+      const result = createUserSchema.safeParse({
+        email: 'invalid-email',
+        name: 'Test User',
+      })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject name that is too short', () => {
+      const result = createUserSchema.safeParse({
+        email: 'test@example.com',
+        name: 'A',
+      })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject name that is too long', () => {
+      const result = createUserSchema.safeParse({
+        email: 'test@example.com',
+        name: 'A'.repeat(101),
+      })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject missing email', () => {
+      const result = createUserSchema.safeParse({
+        name: 'Test User',
+      })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject missing name', () => {
+      const result = createUserSchema.safeParse({
+        email: 'test@example.com',
+      })
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject empty object', () => {
+      const result = createUserSchema.safeParse({})
+      expect(result.success).toBe(false)
+    })
   })
 
-  it('should return validation error for invalid email', async () => {
-    // Test implementation
-    const input = { email: 'invalid-email', name: 'Test User' }
-    const error = {
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'Invalid email address',
-      },
-    }
-    expect(error.error.code).toBe('VALIDATION_ERROR')
-  })
+  describe('updateUserSchema', () => {
+    it('should accept partial updates with email only', () => {
+      const result = updateUserSchema.safeParse({
+        email: 'new@example.com',
+      })
+      expect(result.success).toBe(true)
+    })
 
-  it('should return validation error for short name', async () => {
-    // Test implementation
-    const input = { email: 'test@example.com', name: 'A' }
-    const error = {
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'Name must be at least 2 characters',
-      },
-    }
-    expect(error.error.code).toBe('VALIDATION_ERROR')
-  })
+    it('should accept partial updates with name only', () => {
+      const result = updateUserSchema.safeParse({
+        name: 'Updated Name',
+      })
+      expect(result.success).toBe(true)
+    })
 
-  it('should return validation error for missing fields', async () => {
-    // Test implementation
-    const input = {}
-    const error = {
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'Required fields missing',
-      },
-    }
-    expect(error.error.code).toBe('VALIDATION_ERROR')
-  })
-})
+    it('should accept empty object for partial schema', () => {
+      const result = updateUserSchema.safeParse({})
+      expect(result.success).toBe(true)
+    })
 
-describe('PUT /api/v1/users', () => {
-  it('should update user with valid data', async () => {
-    // Test implementation
-    const input = { name: 'Updated Name' }
-    const updated = {
-      id: '1',
-      email: 'existing@example.com',
-      name: 'Updated Name',
-      updatedAt: Date.now(),
-    }
-    expect(updated.name).toBe(input.name)
-  })
-
-  it('should return error when user ID is missing', async () => {
-    // Test implementation
-    const error = {
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'User ID is required',
-      },
-    }
-    expect(error.error.code).toBe('VALIDATION_ERROR')
-  })
-})
-
-describe('DELETE /api/v1/users', () => {
-  it('should delete user successfully', async () => {
-    // Test implementation
-    const result = { success: true, deletedId: '1' }
-    expect(result.success).toBe(true)
-    expect(result.deletedId).toBe('1')
-  })
-
-  it('should return error when user ID is missing', async () => {
-    // Test implementation
-    const error = {
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'User ID is required',
-      },
-    }
-    expect(error.error.code).toBe('VALIDATION_ERROR')
+    it('should still validate email format when provided', () => {
+      const result = updateUserSchema.safeParse({
+        email: 'invalid-email',
+      })
+      expect(result.success).toBe(false)
+    })
   })
 })

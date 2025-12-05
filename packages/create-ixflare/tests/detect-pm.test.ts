@@ -190,15 +190,42 @@ describe('detectFromEnvironment', () => {
 })
 
 describe('detectPackageManager', () => {
+  const originalEnv = process.env
+
   beforeEach(() => {
     vi.resetAllMocks()
+    // Clear environment to isolate tests
+    process.env = { ...originalEnv }
+    delete process.env.npm_config_user_agent
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
   })
 
   it('should return npm as default when nothing detected', () => {
     vi.mocked(existsSync).mockReturnValue(false)
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ name: 'test' }))
 
     const result = detectPackageManager('/test')
     expect(result).toBe('npm')
+  })
+
+  it('should detect from lockfile first', () => {
+    vi.mocked(existsSync).mockImplementation((path) => {
+      return String(path).endsWith('pnpm-lock.yaml')
+    })
+
+    const result = detectPackageManager('/test')
+    expect(result).toBe('pnpm')
+  })
+
+  it('should detect from environment when no lockfile or package.json hint', () => {
+    vi.mocked(existsSync).mockReturnValue(false)
+    process.env.npm_config_user_agent = 'bun/1.0.0'
+
+    const result = detectPackageManager('/test')
+    expect(result).toBe('bun')
   })
 })
 
