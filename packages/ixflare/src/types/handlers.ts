@@ -6,6 +6,20 @@
 import type { EdgeContext } from './context'
 
 /**
+ * Arguments passed to loader functions
+ *
+ * @template Env - Type of environment bindings
+ */
+export type LoaderArgs<Env = Record<string, unknown>> = EdgeContext<Env>
+
+/**
+ * Arguments passed to action functions
+ *
+ * @template Env - Type of environment bindings
+ */
+export type ActionArgs<Env = Record<string, unknown>> = EdgeContext<Env>
+
+/**
  * Loader function for GET requests
  *
  * @template Env - Type of environment bindings

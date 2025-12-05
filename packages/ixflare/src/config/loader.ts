@@ -178,12 +178,24 @@ async function loadWranglerVars(filePath: string): Promise<EnvLoadResult> {
 }
 
 /**
- * Detect current environment (development or production)
+ * Detect current environment (development, staging, or production)
  *
- * @returns 'production' if NODE_ENV is production, otherwise 'development'
+ * @returns Environment based on NODE_ENV or APP_ENV
  */
-function detectEnvironment(): 'development' | 'production' {
-  return process.env.NODE_ENV === 'production' ? 'production' : 'development'
+function detectEnvironment(): 'development' | 'staging' | 'production' {
+  const nodeEnv = process.env.NODE_ENV
+  const appEnv = process.env.APP_ENV
+
+  // APP_ENV takes precedence for staging detection
+  if (appEnv === 'staging') {
+    return 'staging'
+  }
+
+  if (nodeEnv === 'production') {
+    return 'production'
+  }
+
+  return 'development'
 }
 
 /**
@@ -192,9 +204,10 @@ function detectEnvironment(): 'development' | 'production' {
  * Environment variables are merged with the following precedence (highest to lowest):
  * 1. wrangler.toml [vars] section (highest priority)
  * 2. .dev.vars (development only - Cloudflare Workers local secrets, gitignored)
- * 3. .env.production (production environment only)
- * 4. .env.local (local overrides, typically gitignored)
- * 5. .env (default values, typically committed)
+ * 3. .env.staging (staging environment only)
+ * 4. .env.production (production environment only)
+ * 5. .env.local (local overrides, typically gitignored)
+ * 6. .env (default values, typically committed)
  *
  * @example
  * ```typescript
@@ -214,7 +227,7 @@ export async function loadConfig(
   projectRoot: string,
   options: {
     /** Override detected environment */
-    environment?: 'development' | 'production'
+    environment?: 'development' | 'staging' | 'production'
     /** Custom config file path (relative to projectRoot) */
     configPath?: string
   } = {}
@@ -242,7 +255,12 @@ export async function loadConfig(
   // 2. .env.local (local overrides)
   const localEnv = await loadEnvFile(join(resolvedRoot, '.env.local'))
 
-  // 3. .env.production (production only)
+  // 3. Environment-specific files (staging or production only)
+  const stagingEnv =
+    environment === 'staging'
+      ? await loadEnvFile(join(resolvedRoot, '.env.staging'))
+      : { vars: {} }
+
   const prodEnv =
     environment === 'production'
       ? await loadEnvFile(join(resolvedRoot, '.env.production'))
@@ -261,6 +279,7 @@ export async function loadConfig(
   const mergedEnv: EnvConfig = {
     ...baseEnv.vars,
     ...localEnv.vars,
+    ...stagingEnv.vars,
     ...prodEnv.vars,
     ...devVars.vars,
     ...wranglerVars.vars,
@@ -320,13 +339,17 @@ export async function loadConfig(
  */
 export async function loadEnv(
   projectRoot: string,
-  environment?: 'development' | 'production'
+  environment?: 'development' | 'staging' | 'production'
 ): Promise<EnvConfig> {
   const resolvedRoot = resolve(projectRoot)
   const env = environment ?? detectEnvironment()
 
   const baseEnv = await loadEnvFile(join(resolvedRoot, '.env'))
   const localEnv = await loadEnvFile(join(resolvedRoot, '.env.local'))
+  const stagingEnv =
+    env === 'staging'
+      ? await loadEnvFile(join(resolvedRoot, '.env.staging'))
+      : { vars: {} }
   const prodEnv =
     env === 'production'
       ? await loadEnvFile(join(resolvedRoot, '.env.production'))
@@ -340,6 +363,7 @@ export async function loadEnv(
   return {
     ...baseEnv.vars,
     ...localEnv.vars,
+    ...stagingEnv.vars,
     ...prodEnv.vars,
     ...devVars.vars,
     ...wranglerVars.vars,

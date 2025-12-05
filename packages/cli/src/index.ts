@@ -14,6 +14,7 @@ const commands: Record<string, () => Promise<void>> = {
   deploy: () => import('./commands/deploy').then(m => m.deploy()),
   migrate: () => import('./commands/migrate').then(m => m.migrate()),
   generate: () => import('./commands/generate').then(m => m.generate()),
+  'generate:env': () => import('./commands/generate-env-types').then(m => m.generateEnvCommand({})),
 }
 
 async function main(): Promise<void> {

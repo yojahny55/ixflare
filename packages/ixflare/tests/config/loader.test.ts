@@ -161,6 +161,62 @@ describe('loadEnv', () => {
     expect(env.D).toBe('devvars')
     expect(env.E).toBe('wrangler')
   })
+
+  it('should include .env.staging in staging mode', async () => {
+    await writeFile(join(tempDir, '.env'), 'SHARED=base')
+    await writeFile(join(tempDir, '.env.staging'), 'SHARED=staging\nSTAGING_ONLY=true')
+
+    const env = await loadEnv(tempDir, 'staging')
+
+    expect(env.SHARED).toBe('staging')
+    expect(env.STAGING_ONLY).toBe(true)
+  })
+
+  it('should NOT include .env.staging in development mode', async () => {
+    await writeFile(join(tempDir, '.env'), 'SHARED=base')
+    await writeFile(join(tempDir, '.env.staging'), 'SHARED=staging\nSTAGING_ONLY=true')
+
+    const env = await loadEnv(tempDir, 'development')
+
+    expect(env.SHARED).toBe('base')
+    expect(env.STAGING_ONLY).toBeUndefined()
+  })
+
+  it('should NOT include .env.staging in production mode', async () => {
+    await writeFile(join(tempDir, '.env'), 'SHARED=base')
+    await writeFile(join(tempDir, '.env.staging'), 'SHARED=staging\nSTAGING_ONLY=true')
+
+    const env = await loadEnv(tempDir, 'production')
+
+    expect(env.SHARED).toBe('base')
+    expect(env.STAGING_ONLY).toBeUndefined()
+  })
+
+  it('should apply full precedence chain with .env.staging in staging mode', async () => {
+    // Create all env files with overlapping vars
+    await writeFile(join(tempDir, '.env'), 'A=base\nB=base\nC=base\nD=base')
+    await writeFile(join(tempDir, '.env.local'), 'B=local\nC=local\nD=local')
+    await writeFile(join(tempDir, '.env.staging'), 'C=staging\nD=staging')
+    await writeFile(join(tempDir, 'wrangler.toml'), '[vars]\nD = "wrangler"')
+
+    const env = await loadEnv(tempDir, 'staging')
+
+    // Precedence: wrangler > .env.staging > .env.local > .env
+    expect(env.A).toBe('base')
+    expect(env.B).toBe('local')
+    expect(env.C).toBe('staging')
+    expect(env.D).toBe('wrangler')
+  })
+
+  it('should NOT load .dev.vars in staging mode', async () => {
+    await writeFile(join(tempDir, '.env'), 'SHARED=base')
+    await writeFile(join(tempDir, '.dev.vars'), 'SHARED=devvars\nDEV_SECRET=secret123')
+
+    const env = await loadEnv(tempDir, 'staging')
+
+    expect(env.SHARED).toBe('base') // .dev.vars NOT loaded in staging
+    expect(env.DEV_SECRET).toBeUndefined()
+  })
 })
 
 describe('loadConfig', () => {

@@ -33,37 +33,14 @@ export {
 
 // Export handler types
 export type {
+  LoaderArgs,
+  ActionArgs,
   LoaderFunction,
   ActionFunction,
   RouteHandler,
   MiddlewareFunction,
   ErrorHandler,
 } from './handlers'
-
-// Legacy exports for backward compatibility
-import type { Context } from '../core/context'
-
-export interface Env {
-  DB?: D1Database
-  CACHE?: KVNamespace
-  [key: string]: unknown
-}
-
-export interface LoaderArgs<E = Env> {
-  request: Request
-  context: Context<E>
-  params: Record<string, string>
-  env: E
-}
-
-export interface ActionArgs<E = Env> extends LoaderArgs<E> {
-  formData: () => Promise<FormData>
-}
-
-export type Middleware<E = Env> = (
-  args: LoaderArgs<E>,
-  next: () => Promise<Response>
-) => Response | Promise<Response>
 
 // Note: Cloudflare Workers types now provided by @cloudflare/workers-types
 // Global type augmentation removed to prevent conflicts

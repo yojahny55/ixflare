@@ -1,26 +1,32 @@
 /**
  * @module errors
- * @description Error classes with typed error codes
+ * @description Error classes with typed error codes and secret redaction
  */
+
+import { redactString } from '../utils/redact'
 
 export class AppError extends Error {
   readonly code: string
   readonly status: number
   readonly timestamp: number
+  private rawMessage: string
 
   constructor(code: string, message: string, status: number = 500) {
-    super(message)
+    // Redact secrets from message before passing to Error
+    const sanitizedMessage = redactString(message)
+    super(sanitizedMessage)
     this.name = 'AppError'
     this.code = code
     this.status = status
     this.timestamp = Date.now()
+    this.rawMessage = sanitizedMessage
   }
 
   toJSON() {
     return {
       error: {
         code: this.code,
-        message: this.message,
+        message: this.rawMessage,
         status: this.status,
         timestamp: this.timestamp,
       },
