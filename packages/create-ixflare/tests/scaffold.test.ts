@@ -142,8 +142,8 @@ describe('isBinaryFile', () => {
     expect(isBinaryFile('font.WOFF2')).toBe(true)
   })
 
-  it('should identify SVG as binary (treated as binary for safety)', () => {
-    expect(isBinaryFile('icon.svg')).toBe(true)
+  it('should identify SVG as text (XML format supports template variables)', () => {
+    expect(isBinaryFile('icon.svg')).toBe(false)
   })
 })
 

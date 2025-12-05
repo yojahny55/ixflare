@@ -1,0 +1,8 @@
+# Environment Variables
+# Copy this file to .env.local for local development
+
+# Database (optional)
+# DATABASE_URL=
+
+# API Keys (optional)
+# API_KEY=

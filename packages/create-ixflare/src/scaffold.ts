@@ -11,6 +11,7 @@ import {
   writeFileSync,
   statSync,
   copyFileSync,
+  chmodSync,
 } from 'node:fs'
 import { join, dirname } from 'node:path'
 import type { ScaffoldOptions, ScaffoldResult, Template } from './types'
@@ -36,7 +37,7 @@ const BINARY_EXTENSIONS = new Set([
   '.gif',
   '.ico',
   '.webp',
-  '.svg',
+  // Note: SVG is text/XML and supports template variables
   '.woff',
   '.woff2',
   '.ttf',
@@ -53,24 +54,37 @@ const BINARY_EXTENSIONS = new Set([
 /**
  * Get the path to templates directory
  * Works both in development (src/) and production (dist/)
+ *
+ * Resolution order:
+ * 1. IXFLARE_TEMPLATES_DIR env var (for testing/custom installs)
+ * 2. Relative to package directory (npm package structure)
+ * 3. Monorepo development paths
  */
 export function getTemplatesDir(): string {
-  // In CJS, __dirname is available. For ESM compatibility in bundled output,
-  // we use require.resolve or relative paths from cwd
-  // The templates are in the monorepo templates/ directory
+  // Allow override via environment variable (useful for testing)
+  if (process.env.IXFLARE_TEMPLATES_DIR) {
+    const envPath = process.env.IXFLARE_TEMPLATES_DIR
+    if (existsSync(envPath)) {
+      return envPath
+    }
+  }
 
   // Try different locations based on environment
   const possiblePaths = [
-    // From the npm package (when installed globally or via npx)
-    // The package is at node_modules/create-ixflare, templates should be bundled
-    join(__dirname, '..', '..', '..', 'templates'), // From dist/ in packages/create-ixflare
-    join(__dirname, '..', '..', 'templates'), // Alternative location
-    join(__dirname, '..', 'templates'), // If templates are copied to package
-    join(process.cwd(), 'templates'), // From monorepo root during development
+    // npm package structure: node_modules/create-ixflare/templates
+    join(__dirname, '..', 'templates'),
+    // Monorepo development: packages/create-ixflare/dist -> ../../templates
+    join(__dirname, '..', '..', '..', 'templates'),
+    // Alternative monorepo structure
+    join(__dirname, '..', '..', 'templates'),
+    // Development from root
+    join(process.cwd(), 'templates'),
   ]
 
   for (const templatePath of possiblePaths) {
-    if (existsSync(templatePath)) {
+    // Verify this is actually a templates directory (has at least minimal/)
+    const minimalPath = join(templatePath, 'minimal')
+    if (existsSync(templatePath) && existsSync(minimalPath)) {
       return templatePath
     }
   }
@@ -78,7 +92,7 @@ export function getTemplatesDir(): string {
   throw new ScaffoldError(
     'Templates directory not found',
     'TEMPLATES_NOT_FOUND',
-    'Ensure templates/ directory exists in the monorepo root'
+    'Ensure templates/ directory exists with template subdirectories (minimal, api-backend, fullstack-react)'
   )
 }
 
@@ -141,6 +155,7 @@ export function isBinaryFile(filename: string): boolean {
 
 /**
  * Copy a single file with template variable replacement
+ * Preserves file permissions from source
  */
 export function copyTemplateFile(
   srcPath: string,
@@ -153,7 +168,11 @@ export function copyTemplateFile(
     mkdirSync(destDir, { recursive: true })
   }
 
-  // Binary files are copied as-is
+  // Get source file permissions
+  const srcStats = statSync(srcPath)
+  const mode = srcStats.mode
+
+  // Binary files are copied as-is (copyFileSync preserves permissions)
   if (isBinaryFile(srcPath)) {
     copyFileSync(srcPath, destPath)
     return
@@ -163,6 +182,9 @@ export function copyTemplateFile(
   const content = readFileSync(srcPath, 'utf-8')
   const replaced = replaceTemplateVars(content, vars)
   writeFileSync(destPath, replaced, 'utf-8')
+
+  // Preserve file permissions
+  chmodSync(destPath, mode)
 }
 
 /**

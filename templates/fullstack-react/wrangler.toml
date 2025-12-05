@@ -1,0 +1,18 @@
+name = "{{projectName}}"
+main = "dist/index.js"
+compatibility_date = "2024-01-01"
+
+# Static assets
+[site]
+bucket = "./dist/client"
+
+# Uncomment to enable D1 database
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "{{projectName}}-db"
+# database_id = ""
+
+# Uncomment to enable KV namespace
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = ""
