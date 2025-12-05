@@ -139,25 +139,28 @@ export async function runPrompts(options: {
   detectedPm?: PackageManager
 }): Promise<PromptResponses | null> {
   // Prompt for project name if not provided
-  let projectName = options.projectName
+  let projectName: string | undefined = options.projectName
   if (!projectName) {
-    projectName = await promptProjectName()
-    if (!projectName) return null
+    const prompted = await promptProjectName()
+    if (!prompted) return null
+    projectName = prompted
   }
 
   // Prompt for template if not provided
-  let template = options.template
+  let template: Template | undefined = options.template
   if (!template) {
-    template = await promptTemplate()
-    if (!template) return null
+    const prompted = await promptTemplate()
+    if (!prompted) return null
+    template = prompted
   }
 
   // Prompt for package manager if not provided
-  let packageManager = options.packageManager
+  let packageManager: PackageManager | undefined = options.packageManager
   if (!packageManager) {
     // Use detected PM as default in the selection
-    packageManager = await promptPackageManager(options.detectedPm)
-    if (!packageManager) return null
+    const prompted = await promptPackageManager(options.detectedPm)
+    if (!prompted) return null
+    packageManager = prompted
   }
 
   return {

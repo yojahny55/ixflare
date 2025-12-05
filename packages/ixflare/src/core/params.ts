@@ -51,9 +51,9 @@ export function extractParamsFromUrl(
     }
 
     return params
-  } catch (error) {
+  } catch {
     // URLPattern parsing failed - invalid pattern
-    console.error(`[ixflare] Invalid route pattern: ${pattern}`, error)
+    // Silently return null to allow router to try next route
     return null
   }
 }
@@ -86,7 +86,7 @@ export function parseCatchAllParam(catchAllValue: string): string[] {
  * @param params - Raw parameters extracted from URL (all strings)
  * @param schema - Zod schema for validation and coercion
  * @returns Validated and coerced parameters
- * @throws ValidationError if params don't match schema
+ * @throws ZodError if params don't match schema (caller should catch and return 400)
  *
  * @example
  * ```ts
