@@ -15,6 +15,131 @@ npm run build
 npm run deploy
 ```
 
+## First-Time Deployment
+
+Deploy your API to Cloudflare Workers edge network globally! The guided setup makes it effortless.
+
+### Prerequisites
+
+- A [Cloudflare account](https://dash.cloudflare.com/sign-up) (free tier available)
+- Node.js 18+ installed
+
+### Quick Start Guide
+
+First deployment? Ixflare walks you through it:
+
+```bash
+npm run deploy
+# → First-time deployment detected!
+# → To deploy to Cloudflare Workers, you need:
+#    1. A Cloudflare account (free)
+#    2. An API token with Workers permissions
+# → Let's set this up:
+```
+
+### Authentication Options
+
+#### Option 1: Browser Login (Local Development)
+
+Easiest for local development:
+
+```bash
+npm run deploy
+# → Choose "Browser login"
+# → Browser opens automatically
+# → Authenticate with Cloudflare
+# → Return to terminal
+# ✅ Authentication successful!
+```
+
+#### Option 2: API Token (Production/CI)
+
+For CI/CD pipelines and automation:
+
+1. Visit [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens)
+2. Click "Create Token"
+3. Use "Edit Cloudflare Workers" template
+4. Copy the token and set it:
+   ```bash
+   export CLOUDFLARE_API_TOKEN="your-token-here"
+   ```
+
+### Configuration
+
+Add your account ID to `wrangler.toml`:
+
+```toml
+name = "{{projectName}}"
+main = "dist/index.js"
+compatibility_date = "2024-01-01"
+account_id = "your-account-id"  # From dash.cloudflare.com
+```
+
+### Deploy Your API
+
+```bash
+npm run deploy
+```
+
+The deployment process:
+1. ✓ Checks prerequisites (wrangler, authentication)
+2. ✓ Validates bundle size (<3MB for free tier)
+3. ✓ Validates request limits (100MB max)
+4. ✓ Builds your API
+5. ✓ Uploads to Cloudflare Workers
+6. ✓ Returns your live API URL
+
+**Your API is live at:** `https://your-api.your-subdomain.workers.dev`
+
+### Environment-Specific Deployments
+
+Deploy to multiple environments:
+
+```bash
+# Staging environment
+IXFLARE_ENV=staging npm run deploy
+
+# Production environment (default)
+npm run deploy
+```
+
+Configure in `wrangler.toml`:
+
+```toml
+[env.staging]
+vars = { DB_URL = "https://staging-db.example.com" }
+
+[env.production]
+vars = { DB_URL = "https://prod-db.example.com" }
+```
+
+### Managing API Secrets
+
+Set sensitive API keys and credentials:
+
+```bash
+# Set database connection string
+wrangler secret put DATABASE_URL
+
+# Set third-party API keys
+wrangler secret put STRIPE_SECRET_KEY
+wrangler secret put SENDGRID_API_KEY
+```
+
+### CI/CD Integration
+
+Skip interactive first-time setup in CI:
+
+```bash
+# GitHub Actions, GitLab CI, etc.
+ix deploy --skip-first-time
+
+# Or set environment variables
+export CLOUDFLARE_API_TOKEN="your-token"
+export CLOUDFLARE_ACCOUNT_ID="your-account-id"
+npm run deploy
+```
+
 ## Project Structure
 
 ```

@@ -15,6 +15,104 @@ npm run build
 npm run deploy
 ```
 
+## First-Time Deployment
+
+Deploy your React application to Cloudflare Workers in minutes! The CLI handles all the complexity.
+
+### Prerequisites
+
+- A [Cloudflare account](https://dash.cloudflare.com/sign-up) (free tier available)
+- Node.js 18+ installed
+
+### Authentication
+
+On your first deployment, Ixflare will automatically detect you're not authenticated and guide you:
+
+```bash
+npm run deploy
+# → First-time deployment detected!
+# → Do you have a Cloudflare account? (Y/n)
+# → How would you like to authenticate?
+#    1. Browser login (recommended for local dev)
+#    2. API token (recommended for CI/CD)
+```
+
+#### Browser Login (Recommended)
+
+1. Select "Browser login" from the prompts
+2. Your browser will open automatically
+3. Log in to Cloudflare
+4. Return to terminal - you're authenticated!
+
+#### API Token (CI/CD)
+
+For automated deployments:
+
+1. Create a token at [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens)
+2. Use the "Edit Cloudflare Workers" template
+3. Set in your environment:
+   ```bash
+   export CLOUDFLARE_API_TOKEN="your-token-here"
+   ```
+
+### Configuration
+
+Update `wrangler.toml` with your account ID:
+
+```toml
+name = "{{projectName}}"
+main = "dist/index.js"
+compatibility_date = "2024-01-01"
+account_id = "your-account-id"  # Find at dash.cloudflare.com
+```
+
+### Deploy
+
+```bash
+npm run deploy
+```
+
+Ixflare will:
+- ✓ Verify deployment prerequisites
+- ✓ Check bundle size (React SSR apps should stay under 3MB compressed)
+- ✓ Build your React application
+- ✓ Deploy to Cloudflare Workers
+- ✓ Show your live URL
+
+**Your app is now live at:** `https://your-app.your-subdomain.workers.dev`
+
+### Multi-Environment Deployment
+
+Deploy to different environments:
+
+```bash
+# Deploy to staging
+IXFLARE_ENV=staging npm run deploy
+
+# Deploy to production (default)
+npm run deploy
+```
+
+Configure environments in `wrangler.toml`:
+
+```toml
+[env.staging]
+vars = { API_URL = "https://staging-api.example.com" }
+
+[env.production]
+vars = { API_URL = "https://api.example.com" }
+```
+
+### Secrets Management
+
+Set encrypted secrets for production:
+
+```bash
+# Interactive prompt for secret value
+wrangler secret put DATABASE_URL
+wrangler secret put API_KEY
+```
+
 ## Project Structure
 
 ```

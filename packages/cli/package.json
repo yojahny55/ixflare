@@ -29,9 +29,12 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "ixflare": "workspace:*"
+    "ixflare": "workspace:*",
+    "prompts": "^2.4.2"
   },
   "devDependencies": {
+    "@types/node": "^22.19.1",
+    "@types/prompts": "^2.4.9",
     "tsup": "^8.5.0",
     "typescript": "^5.5.0",
     "vitest": "^4.0.0"
