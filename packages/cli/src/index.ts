@@ -22,9 +22,9 @@ const commands: Record<string, () => Promise<void>> = {
 async function main(): Promise<void> {
   if (!command || command === '--help' || command === '-h') {
     // Load custom commands for help display
-    const customCommands = await loadCustomCommands(process.cwd())
+    const { commands: customCommands } = await loadCustomCommands(process.cwd())
     const customCommandsList = Array.from(customCommands.entries())
-      .map(([name, config]) => `    ${name.padEnd(14)} ${config.description}`)
+      .map(([name, cmdConfig]) => `    ${name.padEnd(14)} ${cmdConfig.description}`)
       .join('\n')
 
     console.log(`
@@ -67,9 +67,9 @@ ${customCommandsList ? '\n  Custom Commands:\n' + customCommandsList : ''}
   }
 
   // Try custom commands
-  const customCommands = await loadCustomCommands(process.cwd())
-  if (customCommands.has(command)) {
-    await runCustomCommand(process.cwd(), command)
+  const { commands: customCommands, config } = await loadCustomCommands(process.cwd())
+  if (customCommands.has(command) && config) {
+    await runCustomCommand(command, config)
     return
   }
 

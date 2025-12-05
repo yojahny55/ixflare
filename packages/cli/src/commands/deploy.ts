@@ -13,8 +13,9 @@ export async function deploy(): Promise<void> {
     // Load configuration
     await runner.loadConfig(projectRoot)
 
-    // Detect environment (use NODE_ENV or default to production)
-    const environment = process.env.NODE_ENV === 'development' ? 'development' : 'production'
+    // Detect environment from NODE_ENV or IXFLARE_ENV, defaulting to production
+    // Supports: development, staging, production, or any custom environment name
+    const environment = process.env.IXFLARE_ENV || process.env.NODE_ENV || 'production'
 
     // Execute pre-deploy hook
     try {

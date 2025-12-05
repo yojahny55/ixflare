@@ -108,18 +108,19 @@ describe('HooksRunner', () => {
 
   describe('runPostBuild', () => {
     it('should execute post-build hook with correct context', async () => {
-      let capturedContext: any = null
+      const flagFile = join(tempDir, 'post-build-context.json')
 
       await writeFile(
         join(tempDir, 'edge.config.ts'),
         `
-        const captureContext = (ctx) => {
-          global.__testContext = ctx
-        }
+        import { writeFileSync } from 'node:fs'
+
         export default {
           name: 'test-app',
           hooks: {
-            'post-build': captureContext
+            'post-build': async (ctx) => {
+              writeFileSync('${flagFile}', JSON.stringify(ctx))
+            }
           }
         }
         `
@@ -128,8 +129,11 @@ describe('HooksRunner', () => {
       await runner.loadConfig(tempDir)
       await runner.runPostBuild({ outputPath: '/dist/output' })
 
-      // Note: In real test, we'll need to check the hook was called with correct params
-      // This is a placeholder - actual test will verify the hook signature
+      // Verify hook received correct context
+      const { readFile: readFlagFile } = await import('node:fs/promises')
+      const content = await readFlagFile(flagFile, 'utf-8')
+      const context = JSON.parse(content)
+      expect(context).toEqual({ outputPath: '/dist/output' })
     })
 
     it('should skip gracefully when no post-build hook configured', async () => {

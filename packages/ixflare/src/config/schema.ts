@@ -53,16 +53,33 @@ export const postDeployContextSchema = z.object({
 
 /**
  * Lifecycle hooks schema
- * Note: z.function() validation is limited - functions are passed through
+ *
+ * Note: Zod's z.function() validates that values are functions but cannot
+ * enforce specific signatures at the schema level. For full type safety,
+ * use the exported hook types (PreBuildHook, PostBuildHook, PreDeployHook,
+ * PostDeployHook) when defining hooks in your edge.config.ts:
+ *
+ * @example
+ * import type { PostBuildHook, PreDeployHook } from 'ixflare'
+ *
+ * const myPostBuildHook: PostBuildHook = async ({ outputPath }) => {
+ *   // TypeScript will enforce correct parameter types
+ * }
+ *
+ * export default defineConfig({
+ *   hooks: {
+ *     'post-build': myPostBuildHook,
+ *   },
+ * })
  */
 export const hooksConfigSchema = z.object({
-  /** Called before build starts */
+  /** Called before build starts (no parameters) */
   'pre-build': z.function().optional(),
-  /** Called after build completes */
+  /** Called after build completes (receives { outputPath: string }) */
   'post-build': z.function().optional(),
-  /** Called before deployment */
+  /** Called before deployment (receives { environment: string }) */
   'pre-deploy': z.function().optional(),
-  /** Called after deployment completes */
+  /** Called after deployment completes (receives { url: string }) */
   'post-deploy': z.function().optional(),
 })
 

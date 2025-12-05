@@ -7,7 +7,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdir, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { loadCustomCommands, runCustomCommand } from '../../src/commands/custom'
+import { loadCustomCommands, runCustomCommand, CommandError } from '../../src/commands/custom'
+import { loadConfig } from 'ixflare/config'
 
 // Create a unique temp directory for each test run
 const createTempDir = async () => {
@@ -28,8 +29,9 @@ describe('loadCustomCommands', () => {
   })
 
   it('should return empty map when no config file exists', async () => {
-    const commands = await loadCustomCommands(tempDir)
-    expect(commands.size).toBe(0)
+    const result = await loadCustomCommands(tempDir)
+    expect(result.commands.size).toBe(0)
+    expect(result.config).toBeNull()
   })
 
   it('should return empty map when no custom commands configured', async () => {
@@ -38,8 +40,9 @@ describe('loadCustomCommands', () => {
       `export default { name: 'test-app' }`
     )
 
-    const commands = await loadCustomCommands(tempDir)
-    expect(commands.size).toBe(0)
+    const result = await loadCustomCommands(tempDir)
+    expect(result.commands.size).toBe(0)
+    expect(result.config).not.toBeNull()
   })
 
   it('should load custom commands from config', async () => {
@@ -66,10 +69,11 @@ describe('loadCustomCommands', () => {
       `
     )
 
-    const commands = await loadCustomCommands(tempDir)
-    expect(commands.size).toBe(2)
-    expect(commands.has('db:seed')).toBe(true)
-    expect(commands.has('cache:clear')).toBe(true)
+    const result = await loadCustomCommands(tempDir)
+    expect(result.commands.size).toBe(2)
+    expect(result.commands.has('db:seed')).toBe(true)
+    expect(result.commands.has('cache:clear')).toBe(true)
+    expect(result.config).not.toBeNull()
   })
 
   it('should include command descriptions', async () => {
@@ -88,8 +92,8 @@ describe('loadCustomCommands', () => {
       `
     )
 
-    const commands = await loadCustomCommands(tempDir)
-    const dbSeed = commands.get('db:seed')
+    const result = await loadCustomCommands(tempDir)
+    const dbSeed = result.commands.get('db:seed')
     expect(dbSeed?.description).toBe('Seed the database')
   })
 })
@@ -105,17 +109,15 @@ describe('runCustomCommand', () => {
     await rm(tempDir, { recursive: true, force: true })
   })
 
-  it('should throw error when config file not found', async () => {
-    await expect(runCustomCommand(tempDir, 'db:seed')).rejects.toThrow('Configuration file not found')
-  })
-
-  it('should throw error when command not found', async () => {
+  it('should throw CommandError when command not found', async () => {
     await writeFile(
       join(tempDir, 'edge.config.ts'),
       `export default { name: 'test-app' }`
     )
 
-    await expect(runCustomCommand(tempDir, 'nonexistent')).rejects.toThrow('Unknown custom command: nonexistent')
+    const config = await loadConfig(tempDir)
+    await expect(runCustomCommand('nonexistent', config)).rejects.toThrow(CommandError)
+    await expect(runCustomCommand('nonexistent', config)).rejects.toThrow('Unknown custom command: nonexistent')
   })
 
   it('should execute custom command handler', async () => {
@@ -140,7 +142,8 @@ describe('runCustomCommand', () => {
       `
     )
 
-    await runCustomCommand(tempDir, 'test:command')
+    const config = await loadConfig(tempDir)
+    await runCustomCommand('test:command', config)
 
     // Verify command was executed
     const { readFile } = await import('node:fs/promises')
@@ -170,7 +173,8 @@ describe('runCustomCommand', () => {
       `
     )
 
-    await runCustomCommand(tempDir, 'async:command')
+    const config = await loadConfig(tempDir)
+    await runCustomCommand('async:command', config)
 
     // Verify async command was executed
     const { readFile } = await import('node:fs/promises')
@@ -178,7 +182,7 @@ describe('runCustomCommand', () => {
     expect(content).toBe('async-executed')
   })
 
-  it('should propagate handler errors', async () => {
+  it('should wrap handler errors in CommandError', async () => {
     await writeFile(
       join(tempDir, 'edge.config.ts'),
       `
@@ -196,7 +200,9 @@ describe('runCustomCommand', () => {
       `
     )
 
-    await expect(runCustomCommand(tempDir, 'failing:command')).rejects.toThrow('Command execution failed')
+    const config = await loadConfig(tempDir)
+    await expect(runCustomCommand('failing:command', config)).rejects.toThrow(CommandError)
+    await expect(runCustomCommand('failing:command', config)).rejects.toThrow('Command execution failed')
   })
 
   it('should support commands with colons in names', async () => {
@@ -221,10 +227,27 @@ describe('runCustomCommand', () => {
       `
     )
 
-    await runCustomCommand(tempDir, 'db:migrate:rollback')
+    const config = await loadConfig(tempDir)
+    await runCustomCommand('db:migrate:rollback', config)
 
     const { readFile } = await import('node:fs/promises')
     const content = await readFile(flagFile, 'utf-8')
     expect(content).toBe('rollback-executed')
+  })
+
+  it('should include command name in CommandError', async () => {
+    await writeFile(
+      join(tempDir, 'edge.config.ts'),
+      `export default { name: 'test-app' }`
+    )
+
+    const config = await loadConfig(tempDir)
+    try {
+      await runCustomCommand('my-command', config)
+    } catch (error) {
+      expect(error).toBeInstanceOf(CommandError)
+      expect((error as CommandError).commandName).toBe('my-command')
+      expect((error as CommandError).code).toBe('COMMAND_NOT_FOUND')
+    }
   })
 })
