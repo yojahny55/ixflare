@@ -78,6 +78,59 @@ export async function loader({ env }: LoaderArgs<Env>) {
 - Use `.dev.vars` for local development secrets (Cloudflare Workers local mode)
 - Set production secrets using `wrangler secret put <KEY>`
 
+## Lifecycle Hooks & Custom Commands
+
+Ixflare supports lifecycle hooks for build and deployment customization, plus custom CLI commands.
+
+### Lifecycle Hooks
+
+Add hooks to `edge.config.ts` to run custom logic at different stages:
+
+```typescript
+export default defineConfig({
+  name: 'my-app',
+  hooks: {
+    'pre-build': async () => {
+      // Runs before build starts
+      console.log('Running code generation...')
+    },
+    'post-build': async ({ outputPath }) => {
+      // Runs after build completes
+      console.log(`Build output: ${outputPath}`)
+    },
+    'pre-deploy': async ({ environment }) => {
+      // Runs before deployment
+      console.log(`Deploying to ${environment}`)
+    },
+    'post-deploy': async ({ url }) => {
+      // Runs after deployment
+      console.log(`Deployed to ${url}`)
+    },
+  },
+})
+```
+
+### Custom Commands
+
+Add custom commands to `edge.config.ts`:
+
+```typescript
+export default defineConfig({
+  name: 'my-app',
+  commands: {
+    'db:seed': {
+      description: 'Seed the database',
+      handler: async () => {
+        console.log('Seeding database...')
+        // Your logic here
+      },
+    },
+  },
+})
+```
+
+Run with `ix db:seed`. Custom commands appear in `ix --help`.
+
 ## Learn More
 
 - [Ixflare Documentation](https://ixflare.dev)

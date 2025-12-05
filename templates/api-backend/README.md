@@ -82,6 +82,62 @@ export async function GET({ env }: LoaderArgs<Env>) {
 - Use `.dev.vars` for local development secrets (Cloudflare Workers local mode)
 - Set production secrets using `wrangler secret put <KEY>`
 
+## Lifecycle Hooks & Custom Commands
+
+Automate API operations with lifecycle hooks and custom CLI commands.
+
+### Lifecycle Hooks
+
+Configure in `edge.config.ts`:
+
+```typescript
+export default defineConfig({
+  name: 'my-api',
+  hooks: {
+    'pre-deploy': async ({ environment }) => {
+      // Run database migrations before deployment
+      await runMigrations(environment)
+    },
+    'post-deploy': async ({ url }) => {
+      // Run API smoke tests after deployment
+      await testEndpoints(url)
+    },
+  },
+})
+```
+
+**Hook phases:**
+- `pre-build`: Before build (e.g., generate OpenAPI spec)
+- `post-build`: After build (e.g., analyze bundle size)
+- `pre-deploy`: Before deployment (e.g., run migrations)
+- `post-deploy`: After deployment (e.g., warm cache, notify monitoring)
+
+### Custom Commands
+
+Add API-specific commands:
+
+```typescript
+export default defineConfig({
+  name: 'my-api',
+  commands: {
+    'api:test': {
+      description: 'Run API integration tests',
+      handler: async () => {
+        // Testing logic
+      },
+    },
+    'cache:warm': {
+      description: 'Pre-warm API cache',
+      handler: async () => {
+        // Cache warming logic
+      },
+    },
+  },
+})
+```
+
+Run with `ix api:test` or `ix cache:warm`. List all with `ix --help`.
+
 ## Learn More
 
 - [Ixflare Documentation](https://ixflare.dev)

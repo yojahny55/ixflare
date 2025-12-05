@@ -21,7 +21,7 @@
   "exports": {
     ".": {
       "import": {
-        "types": "./dist/index.d.mts",
+        "types": "./dist/index.d.ts",
         "default": "./dist/index.mjs"
       },
       "require": {
@@ -31,7 +31,7 @@
     },
     "./orm": {
       "import": {
-        "types": "./dist/orm.d.mts",
+        "types": "./dist/orm.d.ts",
         "default": "./dist/orm.mjs"
       },
       "require": {
@@ -41,7 +41,7 @@
     },
     "./ssr": {
       "import": {
-        "types": "./dist/ssr.d.mts",
+        "types": "./dist/ssr.d.ts",
         "default": "./dist/ssr.mjs"
       },
       "require": {
@@ -51,7 +51,7 @@
     },
     "./config": {
       "import": {
-        "types": "./dist/config.d.mts",
+        "types": "./dist/config.d.ts",
         "default": "./dist/config.mjs"
       },
       "require": {

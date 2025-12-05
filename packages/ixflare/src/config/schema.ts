@@ -153,3 +153,51 @@ export type CommandConfig = z.infer<typeof commandSchema>
  * Environment variables type
  */
 export type EnvConfig = z.infer<typeof envConfigSchema>
+
+/**
+ * Hook context types - actual runtime types for hook functions
+ */
+
+/**
+ * Context passed to post-build hook
+ */
+export type PostBuildContext = z.infer<typeof postBuildContextSchema>
+
+/**
+ * Context passed to pre-deploy hook
+ */
+export type PreDeployContext = z.infer<typeof preDeployContextSchema>
+
+/**
+ * Context passed to post-deploy hook
+ */
+export type PostDeployContext = z.infer<typeof postDeployContextSchema>
+
+/**
+ * Hook function type definitions
+ */
+
+/**
+ * Pre-build hook function (no context)
+ */
+export type PreBuildHook = () => void | Promise<void>
+
+/**
+ * Post-build hook function (receives output path)
+ */
+export type PostBuildHook = (context: PostBuildContext) => void | Promise<void>
+
+/**
+ * Pre-deploy hook function (receives environment)
+ */
+export type PreDeployHook = (context: PreDeployContext) => void | Promise<void>
+
+/**
+ * Post-deploy hook function (receives deployment URL)
+ */
+export type PostDeployHook = (context: PostDeployContext) => void | Promise<void>
+
+/**
+ * Union type of all hook contexts
+ */
+export type HookContext = PostBuildContext | PreDeployContext | PostDeployContext

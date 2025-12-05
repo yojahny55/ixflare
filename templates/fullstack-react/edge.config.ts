@@ -33,20 +33,44 @@ export default defineConfig({
     headers: true, // Auto-inject security headers
   },
 
-  // Lifecycle hooks (optional)
+  // Lifecycle hooks for build and deployment customization (optional)
   // hooks: {
-  //   'pre-build': () => console.log('Starting build...'),
-  //   'post-build': ({ outputPath }) => console.log(`Built to ${outputPath}`),
-  //   'pre-deploy': ({ environment }) => console.log(`Deploying to ${environment}`),
-  //   'post-deploy': ({ url }) => console.log(`Deployed to ${url}`),
+  //   'pre-build': async () => {
+  //     // Run before build starts
+  //     // Example: Generate types, validate config, run code generation
+  //     console.log('Starting build...')
+  //   },
+  //   'post-build': async ({ outputPath }) => {
+  //     // Run after build completes
+  //     // Example: Upload sourcemaps, generate build reports, optimize assets
+  //     console.log(`Built to ${outputPath}`)
+  //   },
+  //   'pre-deploy': async ({ environment }) => {
+  //     // Run before deployment starts
+  //     // Example: Run migrations, backup data, notify team
+  //     console.log(`Deploying to ${environment}`)
+  //   },
+  //   'post-deploy': async ({ url }) => {
+  //     // Run after deployment completes
+  //     // Example: Run smoke tests, notify Slack, invalidate CDN cache
+  //     console.log(`Deployed to ${url}`)
+  //   },
   // },
 
   // Custom CLI commands (optional)
   // commands: {
-  //   'seed-db': {
+  //   'db:seed': {
   //     description: 'Seed the database with sample data',
   //     handler: async () => {
   //       console.log('Seeding database...')
+  //       // Your seeding logic here
+  //     },
+  //   },
+  //   'cache:clear': {
+  //     description: 'Clear all KV cache entries',
+  //     handler: async () => {
+  //       console.log('Clearing cache...')
+  //       // Your cache clearing logic here
   //     },
   //   },
   // },

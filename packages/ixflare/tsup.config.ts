@@ -16,6 +16,7 @@ export default defineConfig({
   outExtension({ format }) {
     return {
       js: format === 'esm' ? '.mjs' : '.cjs',
+      dts: format === 'esm' ? '.d.mts' : '.d.cts',
     }
   },
 })

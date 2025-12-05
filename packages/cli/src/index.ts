@@ -5,6 +5,8 @@
  * @node-only
  */
 
+import { loadCustomCommands, runCustomCommand } from './commands/custom'
+
 const args = process.argv.slice(2)
 const command = args[0]
 
@@ -19,6 +21,12 @@ const commands: Record<string, () => Promise<void>> = {
 
 async function main(): Promise<void> {
   if (!command || command === '--help' || command === '-h') {
+    // Load custom commands for help display
+    const customCommands = await loadCustomCommands(process.cwd())
+    const customCommandsList = Array.from(customCommands.entries())
+      .map(([name, config]) => `    ${name.padEnd(14)} ${config.description}`)
+      .join('\n')
+
     console.log(`
   ╭─────────────────────────────────────────╮
   │                                         │
@@ -37,6 +45,7 @@ async function main(): Promise<void> {
     migrate        Run database migrations
     generate       Generate code (model, migration, component)
     generate:env   Generate TypeScript types from .env.example
+${customCommandsList ? '\n  Custom Commands:\n' + customCommandsList : ''}
 
   Options:
     --help    Show help
@@ -50,14 +59,24 @@ async function main(): Promise<void> {
     return
   }
 
+  // Check built-in commands first
   const handler = commands[command]
-  if (!handler) {
-    console.error(`Unknown command: ${command}`)
-    console.error('Run "ix --help" for available commands')
-    process.exit(1)
+  if (handler) {
+    await handler()
+    return
   }
 
-  await handler()
+  // Try custom commands
+  const customCommands = await loadCustomCommands(process.cwd())
+  if (customCommands.has(command)) {
+    await runCustomCommand(process.cwd(), command)
+    return
+  }
+
+  // Unknown command
+  console.error(`Unknown command: ${command}`)
+  console.error('Run "ix --help" for available commands')
+  process.exit(1)
 }
 
 main().catch(err => {

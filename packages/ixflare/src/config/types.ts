@@ -13,4 +13,12 @@ export type {
   HooksConfig,
   CommandConfig,
   EnvConfig,
+  PostBuildContext,
+  PreDeployContext,
+  PostDeployContext,
+  PreBuildHook,
+  PostBuildHook,
+  PreDeployHook,
+  PostDeployHook,
+  HookContext,
 } from './schema'

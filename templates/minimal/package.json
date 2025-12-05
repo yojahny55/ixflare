@@ -16,6 +16,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.0.0",
+    "@ixflare/tsconfig": "workspace:*",
     "typescript": "^5.9.3",
     "vite": "^6.0.0",
     "vite-plugin-ixflare": "workspace:*",
