@@ -29,5 +29,26 @@ export type {
 // Error exports
 export { AppError, AuthError, ValidationError, NotFoundError, ForbiddenError, ConflictError, InfraError, HttpError } from './errors'
 
-// Type exports
-export type { RouteHandler, Middleware, LoaderArgs, ActionArgs, Env } from './types'
+// Type exports (new EdgeContext-based types)
+export type {
+  EdgeContext,
+  LoaderFunction,
+  ActionFunction,
+  RouteHandler as EdgeRouteHandler,
+  MiddlewareFunction,
+  ErrorHandler,
+  ResponseInit,
+} from './types'
+
+export {
+  createEdgeContext,
+  parseJson,
+  parseFormData,
+  parseText,
+  getQueryParam,
+  getQueryParams,
+  getParam,
+} from './types'
+
+// Legacy type exports (backward compatibility)
+export type { Middleware, LoaderArgs, ActionArgs, Env } from './types'

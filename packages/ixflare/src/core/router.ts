@@ -1,6 +1,7 @@
 /**
  * @module core/router
  * @description File-based router for Cloudflare Workers
+ * @worker-only
  */
 
 export interface Route {

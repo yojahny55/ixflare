@@ -1,6 +1,7 @@
 /**
  * @module core/context
  * @description Request context for route handlers
+ * @worker-only
  */
 
 export interface Context<E = unknown> {

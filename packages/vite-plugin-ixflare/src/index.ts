@@ -1,6 +1,7 @@
 /**
  * @module vite-plugin-ixflare
  * @description Vite plugin for Ixflare framework
+ * @node-only
  */
 
 import type { Plugin } from 'vite'

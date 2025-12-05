@@ -2,6 +2,7 @@
 /**
  * @module @ixflare/cli
  * @description CLI entry point for ix commands
+ * @node-only
  */
 
 const args = process.argv.slice(2)
