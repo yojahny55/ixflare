@@ -32,6 +32,9 @@ export interface EdgeContext<Env = Record<string, unknown>> {
 
   /** Request headers */
   headers: Headers
+
+  /** Data from page loader (if loader was executed) */
+  loaderData?: unknown
 }
 
 /**

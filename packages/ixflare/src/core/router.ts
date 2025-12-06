@@ -268,10 +268,7 @@ export class Router<Env = unknown> {
           return loaderResult
         }
 
-        // Otherwise, attach loader data to context for handler/SSR to use
-        // Note: EdgeContext doesn't have loaderData yet, but this prepares for SSR integration
-        // For now, the handler can access this via a custom context extension if needed
-        // @ts-expect-error - Adding loaderData dynamically for SSR integration
+        // Attach loader data to context for handler/SSR to use
         edgeContext.loaderData = loaderResult
       } catch (error) {
         // Handle thrown Response (e.g., throw redirect())

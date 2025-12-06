@@ -122,6 +122,9 @@ describe('Router - Page Loader Execution', () => {
           status: 404,
         },
       })
+      // Verify timestamp is present per architecture spec
+      expect(body.error.timestamp).toBeDefined()
+      expect(typeof body.error.timestamp).toBe('number')
     })
 
     it('should return 401 response when loader throws AuthError', async () => {
@@ -164,7 +167,7 @@ describe('Router - Page Loader Execution', () => {
       expect(body.error.status).toBe(403)
     })
 
-    it('should return 422 response when loader throws ValidationError', async () => {
+    it('should return 422 response when loader throws ValidationError with errors array', async () => {
       router.add(
         '/validate',
         async () => new Response('OK'),
@@ -184,6 +187,11 @@ describe('Router - Page Loader Execution', () => {
       const body = await response.json()
       expect(body.error.code).toBe('VALIDATION.FAILED')
       expect(body.error.status).toBe(422)
+      expect(body.error.timestamp).toBeDefined()
+      // Verify errors array is preserved from ValidationError
+      expect(body.error.errors).toEqual([
+        { field: 'email', message: 'Invalid email format' },
+      ])
     })
 
     it('should return 500 response for unknown errors with safe message', async () => {
@@ -209,9 +217,7 @@ describe('Router - Page Loader Execution', () => {
   })
 
   describe('AC3: Parallel Loader Execution', () => {
-    it('should execute loader in parallel with route matching (not tested directly, but loader runs before handler)', async () => {
-      // This test verifies loader executes, parallel execution with layouts
-      // will be tested when layout+page integration is implemented
+    it('should execute loader before handler', async () => {
       const timestamps: number[] = []
 
       router.add(
@@ -236,6 +242,77 @@ describe('Router - Page Loader Execution', () => {
       // Loader should execute before handler
       expect(timestamps.length).toBe(2)
       expect(timestamps[0]).toBeLessThanOrEqual(timestamps[1])
+    })
+
+    it('should execute layout + page loaders in parallel using executeLoaders', async () => {
+      // Import executeLoaders for parallel execution testing
+      const { executeLoaders } = await import('../../src/core/layout-loader')
+
+      const executionOrder: string[] = []
+      const startTime = Date.now()
+
+      // Simulate layout loaders with delays
+      const layoutLoader1 = async () => {
+        executionOrder.push('layout1-start')
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        executionOrder.push('layout1-end')
+        return { layout1: 'data' }
+      }
+
+      const layoutLoader2 = async () => {
+        executionOrder.push('layout2-start')
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        executionOrder.push('layout2-end')
+        return { layout2: 'data' }
+      }
+
+      const pageLoader = async () => {
+        executionOrder.push('page-start')
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        executionOrder.push('page-end')
+        return { page: 'data' }
+      }
+
+      const args = {
+        request: new Request('http://localhost/test'),
+        params: {},
+        env: {},
+        ctx: { waitUntil: () => {}, passThroughOnException: () => {}, props: {} } as ExecutionContext,
+        query: new URLSearchParams(),
+        url: new URL('http://localhost/test'),
+        method: 'GET',
+        headers: new Headers(),
+      }
+
+      const [layoutData, pageData] = await executeLoaders(
+        [layoutLoader1, layoutLoader2],
+        pageLoader,
+        args
+      )
+
+      const duration = Date.now() - startTime
+
+      // All loaders return correct data
+      expect(layoutData).toEqual([{ layout1: 'data' }, { layout2: 'data' }])
+      expect(pageData).toEqual({ page: 'data' })
+
+      // If run in parallel, total time should be ~50ms (max of individual times)
+      // If run sequentially, it would be ~150ms
+      // Allow some buffer for test execution overhead
+      expect(duration).toBeLessThan(120) // Should be ~50-70ms if parallel
+
+      // Verify all started before any ended (parallel execution)
+      const startIndices = executionOrder
+        .map((e, i) => (e.endsWith('-start') ? i : -1))
+        .filter((i) => i >= 0)
+      const endIndices = executionOrder
+        .map((e, i) => (e.endsWith('-end') ? i : -1))
+        .filter((i) => i >= 0)
+
+      // All starts should happen before all ends in parallel execution
+      const maxStartIndex = Math.max(...startIndices)
+      const minEndIndex = Math.min(...endIndices)
+      expect(maxStartIndex).toBeLessThan(minEndIndex)
     })
   })
 

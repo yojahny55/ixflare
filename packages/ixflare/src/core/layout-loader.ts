@@ -5,7 +5,7 @@
  */
 
 import type { LayoutLoaderArgs } from '../types/handlers'
-import { NotFoundError, AuthError, ForbiddenError, AppError } from '../errors'
+import { NotFoundError, AuthError, ForbiddenError, ValidationError, AppError } from '../errors'
 
 /**
  * Layout loader function signature
@@ -36,35 +36,53 @@ export class LayoutLoaderError extends AppError {
 /**
  * Convert known error types to appropriate HTTP responses
  * This integrates with the typed error classes from the architecture
+ *
+ * Error response format per architecture spec:
+ * { error: { code, message, status, timestamp } }
  */
 export function getLoaderErrorResponse(error: Error): Response {
   if (error instanceof NotFoundError) {
     return Response.json(
-      { error: { code: error.code, message: error.message, status: 404 } },
+      { error: { code: error.code, message: error.message, status: 404, timestamp: Date.now() } },
       { status: 404 }
     )
   }
   if (error instanceof AuthError) {
     return Response.json(
-      { error: { code: error.code, message: error.message, status: 401 } },
+      { error: { code: error.code, message: error.message, status: 401, timestamp: Date.now() } },
       { status: 401 }
     )
   }
   if (error instanceof ForbiddenError) {
     return Response.json(
-      { error: { code: error.code, message: error.message, status: 403 } },
+      { error: { code: error.code, message: error.message, status: 403, timestamp: Date.now() } },
       { status: 403 }
+    )
+  }
+  // ValidationError must come before AppError since it extends AppError
+  if (error instanceof ValidationError) {
+    return Response.json(
+      {
+        error: {
+          code: error.code,
+          message: error.message,
+          status: 422,
+          timestamp: Date.now(),
+          errors: error.errors,
+        },
+      },
+      { status: 422 }
     )
   }
   if (error instanceof AppError) {
     return Response.json(
-      { error: { code: error.code, message: error.message, status: error.status } },
+      { error: { code: error.code, message: error.message, status: error.status, timestamp: Date.now() } },
       { status: error.status }
     )
   }
   // Unknown error - return 500
   return Response.json(
-    { error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred', status: 500 } },
+    { error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred', status: 500, timestamp: Date.now() } },
     { status: 500 }
   )
 }

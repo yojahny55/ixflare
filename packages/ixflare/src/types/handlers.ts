@@ -148,6 +148,11 @@ export interface LayoutProps<TData = unknown> {
  * - Data object (will be passed to component as `data` prop)
  * - Response object (including redirects, errors, etc.)
  *
+ * NOTE: PageLoaderFunction allows returning Response (for redirects/errors),
+ * while LayoutLoaderFunction does not. This is intentional:
+ * - Page loaders are terminal and can redirect or return error responses
+ * - Layout loaders provide data for wrapping content; errors are thrown instead
+ *
  * @example
  * ```typescript
  * export async function loader({ params, env }: LoaderArgs) {
