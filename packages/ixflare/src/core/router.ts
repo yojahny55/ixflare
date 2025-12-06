@@ -5,9 +5,9 @@
  */
 
 import type { ZodSchema } from 'zod'
-import type { EdgeContext } from '../types/context'
-import type { PageLoaderFunction } from '../types/handlers'
-import { createEdgeContext } from '../types/context'
+import type { EdgeContext } from '@/types/context'
+import type { PageLoaderFunction } from '@/types/handlers'
+import { createEdgeContext } from '@/types/context'
 import { extractParamsFromUrl, parseCatchAllParam, validateParams } from './params'
 import { getLoaderErrorResponse } from './layout-loader'
 
@@ -310,6 +310,7 @@ export class Router<Env = unknown> {
       const catchAllPath = params['0']
       const parsedPath = parseCatchAllParam(catchAllPath)
       // Remove '0' and add named param
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { '0': _, ...restParams } = params
       return { ...restParams, [catchAllParam]: parsedPath }
     }
