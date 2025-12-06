@@ -9,7 +9,7 @@ export { createRouter, Router } from './core/router'
 export type { HttpMethod } from './core/router'
 export { createMiddleware, compose } from './core/middleware'
 export { createContext, type Context } from './core/context'
-export { json, html, redirect, notFound, text, stream, eventStream, type SSEEvent } from './core/helpers'
+export { json, html, htmlResponse, redirect, notFound, text, stream, eventStream, type SSEEvent } from './core/helpers'
 export {
   extractParamsFromUrl,
   parseCatchAllParam,

@@ -16,6 +16,8 @@ export function json<T>(data: T, init?: ResponseInit): Response {
 /**
  * Escapes HTML special characters to prevent XSS attacks
  * @internal
+ * @param unsafe - The string to escape
+ * @returns Escaped string safe for HTML insertion
  */
 function escapeHtml(unsafe: string): string {
   return unsafe
@@ -24,6 +26,18 @@ function escapeHtml(unsafe: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;')
+}
+
+/**
+ * Builds HTML content from a tagged template literal with XSS escaping
+ * @internal
+ * @param strings - Template literal strings
+ * @param values - Interpolated values to escape
+ * @returns Escaped HTML string
+ */
+function buildHtmlContent(strings: TemplateStringsArray, values: unknown[]): string {
+  const escaped = values.map(v => escapeHtml(String(v)))
+  return strings.reduce((acc, str, i) => acc + str + (escaped[i] ?? ''), '')
 }
 
 /**
@@ -62,10 +76,7 @@ export function html(
   // Check if it's a tagged template literal
   if (Array.isArray(stringsOrContent) && 'raw' in stringsOrContent) {
     const strings = stringsOrContent as TemplateStringsArray
-    const values = valuesOrInit
-    const escaped = values.map(v => escapeHtml(String(v)))
-    const content = strings.reduce((acc, str, i) =>
-      acc + str + (escaped[i] ?? ''), '')
+    const content = buildHtmlContent(strings, valuesOrInit)
     return new Response(content, {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     })
@@ -75,6 +86,37 @@ export function html(
   const content = stringsOrContent as string
   const init = valuesOrInit[0] as ResponseInit | undefined
   return new Response(content, {
+    ...init,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      ...init?.headers,
+    },
+  })
+}
+
+/**
+ * Creates an HTML response with XSS escaping and custom ResponseInit options
+ * Use this when you need both template literal XSS safety AND custom headers/status
+ *
+ * @example
+ * ```typescript
+ * const name = '<script>alert("xss")</script>'
+ * return htmlResponse`<h1>Hello ${name}</h1>`({
+ *   headers: { 'X-Custom': 'value' },
+ *   status: 201
+ * })
+ * ```
+ *
+ * @param strings - Template literal strings
+ * @param values - Interpolated values to escape
+ * @returns A function that accepts ResponseInit and returns a Response
+ */
+export function htmlResponse(
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+): (init?: ResponseInit) => Response {
+  const content = buildHtmlContent(strings, values)
+  return (init?: ResponseInit) => new Response(content, {
     ...init,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
@@ -145,9 +187,12 @@ export function stream(
     }
   }
 
-  // Use ReadableStream.from() if available (Cloudflare Workers April 2024+)
-  // TypeScript doesn't have the type yet, so we cast through any
-  const readable = (ReadableStream as any).from(encodedGenerator())
+  // ReadableStream.from() is available in Cloudflare Workers since April 2024
+  // TypeScript's lib.dom.d.ts doesn't include this static method yet, and @cloudflare/workers-types
+  // also lacks it. Cast through unknown for type safety rather than any.
+  // See: https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream/from_static
+  const readable = (ReadableStream as unknown as { from: <T>(iter: AsyncIterable<T>) => ReadableStream<T> })
+    .from(encodedGenerator())
 
   return new Response(readable, {
     ...init,
@@ -200,16 +245,19 @@ export function eventStream(
     }
   }
 
-  // Use ReadableStream.from() if available (Cloudflare Workers April 2024+)
-  // TypeScript doesn't have the type yet, so we cast through any
-  const readable = (ReadableStream as any).from(sseGenerator())
+  // ReadableStream.from() is available in Cloudflare Workers since April 2024
+  // TypeScript's lib.dom.d.ts doesn't include this static method yet, and @cloudflare/workers-types
+  // also lacks it. Cast through unknown for type safety rather than any.
+  // See: https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream/from_static
+  const readable = (ReadableStream as unknown as { from: <T>(iter: AsyncIterable<T>) => ReadableStream<T> })
+    .from(sseGenerator())
 
   return new Response(readable, {
     ...init,
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      // Note: Connection header omitted - it's a hop-by-hop header handled by HTTP/2+
       ...init?.headers,
     },
   })

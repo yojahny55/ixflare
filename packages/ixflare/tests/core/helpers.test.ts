@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { json, html, redirect, notFound, text, stream, eventStream, type SSEEvent } from '../../src/core/helpers'
+import { json, html, htmlResponse, redirect, notFound, text, stream, eventStream, type SSEEvent } from '../../src/core/helpers'
 
 describe('Response Helpers', () => {
   describe('json', () => {
@@ -85,6 +85,104 @@ describe('Response Helpers', () => {
       const body = await response.text()
       expect(body).toBe('<p>test</p>')
     })
+
+    // Tests for non-string interpolations (HIGH-1 fix)
+    it('should handle null interpolation', async () => {
+      const value = null
+      const response = html`<p>${value}</p>`
+
+      const body = await response.text()
+      expect(body).toBe('<p>null</p>')
+    })
+
+    it('should handle undefined interpolation', async () => {
+      const value = undefined
+      const response = html`<p>${value}</p>`
+
+      const body = await response.text()
+      expect(body).toBe('<p>undefined</p>')
+    })
+
+    it('should handle number interpolation', async () => {
+      const count = 42
+      const response = html`<p>Count: ${count}</p>`
+
+      const body = await response.text()
+      expect(body).toBe('<p>Count: 42</p>')
+    })
+
+    it('should handle boolean interpolation', async () => {
+      const active = true
+      const response = html`<p>Active: ${active}</p>`
+
+      const body = await response.text()
+      expect(body).toBe('<p>Active: true</p>')
+    })
+
+    it('should handle object interpolation (renders as [object Object])', async () => {
+      const obj = { name: 'test' }
+      const response = html`<p>${obj}</p>`
+
+      const body = await response.text()
+      expect(body).toBe('<p>[object Object]</p>')
+    })
+
+    it('should handle array interpolation (joins with commas)', async () => {
+      const arr = ['a', 'b', 'c']
+      const response = html`<p>${arr}</p>`
+
+      const body = await response.text()
+      expect(body).toBe('<p>a,b,c</p>')
+    })
+
+    it('should escape HTML in array elements', async () => {
+      const arr = ['<script>', 'safe']
+      const response = html`<p>${arr}</p>`
+
+      const body = await response.text()
+      expect(body).toBe('<p>&lt;script&gt;,safe</p>')
+    })
+  })
+
+  describe('htmlResponse', () => {
+    it('should create HTML with XSS escaping and custom headers', async () => {
+      const userInput = '<script>alert("xss")</script>'
+      const response = htmlResponse`<h1>Hello ${userInput}</h1>`({
+        headers: { 'X-Custom': 'value' },
+      })
+
+      expect(response.headers.get('Content-Type')).toBe('text/html; charset=utf-8')
+      expect(response.headers.get('X-Custom')).toBe('value')
+      const body = await response.text()
+      expect(body).toBe('<h1>Hello &lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;</h1>')
+    })
+
+    it('should support custom status code', async () => {
+      const response = htmlResponse`<h1>Created</h1>`({ status: 201 })
+
+      expect(response.status).toBe(201)
+      expect(await response.text()).toBe('<h1>Created</h1>')
+    })
+
+    it('should work without init parameter', async () => {
+      const name = 'World'
+      const response = htmlResponse`<p>Hello ${name}</p>`()
+
+      expect(response.headers.get('Content-Type')).toBe('text/html; charset=utf-8')
+      expect(await response.text()).toBe('<p>Hello World</p>')
+    })
+
+    it('should escape multiple values with custom headers', async () => {
+      const user = '<admin>'
+      const role = 'super&user'
+      const response = htmlResponse`<p>${user}: ${role}</p>`({
+        headers: { 'Cache-Control': 'no-cache' },
+      })
+
+      const body = await response.text()
+      expect(body).toBe('<p>&lt;admin&gt;: super&amp;user</p>')
+      expect(response.headers.get('Cache-Control')).toBe('no-cache')
+    })
   })
 
   describe('text', () => {
@@ -162,6 +260,16 @@ describe('Response Helpers', () => {
       const text = await response.text()
       expect(text).toBe('abc')
     })
+
+    it('should propagate generator errors', async () => {
+      const response = stream(async function* () {
+        yield 'Before error\n'
+        throw new Error('Generator failed')
+      })
+
+      // The error should propagate when reading the stream
+      await expect(response.text()).rejects.toThrow('Generator failed')
+    })
   })
 
   describe('eventStream', () => {
@@ -172,7 +280,8 @@ describe('Response Helpers', () => {
 
       expect(response.headers.get('Content-Type')).toBe('text/event-stream')
       expect(response.headers.get('Cache-Control')).toBe('no-cache')
-      expect(response.headers.get('Connection')).toBe('keep-alive')
+      // Note: Connection header intentionally omitted - it's a hop-by-hop header
+      // handled by HTTP/2+ and often stripped by proxies/CDNs
     })
 
     it('should format basic SSE message', async () => {
@@ -255,6 +364,16 @@ describe('Response Helpers', () => {
 
       const text = await response.text()
       expect(text).toBe('')
+    })
+
+    it('should propagate generator errors', async () => {
+      const response = eventStream(async function* () {
+        yield { data: 'Event 1' }
+        throw new Error('SSE generator failed')
+      })
+
+      // The error should propagate when reading the stream
+      await expect(response.text()).rejects.toThrow('SSE generator failed')
     })
   })
 
