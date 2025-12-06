@@ -1,0 +1,11 @@
+{
+  "extends": "@ixflare/tsconfig/base",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src/**/*", "edge.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}

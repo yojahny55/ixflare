@@ -1,0 +1,59 @@
+name = "{{projectName}}"
+main = "dist/index.js"
+compatibility_date = "2025-01-01"
+
+# Static assets for client-side bundle
+[site]
+bucket = "./dist/client"
+
+# ============================================================
+# BINDINGS CONFIGURATION
+# ============================================================
+# Configure your Cloudflare bindings below. These are automatically
+# available in local development via @cloudflare/vite-plugin.
+#
+# Documentation: https://developers.cloudflare.com/workers/wrangler/configuration/
+
+# D1 Database (SQL at the edge)
+# Uncomment to enable. Create database first: wrangler d1 create {{projectName}}-db
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "{{projectName}}-db"
+# database_id = ""  # Get from: wrangler d1 list
+
+# KV Namespace (Key-Value storage)
+# Uncomment to enable. Create namespace first: wrangler kv:namespace create CACHE
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = ""  # Get from: wrangler kv:namespace list
+
+# R2 Bucket (Object storage)
+# Uncomment to enable. Create bucket first: wrangler r2 bucket create {{projectName}}-storage
+# [[r2_buckets]]
+# binding = "STORAGE"
+# bucket_name = "{{projectName}}-storage"
+
+# Durable Objects (Stateful edge compute)
+# Uncomment to enable. Requires a DO class in your code.
+# [[durable_objects.bindings]]
+# name = "COUNTER"
+# class_name = "Counter"
+
+# ============================================================
+# ENVIRONMENT VARIABLES
+# ============================================================
+# Non-secret environment variables. For secrets, use:
+# wrangler secret put SECRET_NAME
+
+[vars]
+ENVIRONMENT = "development"
+
+# ============================================================
+# ENVIRONMENT-SPECIFIC CONFIGURATION
+# ============================================================
+
+[env.staging]
+vars = { ENVIRONMENT = "staging" }
+
+[env.production]
+vars = { ENVIRONMENT = "production" }

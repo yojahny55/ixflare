@@ -1,0 +1,48 @@
+# ====================
+# Environment Variables
+# ====================
+# Copy this file to .env.local for local development
+# NEVER commit .env.local or .dev.vars to version control
+
+# -------------------
+# Database
+# -------------------
+# D1 database connection (handled by Cloudflare bindings)
+# DATABASE_URL=
+
+# -------------------
+# Authentication
+# -------------------
+# JWT signing secret (generate with: openssl rand -hex 32)
+JWT_SECRET=
+
+# JWT expiration time (in seconds, default: 900 = 15 minutes)
+# JWT_EXPIRY=900
+
+# -------------------
+# External Services
+# -------------------
+# Third-party API keys
+# API_KEY=
+
+# External API base URLs
+# EXTERNAL_API_URL=https://api.example.com
+
+# -------------------
+# Rate Limiting
+# -------------------
+# Requests per minute (default: 60)
+# RATE_LIMIT_RPM=60
+
+# -------------------
+# CORS
+# -------------------
+# Allowed origins (comma-separated)
+# CORS_ORIGINS=https://example.com,https://app.example.com
+
+# -------------------
+# Feature Flags
+# -------------------
+# DEBUG=false
+# VERBOSE_LOGGING=false
+# ENABLE_API_DOCS=true

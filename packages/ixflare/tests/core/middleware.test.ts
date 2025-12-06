@@ -1,12 +1,19 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createMiddleware, compose } from '../../src/core/middleware'
-import type { RouteContext } from '../../src/core/router'
+import type { EdgeContext } from '../../src/types/context'
 
-function createMockContext(overrides: Partial<RouteContext> = {}): RouteContext {
+function createMockContext(overrides: Partial<EdgeContext> = {}): EdgeContext {
+  const request = new Request('http://localhost/test')
+  const url = new URL(request.url)
   return {
-    request: new Request('http://localhost/test'),
+    request,
     params: {},
     env: {},
+    ctx: {} as ExecutionContext,
+    query: url.searchParams,
+    url,
+    method: request.method,
+    headers: request.headers,
     ...overrides,
   }
 }
@@ -23,7 +30,7 @@ describe('Middleware', () => {
 
     it('should pass context to middleware', async () => {
       const context = createMockContext({ params: { id: '123' } })
-      let capturedContext: RouteContext | null = null
+      let capturedContext: EdgeContext | null = null
 
       const middleware = createMiddleware(async (ctx, next) => {
         capturedContext = ctx

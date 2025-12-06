@@ -5,12 +5,12 @@
 
 import type { RenderOptions } from './types'
 
-export async function renderToString(element: unknown, options?: RenderOptions): Promise<string> {
+export async function renderToString(_element: unknown, _options?: RenderOptions): Promise<string> {
   // Placeholder - will be implemented in Epic 4
   return '<!DOCTYPE html><html><body>SSR Placeholder</body></html>'
 }
 
-export function renderToStream(element: unknown, options?: RenderOptions): ReadableStream {
+export function renderToStream(_element: unknown, _options?: RenderOptions): ReadableStream {
   // Placeholder - will be implemented in Epic 4
   return new ReadableStream({
     start(controller) {

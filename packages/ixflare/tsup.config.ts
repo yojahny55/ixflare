@@ -5,6 +5,7 @@ export default defineConfig({
     index: 'src/index.ts',
     orm: 'src/edge-record/index.ts',
     ssr: 'src/ssr/index.ts',
+    config: 'src/config/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
@@ -15,6 +16,7 @@ export default defineConfig({
   outExtension({ format }) {
     return {
       js: format === 'esm' ? '.mjs' : '.cjs',
+      dts: format === 'esm' ? '.d.mts' : '.d.cts',
     }
   },
 })

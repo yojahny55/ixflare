@@ -3,20 +3,21 @@
  * @description Middleware composition for request processing
  */
 
-import type { RouteContext, RouteHandler } from './router'
+import type { RouteHandler } from './router'
+import type { EdgeContext } from '@/types/context'
 
-export type Middleware = (
-  context: RouteContext,
+export type Middleware<Env = unknown> = (
+  context: EdgeContext<Env>,
   next: () => Promise<Response>
 ) => Response | Promise<Response>
 
-export function createMiddleware(fn: Middleware): Middleware {
+export function createMiddleware<Env = unknown>(fn: Middleware<Env>): Middleware<Env> {
   return fn
 }
 
-export function compose(...middlewares: Middleware[]): (handler: RouteHandler) => RouteHandler {
-  return (handler: RouteHandler): RouteHandler => {
-    return async (context: RouteContext): Promise<Response> => {
+export function compose<Env = unknown>(...middlewares: Middleware<Env>[]): (handler: RouteHandler<Env>) => RouteHandler<Env> {
+  return (handler: RouteHandler<Env>): RouteHandler<Env> => {
+    return async (context: EdgeContext<Env>): Promise<Response> => {
       let index = -1
 
       const dispatch = async (i: number): Promise<Response> => {
