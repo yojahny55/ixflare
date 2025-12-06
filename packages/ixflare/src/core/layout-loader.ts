@@ -4,8 +4,8 @@
  * @worker-only
  */
 
-import type { LayoutLoaderArgs } from '../types/handlers'
-import { NotFoundError, AuthError, ForbiddenError, ValidationError, AppError } from '../errors'
+import type { LayoutLoaderArgs } from '@/types/handlers'
+import { NotFoundError, AuthError, ForbiddenError, ValidationError, AppError } from '@/errors'
 
 /**
  * Layout loader function signature

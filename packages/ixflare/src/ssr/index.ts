@@ -10,6 +10,6 @@
 export { renderToString, renderToStream } from './render'
 export { createIsland, hydrateIsland } from './islands'
 export { renderLayoutChain, renderWithoutLayouts } from './layout-renderer'
-export { useLayoutData, LayoutContextProvider } from '../core/layout'
+export { useLayoutData, LayoutContextProvider } from '@/core/layout'
 export type { RenderOptions, IslandConfig } from './types'
 export type { LayoutComponent } from './layout-renderer'

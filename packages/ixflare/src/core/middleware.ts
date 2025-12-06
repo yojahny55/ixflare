@@ -4,7 +4,7 @@
  */
 
 import type { RouteHandler } from './router'
-import type { EdgeContext } from '../types/context'
+import type { EdgeContext } from '@/types/context'
 
 export type Middleware<Env = unknown> = (
   context: EdgeContext<Env>,

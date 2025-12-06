@@ -5,8 +5,8 @@
  */
 
 import * as React from 'react'
-import { LayoutContextProvider } from '../core/layout'
-import type { LayoutProps } from '../types/handlers'
+import { LayoutContextProvider } from '@/core/layout'
+import type { LayoutProps } from '@/types/handlers'
 
 /**
  * Layout component type - default export from _layout.tsx files
