@@ -31,6 +31,9 @@ export {
   type FileValidationOptions,
 } from './core/body-parser'
 
+// Query parameter parsing with Zod validation
+export { parseQuery } from './core/query-parser'
+
 // Layout exports moved to 'ixflare/ssr' to avoid React dependency in API-only apps
 // Use: import { useLayoutData, executeLoaders } from 'ixflare/ssr'
 export { executeLoaders, executeLayoutLoaders, getLoaderErrorResponse, LayoutLoaderError } from './core/layout-loader'

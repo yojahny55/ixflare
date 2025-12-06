@@ -283,7 +283,7 @@ function formDataToObject(formData: FormData): Record<string, unknown> {
  * Converts Zod's path arrays to dot notation (e.g., ['user', 'email'] → 'user.email')
  * Root-level errors (empty path) use '_root' as field name
  */
-function formatZodErrors(error: ZodError): Array<{ field: string; message: string }> {
+export function formatZodErrors(error: ZodError): Array<{ field: string; message: string }> {
   // Zod uses 'issues' not 'errors' for the array of validation problems
   if (!error || !error.issues || !Array.isArray(error.issues)) {
     return [{ field: '_root', message: error?.message || 'Validation failed' }]
