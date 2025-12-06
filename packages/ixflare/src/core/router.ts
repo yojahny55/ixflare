@@ -6,8 +6,10 @@
 
 import type { ZodSchema } from 'zod'
 import type { EdgeContext } from '../types/context'
+import type { PageLoaderFunction } from '../types/handlers'
 import { createEdgeContext } from '../types/context'
 import { extractParamsFromUrl, parseCatchAllParam, validateParams } from './params'
+import { getLoaderErrorResponse } from './layout-loader'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS'
 
@@ -20,6 +22,8 @@ export interface Route<Env = unknown> {
   catchAllParam?: string
   /** Zod schema for parameter validation */
   paramsSchema?: ZodSchema
+  /** Optional page loader function that runs before handler */
+  loader?: PageLoaderFunction<unknown, Env>
 }
 
 export type RouteHandler<Env = unknown> = (context: EdgeContext<Env>) => Response | Promise<Response>
@@ -85,11 +89,17 @@ export class Router<Env = unknown> {
    * @param options.methods - HTTP methods this route handles (defaults to all methods if not specified)
    * @param options.catchAllParam - Name of catch-all parameter (e.g., 'path' from [...path].tsx)
    * @param options.paramsSchema - Zod schema for automatic parameter validation
+   * @param options.loader - Optional page loader function that runs before handler
    */
   add(
     path: string,
     handler: RouteHandler<Env>,
-    options?: { methods?: HttpMethod[]; catchAllParam?: string; paramsSchema?: ZodSchema }
+    options?: {
+      methods?: HttpMethod[]
+      catchAllParam?: string
+      paramsSchema?: ZodSchema
+      loader?: PageLoaderFunction<unknown, Env>
+    }
   ): this {
     this.routes.push({
       path,
@@ -97,6 +107,7 @@ export class Router<Env = unknown> {
       methods: options?.methods,
       catchAllParam: options?.catchAllParam,
       paramsSchema: options?.paramsSchema,
+      loader: options?.loader,
     })
     return this
   }
@@ -132,6 +143,7 @@ export class Router<Env = unknown> {
     let matchedHandler: RouteHandler<Env> | null = null
     let matchedParams: Record<string, string | string[]> | null = null
     let matchedSchema: ZodSchema | undefined
+    let matchedLoader: PageLoaderFunction<unknown, Env> | undefined
 
     for (const { route, params } of matchingRoutes) {
       // If route has no method restrictions, it supports all methods
@@ -146,6 +158,7 @@ export class Router<Env = unknown> {
         matchedHandler = route.handler
         matchedParams = params
         matchedSchema = route.paramsSchema
+        matchedLoader = route.loader
       }
     }
 
@@ -157,6 +170,7 @@ export class Router<Env = unknown> {
           const getHandler = route.handler
           matchedParams = params
           matchedSchema = route.paramsSchema
+          matchedLoader = route.loader
 
           // Create HEAD handler that calls GET and removes body
           matchedHandler = async (context: EdgeContext<Env>) => {
@@ -232,6 +246,49 @@ export class Router<Env = unknown> {
     }
 
     const edgeContext = createEdgeContext(request, env, executionContext, finalParams)
+
+    // Execute loader if present (before handler)
+    if (matchedLoader) {
+      try {
+        const loaderArgs = {
+          request: edgeContext.request,
+          params: edgeContext.params,
+          env: edgeContext.env,
+          ctx: edgeContext.ctx,
+          query: edgeContext.query,
+          url: edgeContext.url,
+          method: edgeContext.method,
+          headers: edgeContext.headers,
+        }
+
+        const loaderResult = await matchedLoader(loaderArgs)
+
+        // If loader returned a Response (redirect, error, etc.), return it directly
+        if (loaderResult instanceof Response) {
+          return loaderResult
+        }
+
+        // Otherwise, attach loader data to context for handler/SSR to use
+        // Note: EdgeContext doesn't have loaderData yet, but this prepares for SSR integration
+        // For now, the handler can access this via a custom context extension if needed
+        // @ts-expect-error - Adding loaderData dynamically for SSR integration
+        edgeContext.loaderData = loaderResult
+      } catch (error) {
+        // Handle thrown Response (e.g., throw redirect())
+        if (error instanceof Response) {
+          return error
+        }
+
+        // Handle typed errors using existing error handler
+        if (error instanceof Error) {
+          return getLoaderErrorResponse(error)
+        }
+
+        // Unknown error type
+        throw error
+      }
+    }
+
     return await matchedHandler(edgeContext)
   }
 

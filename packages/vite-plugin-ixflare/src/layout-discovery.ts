@@ -5,7 +5,7 @@
  */
 
 import { readFile } from 'node:fs/promises'
-import { relative, dirname, sep, join } from 'node:path'
+import { relative, dirname, sep } from 'node:path'
 import fg from 'fast-glob'
 
 export interface LayoutNode {

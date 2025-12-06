@@ -22,6 +22,7 @@ export interface Route {
   params: RouteParam[]
   handlers: HttpMethod[]
   hasParamsSchema?: boolean // True if route exports 'params' Zod schema
+  hasLoader?: boolean // True if route exports a loader function
   layoutChain?: string[] // Array of layout paths from root to innermost
   layoutHasLoader?: boolean[] // True for each layout that exports a loader function
   middleware?: string[]
@@ -101,6 +102,15 @@ export async function parseRouteFile(filePath: string, routesDir: string): Promi
   // Detect exported params schema for validation
   const hasParamsSchema = /export\s+(?:const|let)\s+params\s*=/.test(content)
 
+  // Detect exported loader function
+  // Match both function exports and const exports:
+  // - export async function loader(...)
+  // - export function loader(...)
+  // - export const loader = ...
+  const loaderFunctionRegex = /export\s+(?:async\s+)?function\s+loader\s*\(/g
+  const loaderConstRegex = /export\s+const\s+loader\s*[:=]/g
+  const hasLoader = loaderFunctionRegex.test(content) || loaderConstRegex.test(content)
+
   // Extract dynamic params
   const params = extractDynamicParams(relativePath)
 
@@ -129,6 +139,7 @@ export async function parseRouteFile(filePath: string, routesDir: string): Promi
     params,
     handlers,
     hasParamsSchema,
+    hasLoader,
   }
 }
 

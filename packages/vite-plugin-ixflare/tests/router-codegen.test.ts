@@ -178,6 +178,98 @@ export const DELETE: RouteHandler = async () => new Response('DELETE')`
       expect(route.handlers).toContain('PUT')
       expect(route.handlers).toContain('DELETE')
     })
+
+    it('should detect loader function export', async () => {
+      const file = join(testDir, 'with-loader-func.tsx')
+      await writeFile(
+        file,
+        `export async function loader({ params }) {
+  return { user: { id: params.id } }
+}
+
+export function GET() {}`
+      )
+
+      const route = await parseRouteFile(file, testDir)
+
+      expect(route.hasLoader).toBe(true)
+      expect(route.handlers).toContain('GET')
+    })
+
+    it('should detect loader const export', async () => {
+      const file = join(testDir, 'with-loader-const.tsx')
+      await writeFile(
+        file,
+        `import type { PageLoaderFunction } from 'ixflare'
+
+export const loader: PageLoaderFunction = async ({ params }) => {
+  return { user: { id: params.id } }
+}
+
+export function GET() {}`
+      )
+
+      const route = await parseRouteFile(file, testDir)
+
+      expect(route.hasLoader).toBe(true)
+      expect(route.handlers).toContain('GET')
+    })
+
+    it('should detect async loader function export', async () => {
+      const file = join(testDir, 'with-async-loader.tsx')
+      await writeFile(
+        file,
+        `export async function loader({ params, env }) {
+  const data = await fetchSomeData(params.id)
+  return { data }
+}
+
+export function GET() {}`
+      )
+
+      const route = await parseRouteFile(file, testDir)
+
+      expect(route.hasLoader).toBe(true)
+    })
+
+    it('should not detect loader if not exported', async () => {
+      const file = join(testDir, 'without-loader.tsx')
+      await writeFile(
+        file,
+        `// Internal loader, not exported
+async function loader({ params }) {
+  return { data: 'test' }
+}
+
+export function GET() {
+  const data = loader({ params: {} })
+  return new Response(JSON.stringify(data))
+}`
+      )
+
+      const route = await parseRouteFile(file, testDir)
+
+      expect(route.hasLoader).toBe(false)
+    })
+
+    it('should handle route with both loader and handlers', async () => {
+      const file = join(testDir, 'loader-and-handlers.tsx')
+      await writeFile(
+        file,
+        `export async function loader({ params }) {
+  return { user: { id: params.userId } }
+}
+
+export function GET() {}
+export function POST() {}
+export function DELETE() {}`
+      )
+
+      const route = await parseRouteFile(file, testDir)
+
+      expect(route.hasLoader).toBe(true)
+      expect(route.handlers).toEqual(['GET', 'POST', 'DELETE'])
+    })
   })
 
   describe('discoverRoutes', () => {

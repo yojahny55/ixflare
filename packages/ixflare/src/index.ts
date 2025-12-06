@@ -72,7 +72,7 @@ export {
 } from './types'
 
 // Handler type aliases (backward compatibility)
-export type { LoaderArgs, ActionArgs, LayoutLoaderArgs, LayoutProps } from './types'
+export type { LoaderArgs, ActionArgs, LayoutLoaderArgs, LayoutProps, PageProps, PageLoaderFunction } from './types'
 
 // Utility exports
 export { redactSecrets, redactString, isSensitiveKey } from './utils/redact'

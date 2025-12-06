@@ -137,3 +137,64 @@ export interface LayoutProps<TData = unknown> {
   /** The original Request object */
   request?: Request
 }
+
+/**
+ * Loader function signature for page components
+ *
+ * @template TData - Type of data returned by the loader
+ * @template Env - Type of environment bindings
+ *
+ * Page loaders can return:
+ * - Data object (will be passed to component as `data` prop)
+ * - Response object (including redirects, errors, etc.)
+ *
+ * @example
+ * ```typescript
+ * export async function loader({ params, env }: LoaderArgs) {
+ *   const user = await User.find(params.userId)
+ *   if (!user) {
+ *     throw new NotFoundError('User not found')
+ *   }
+ *   return { user }
+ * }
+ * ```
+ */
+export type PageLoaderFunction<
+  TData = unknown,
+  Env = Record<string, unknown>
+> = (args: LoaderArgs<Record<string, string>, Env>) => Promise<TData | Response> | TData | Response
+
+/**
+ * Loader function signature for layout components
+ *
+ * @template TData - Type of data returned by the loader
+ * @template Env - Type of environment bindings
+ */
+export type LayoutLoaderFunction<
+  TData = unknown,
+  Env = Record<string, unknown>
+> = (args: LayoutLoaderArgs<Record<string, string>, Env>) => Promise<TData | Response> | TData | Response
+
+/**
+ * Props passed to page components
+ *
+ * @template TData - Type of data returned by page loader
+ *
+ * Page components receive data from their loader function along with
+ * request context.
+ *
+ * @example
+ * ```typescript
+ * export default function UserPage({ data, params }: PageProps<{ user: User }>) {
+ *   return <h1>{data.user.name}</h1>
+ * }
+ * ```
+ */
+export interface PageProps<TData = unknown> {
+  /** Data from the page's loader function */
+  data: TData
+  /** Route parameters extracted from the URL path */
+  params: Record<string, string>
+  /** The original Request object */
+  request: Request
+}

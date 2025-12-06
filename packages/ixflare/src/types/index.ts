@@ -43,6 +43,9 @@ export type {
   ErrorHandler,
   LayoutLoaderArgs,
   LayoutProps,
+  PageLoaderFunction,
+  PageProps,
+  LayoutLoaderFunction,
 } from './handlers'
 
 // Note: Cloudflare Workers types now provided by @cloudflare/workers-types
