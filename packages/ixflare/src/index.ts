@@ -17,6 +17,17 @@ export {
   matchRouteWithParams,
 } from './core/params'
 
+// Body parsing utilities with Zod validation
+export {
+  parseBody,
+  parseJson as parseJsonWithSchema,
+  parseFormData as parseFormDataWithSchema,
+  getFile,
+  getFiles,
+  validateFile,
+  type FileValidationOptions,
+} from './core/body-parser'
+
 // Layout exports moved to 'ixflare/ssr' to avoid React dependency in API-only apps
 // Use: import { useLayoutData, executeLoaders } from 'ixflare/ssr'
 export { executeLoaders, executeLayoutLoaders, getLoaderErrorResponse, LayoutLoaderError } from './core/layout-loader'
@@ -72,7 +83,7 @@ export {
 } from './types'
 
 // Handler type aliases (backward compatibility)
-export type { LoaderArgs, ActionArgs, LayoutLoaderArgs, LayoutProps, PageProps, PageLoaderFunction } from './types'
+export type { LoaderArgs, ActionArgs, LayoutLoaderArgs, LayoutProps, PageProps, PageLoaderFunction, ParseBodyOptions } from './types'
 
 // Utility exports
 export { redactSecrets, redactString, isSensitiveKey } from './utils/redact'

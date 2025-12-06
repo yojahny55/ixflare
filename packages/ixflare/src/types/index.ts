@@ -46,6 +46,7 @@ export type {
   PageLoaderFunction,
   PageProps,
   LayoutLoaderFunction,
+  ParseBodyOptions,
 } from './handlers'
 
 // Note: Cloudflare Workers types now provided by @cloudflare/workers-types

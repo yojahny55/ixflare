@@ -203,3 +203,21 @@ export interface PageProps<TData = unknown> {
   /** The original Request object */
   request: Request
 }
+
+/**
+ * Options for parsing request body
+ *
+ * @example
+ * ```typescript
+ * const body = await parseBody(request, {
+ *   clone: true,  // Clone request before reading
+ *   maxSize: 1024 * 1024  // 1MB limit
+ * })
+ * ```
+ */
+export interface ParseBodyOptions {
+  /** Clone request before reading body (for multiple reads) */
+  clone?: boolean
+  /** Maximum body size in bytes (default: no limit) */
+  maxSize?: number
+}
