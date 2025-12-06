@@ -7,6 +7,16 @@ import type { ZodSchema, ZodError } from 'zod'
 import { ValidationError } from '@/errors'
 
 /**
+ * Options for parsing request body
+ */
+export interface ParseBodyOptions {
+  /** Clone request before reading body (for multiple reads) */
+  clone?: boolean
+  /** Maximum body size in bytes (throws ValidationError if exceeded) */
+  maxSize?: number
+}
+
+/**
  * Automatically parse request body based on Content-Type header
  *
  * Supports:
@@ -16,28 +26,52 @@ import { ValidationError } from '@/errors'
  * - fallback → raw text
  *
  * @param request - The incoming Request object
+ * @param options - Optional parsing options (clone, maxSize)
  * @returns Parsed body as JSON object, FormData, or text
+ * @throws {ValidationError} When body size exceeds maxSize limit
  *
  * @example
  * ```typescript
+ * // Basic usage
  * const body = await parseBody(request)
  * if (body instanceof FormData) {
  *   const email = body.get('email')
- * } else {
- *   // JSON object or text
  * }
+ *
+ * // With options
+ * const body = await parseBody(request, {
+ *   clone: true,           // Clone for multiple reads
+ *   maxSize: 1024 * 1024   // 1MB limit
+ * })
  * ```
  */
-export async function parseBody(request: Request): Promise<unknown> {
-  const contentType = request.headers.get('content-type') || ''
+export async function parseBody(
+  request: Request,
+  options: ParseBodyOptions = {}
+): Promise<unknown> {
+  const { clone = false, maxSize } = options
+  const targetRequest = clone ? request.clone() : request
+
+  // Check Content-Length header for size limit (if available)
+  if (maxSize !== undefined) {
+    const contentLength = targetRequest.headers.get('content-length')
+    if (contentLength && parseInt(contentLength, 10) > maxSize) {
+      throw new ValidationError(
+        `Request body size exceeds limit of ${maxSize} bytes`,
+        [{ field: 'body', message: 'Request body too large' }]
+      )
+    }
+  }
+
+  const contentType = targetRequest.headers.get('content-type') || ''
 
   if (contentType.includes('application/json')) {
-    return request.json()
+    return targetRequest.json()
   }
   if (contentType.includes('form')) {
-    return request.formData()
+    return targetRequest.formData()
   }
-  return request.text()
+  return targetRequest.text()
 }
 
 /**
@@ -49,10 +83,13 @@ export async function parseBody(request: Request): Promise<unknown> {
  * @param request - The incoming Request object
  * @param schema - Zod schema for validation
  * @returns Fully typed validated data
- * @throws {ValidationError} When validation fails with detailed field errors
+ * @throws {ValidationError} When JSON parsing fails or validation fails with detailed field errors
  *
  * @example
  * ```typescript
+ * import { z } from 'zod'
+ * import { parseJson } from 'ixflare'
+ *
  * const schema = z.object({
  *   email: z.string().email(),
  *   name: z.string().min(2),
@@ -66,7 +103,16 @@ export async function parseJson<T>(
   request: Request,
   schema: ZodSchema<T>
 ): Promise<T> {
-  const body = await request.json()
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch (error) {
+    throw new ValidationError(
+      'Invalid JSON in request body',
+      [{ field: 'body', message: error instanceof Error ? error.message : 'Failed to parse JSON' }]
+    )
+  }
+
   const result = schema.safeParse(body)
 
   if (!result.success) {
@@ -215,9 +261,8 @@ export function validateFile(
  */
 function formDataToObject(formData: FormData): Record<string, unknown> {
   const obj: Record<string, unknown> = {}
-  // Use type assertion since FormData.entries() is a standard Web API but types might be incomplete
-  const entries = (formData as any).entries() as IterableIterator<[string, FormDataEntryValue]>
-  for (const [key, value] of entries) {
+  // FormData.forEach is well-typed and available in all Workers environments
+  formData.forEach((value, key) => {
     // Handle multiple values with same key
     const existing = obj[key]
     if (existing !== undefined) {
@@ -229,22 +274,24 @@ function formDataToObject(formData: FormData): Record<string, unknown> {
     } else {
       obj[key] = value
     }
-  }
+  })
   return obj
 }
 
 /**
  * Transform Zod validation errors to ValidationError format
  * Converts Zod's path arrays to dot notation (e.g., ['user', 'email'] → 'user.email')
+ * Root-level errors (empty path) use '_root' as field name
  */
 function formatZodErrors(error: ZodError): Array<{ field: string; message: string }> {
   // Zod uses 'issues' not 'errors' for the array of validation problems
   if (!error || !error.issues || !Array.isArray(error.issues)) {
-    return [{ field: 'unknown', message: error?.message || 'Validation failed' }]
+    return [{ field: '_root', message: error?.message || 'Validation failed' }]
   }
 
   return error.issues.map(e => ({
-    field: e.path.join('.'),
+    // Use '_root' for root-level validation errors (empty path array)
+    field: e.path.length > 0 ? e.path.join('.') : '_root',
     message: e.message,
   }))
 }

@@ -18,6 +18,8 @@ export {
 } from './core/params'
 
 // Body parsing utilities with Zod validation
+// Note: parseJsonWithSchema/parseFormDataWithSchema include Zod validation
+// The simpler parseJson/parseFormData from ./types do NOT require Zod
 export {
   parseBody,
   parseJson as parseJsonWithSchema,
@@ -25,6 +27,7 @@ export {
   getFile,
   getFiles,
   validateFile,
+  type ParseBodyOptions,
   type FileValidationOptions,
 } from './core/body-parser'
 
@@ -83,7 +86,8 @@ export {
 } from './types'
 
 // Handler type aliases (backward compatibility)
-export type { LoaderArgs, ActionArgs, LayoutLoaderArgs, LayoutProps, PageProps, PageLoaderFunction, ParseBodyOptions } from './types'
+// Note: ParseBodyOptions is exported from ./core/body-parser above
+export type { LoaderArgs, ActionArgs, LayoutLoaderArgs, LayoutProps, PageProps, PageLoaderFunction } from './types'
 
 // Utility exports
 export { redactSecrets, redactString, isSensitiveKey } from './utils/redact'

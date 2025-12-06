@@ -93,6 +93,52 @@ describe('parseBody', () => {
     const result = await parseBody(request)
     expect(result).toEqual({})
   })
+
+  it('should clone request when clone option is true', async () => {
+    const body = { test: 'value' }
+    const request = new Request('https://example.com', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+
+    // First read with clone
+    const result1 = await parseBody(request.clone(), { clone: true })
+    expect(result1).toEqual(body)
+
+    // Original request should still be readable
+    const result2 = await request.json()
+    expect(result2).toEqual(body)
+  })
+
+  it('should throw ValidationError when body exceeds maxSize', async () => {
+    const largeBody = 'x'.repeat(1000)
+    const request = new Request('https://example.com', {
+      method: 'POST',
+      headers: {
+        'content-type': 'text/plain',
+        'content-length': '1000',
+      },
+      body: largeBody,
+    })
+
+    await expect(parseBody(request, { maxSize: 500 })).rejects.toThrow(ValidationError)
+  })
+
+  it('should pass when body is within maxSize limit', async () => {
+    const body = { test: 'value' }
+    const request = new Request('https://example.com', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'content-length': '17',
+      },
+      body: JSON.stringify(body),
+    })
+
+    const result = await parseBody(request, { maxSize: 1000 })
+    expect(result).toEqual(body)
+  })
 })
 
 describe('parseJson', () => {
@@ -173,14 +219,22 @@ describe('parseJson', () => {
     }
   })
 
-  it('should throw error when body is not JSON', async () => {
+  it('should throw ValidationError when body is not valid JSON', async () => {
     const request = new Request('https://example.com', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: 'not json',
     })
 
-    await expect(parseJson(request, schema)).rejects.toThrow()
+    try {
+      await parseJson(request, schema)
+      expect.fail('Should have thrown ValidationError')
+    } catch (error) {
+      expect(error).toBeInstanceOf(ValidationError)
+      const validationError = error as ValidationError
+      expect(validationError.message).toBe('Invalid JSON in request body')
+      expect(validationError.errors[0].field).toBe('body')
+    }
   })
 })
 
@@ -490,5 +544,43 @@ describe('Integration Tests', () => {
       expect(json.error.timestamp).toBeDefined()
       expect(json.error.errors).toHaveLength(2)
     }
+  })
+
+  it('should handle root-level validation errors with _root field name', async () => {
+    // Schema that validates the root value (not properties)
+    const stringSchema = z.string().min(5)
+
+    const request = new Request('https://example.com/api/validate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify('ab'), // Too short
+    })
+
+    try {
+      await parseJson(request, stringSchema)
+      expect.fail('Should have thrown ValidationError')
+    } catch (error) {
+      expect(error).toBeInstanceOf(ValidationError)
+      const validationError = error as ValidationError
+      // Root-level errors should use '_root' as field name
+      expect(validationError.errors[0].field).toBe('_root')
+    }
+  })
+
+  it('should handle empty FormData with required schema fields', async () => {
+    const schema = z.object({
+      email: z.string().email(),
+      name: z.string(),
+    })
+
+    const formData = new FormData()
+    // Empty - no fields added
+
+    const request = new Request('https://example.com/api/form', {
+      method: 'POST',
+      body: formData,
+    })
+
+    await expect(parseFormData(request, schema)).rejects.toThrow(ValidationError)
   })
 })
