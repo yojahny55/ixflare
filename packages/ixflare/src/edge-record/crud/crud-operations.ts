@@ -7,6 +7,7 @@ import type { SchemaDefinition, InferSchema, Model } from '@/edge-record/schema/
 import { ModelInstance } from '@/edge-record/crud/model-instance'
 import { NotFoundError } from '@/edge-record/crud/errors'
 import { toSnakeCase } from '@/edge-record/crud/case-transform'
+import { escapeIdentifier } from '@/edge-record/schema/type-mapping'
 
 /**
  * Input type for create operations (excludes auto-generated fields)
@@ -74,7 +75,7 @@ export async function find<T extends SchemaDefinition>(
   id: number,
   db: D1Database
 ): Promise<ModelInstance<T> | null> {
-  const sql = `SELECT * FROM ${model.$tableName} WHERE id = ?`
+  const sql = `SELECT * FROM ${escapeIdentifier(model.$tableName)} WHERE id = ?`
   const stmt = db.prepare(sql).bind(id)
   const row = await stmt.first<Record<string, unknown>>()
 
@@ -155,8 +156,10 @@ export async function upsert<T extends SchemaDefinition>(
   const matchFields = Object.keys(match)
   const matchValues = matchFields.map((k) => match[k as keyof InferSchema<T>])
 
-  const whereClause = matchFields.map((f) => `${toSnakeCase(f)} = ?`).join(' AND ')
-  const sql = `SELECT * FROM ${model.$tableName} WHERE ${whereClause}`
+  const whereClause = matchFields
+    .map((f) => `${escapeIdentifier(toSnakeCase(f))} = ?`)
+    .join(' AND ')
+  const sql = `SELECT * FROM ${escapeIdentifier(model.$tableName)} WHERE ${whereClause}`
   const stmt = db.prepare(sql).bind(...matchValues)
   const existing = await stmt.first<Record<string, unknown>>()
 
@@ -218,7 +221,8 @@ export async function createMany<T extends SchemaDefinition>(
     const dbValues = dbFields.map((f) => dbData[f])
 
     const placeholders = dbFields.map(() => '?').join(', ')
-    const sql = `INSERT INTO ${model.$tableName} (${dbFields.join(', ')}) VALUES (${placeholders})`
+    const escapedFields = dbFields.map((f) => escapeIdentifier(f)).join(', ')
+    const sql = `INSERT INTO ${escapeIdentifier(model.$tableName)} (${escapedFields}) VALUES (${placeholders})`
 
     statements.push(db.prepare(sql).bind(...dbValues))
   }

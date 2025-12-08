@@ -6,6 +6,7 @@
 import type { SchemaDefinition, InferSchema, Model } from './schema/types'
 import { ModelInstance } from './crud/model-instance'
 import { toSnakeCase } from './crud/case-transform'
+import { escapeIdentifier } from './schema/type-mapping'
 
 export type WhereCondition = { field: string; operator: string; value: unknown }
 
@@ -101,11 +102,11 @@ export class QueryBuilder<T extends SchemaDefinition> {
     const fields = Object.keys(dbData)
     const values = fields.map((f) => dbData[f])
 
-    const setClause = fields.map((f) => `${f} = ?`).join(', ')
+    const setClause = fields.map((f) => `${escapeIdentifier(f)} = ?`).join(', ')
     const whereClause = this.buildWhereClause()
     const whereParams = this.conditions.map((c) => c.value)
 
-    const sql = `UPDATE ${this.model.$tableName} SET ${setClause}${whereClause}`
+    const sql = `UPDATE ${escapeIdentifier(this.model.$tableName)} SET ${setClause}${whereClause}`
     const stmt = db.prepare(sql).bind(...values, ...whereParams)
     const result = await stmt.run()
 
@@ -120,7 +121,7 @@ export class QueryBuilder<T extends SchemaDefinition> {
     const whereClause = this.buildWhereClause()
     const whereParams = this.conditions.map((c) => c.value)
 
-    const sql = `DELETE FROM ${this.model.$tableName}${whereClause}`
+    const sql = `DELETE FROM ${escapeIdentifier(this.model.$tableName)}${whereClause}`
     const stmt = db.prepare(sql).bind(...whereParams)
     const result = await stmt.run()
 
@@ -134,7 +135,7 @@ export class QueryBuilder<T extends SchemaDefinition> {
     const whereClause = this.buildWhereClause()
     const whereParams = this.conditions.map((c) => c.value)
 
-    const sql = `SELECT COUNT(*) as count FROM ${this.model.$tableName}${whereClause}`
+    const sql = `SELECT COUNT(*) as count FROM ${escapeIdentifier(this.model.$tableName)}${whereClause}`
     const stmt = db.prepare(sql).bind(...whereParams)
     const result = await stmt.first<{ count: number }>()
 
@@ -149,9 +150,9 @@ export class QueryBuilder<T extends SchemaDefinition> {
       return ''
     }
 
-    // Transform camelCase field names to snake_case for DB
+    // Transform camelCase field names to snake_case for DB and escape
     const clauses = this.conditions.map((c) => {
-      const dbField = toSnakeCase(c.field)
+      const dbField = escapeIdentifier(toSnakeCase(c.field))
       return `${dbField} ${c.operator} ?`
     })
 
@@ -162,13 +163,13 @@ export class QueryBuilder<T extends SchemaDefinition> {
    * Generate SQL query with parameters
    */
   toSQL(): { query: string; params: unknown[] } {
-    let sql = `SELECT * FROM ${this.model.$tableName}`
+    let sql = `SELECT * FROM ${escapeIdentifier(this.model.$tableName)}`
 
     const whereClause = this.buildWhereClause()
     sql += whereClause
 
     if (this.orderByField) {
-      const dbField = toSnakeCase(this.orderByField)
+      const dbField = escapeIdentifier(toSnakeCase(this.orderByField))
       sql += ` ORDER BY ${dbField} ${this.orderDirection.toUpperCase()}`
     }
 

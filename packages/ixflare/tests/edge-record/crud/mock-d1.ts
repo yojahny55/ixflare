@@ -53,7 +53,7 @@ export function createMockD1Database(): D1Database {
             const fields = query
               .match(/\((.*?)\)/)?.[1]
               .split(',')
-              .map((f) => f.trim())
+              .map((f) => f.trim().replace(/^"|"$/g, '')) // Strip quotes from field names
             const record: Record<string, unknown> = { id }
 
             if (fields) {
@@ -86,7 +86,9 @@ export function createMockD1Database(): D1Database {
               // Parse SET clause fields
               const setClause = query.match(/SET\s+(.*?)\s+WHERE/i)?.[1]
               if (setClause) {
-                const fields = setClause.split(',').map((f) => f.trim().split('=')[0].trim())
+                const fields = setClause
+                  .split(',')
+                  .map((f) => f.trim().split('=')[0].trim().replace(/^"|"$/g, '')) // Strip quotes
                 fields.forEach((field, index) => {
                   record[field] = boundValues[index]
                 })
@@ -170,11 +172,44 @@ export function createMockD1Database(): D1Database {
         },
 
         async first<T = unknown>(): Promise<T | null> {
-          // Handle SELECT with WHERE id = ?
+          // Handle SELECT with WHERE
           if (query.toUpperCase().includes('SELECT') && query.toUpperCase().includes('WHERE')) {
+            // Try to match records based on WHERE conditions
+            // Parse WHERE clause to extract field names (handles both quoted "field" and unquoted field)
+            const whereMatch = query.match(/WHERE\s+(.+?)(?:\s+ORDER|\s+LIMIT|$)/i)
+            if (whereMatch) {
+              const conditions = whereMatch[1]
+              // Extract field names - handle both "field_name" = ? and field_name = ?
+              const fieldNames: string[] = []
+              const regex = /"([^"]+)"\s*=\s*\?|(\w+)\s*=\s*\?/g
+              let match
+              while ((match = regex.exec(conditions)) !== null) {
+                // match[1] is for "quoted", match[2] is for unquoted
+                fieldNames.push(match[1] || match[2])
+              }
+
+              if (fieldNames.length > 0) {
+                // Try each record to find a match
+                for (const record of store.values()) {
+                  let matches = true
+                  fieldNames.forEach((fieldName, index) => {
+                    if (record[fieldName] !== boundValues[index]) {
+                      matches = false
+                    }
+                  })
+                  if (matches) {
+                    return record as T
+                  }
+                }
+              }
+            }
+
+            // Fallback: try id-based lookup
             const id = boundValues[0] as number
-            const record = store.get(id)
-            return (record as T) || null
+            if (typeof id === 'number') {
+              const record = store.get(id)
+              return (record as T) || null
+            }
           }
 
           return null

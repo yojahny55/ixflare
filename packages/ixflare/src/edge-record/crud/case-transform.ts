@@ -4,7 +4,7 @@
  */
 
 /**
- * Convert camelCase to snake_case
+ * Convert snake_case to camelCase
  * @example toCamelCase('created_at') -> 'createdAt'
  */
 export function toCamelCase(str: string): string {
@@ -12,7 +12,7 @@ export function toCamelCase(str: string): string {
 }
 
 /**
- * Convert snake_case to camelCase
+ * Convert camelCase to snake_case
  * @example toSnakeCase('createdAt') -> 'created_at'
  */
 export function toSnakeCase(str: string): string {

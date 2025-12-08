@@ -5,6 +5,7 @@
 
 import type { SchemaDefinition, InferSchema, Model } from '@/edge-record/schema/types'
 import { toSnakeCase, toCamelCase } from '@/edge-record/crud/case-transform'
+import { escapeIdentifier } from '@/edge-record/schema/type-mapping'
 
 /**
  * ModelInstance wraps a database record with instance methods
@@ -84,7 +85,8 @@ export class ModelInstance<T extends SchemaDefinition> {
       const dbValues = dbFields.map((k) => dbData[k])
 
       const placeholders = dbFields.map(() => '?').join(', ')
-      const sql = `INSERT INTO ${this._model.$tableName} (${dbFields.join(', ')}) VALUES (${placeholders})`
+      const escapedFields = dbFields.map((f) => escapeIdentifier(f)).join(', ')
+      const sql = `INSERT INTO ${escapeIdentifier(this._model.$tableName)} (${escapedFields}) VALUES (${placeholders})`
 
       const stmt = db.prepare(sql).bind(...dbValues)
       const result = await stmt.run()
@@ -112,8 +114,8 @@ export class ModelInstance<T extends SchemaDefinition> {
         const fields = Object.keys(dbDirty).filter((k) => k !== 'id')
         const values = fields.map((k) => dbDirty[k])
 
-        const setClause = fields.map((f) => `${f} = ?`).join(', ')
-        const sql = `UPDATE ${this._model.$tableName} SET ${setClause} WHERE id = ?`
+        const setClause = fields.map((f) => `${escapeIdentifier(f)} = ?`).join(', ')
+        const sql = `UPDATE ${escapeIdentifier(this._model.$tableName)} SET ${setClause} WHERE id = ?`
 
         const stmt = db.prepare(sql).bind(...values, this._data.id)
         await stmt.run()
@@ -143,8 +145,8 @@ export class ModelInstance<T extends SchemaDefinition> {
     const fields = Object.keys(dbData).filter((k) => k !== 'id')
     const values = fields.map((k) => dbData[k])
 
-    const setClause = fields.map((f) => `${f} = ?`).join(', ')
-    const sql = `UPDATE ${this._model.$tableName} SET ${setClause} WHERE id = ?`
+    const setClause = fields.map((f) => `${escapeIdentifier(f)} = ?`).join(', ')
+    const sql = `UPDATE ${escapeIdentifier(this._model.$tableName)} SET ${setClause} WHERE id = ?`
 
     const stmt = db.prepare(sql).bind(...values, this._data.id)
     await stmt.run()
@@ -158,7 +160,7 @@ export class ModelInstance<T extends SchemaDefinition> {
    * Delete this record from database
    */
   async delete(db: D1Database): Promise<boolean> {
-    const sql = `DELETE FROM ${this._model.$tableName} WHERE id = ?`
+    const sql = `DELETE FROM ${escapeIdentifier(this._model.$tableName)} WHERE id = ?`
     const stmt = db.prepare(sql).bind(this._data.id)
     const result = await stmt.run()
 
