@@ -3,6 +3,7 @@
  * @description Type definitions for EdgeRecord schema system
  */
 
+import type { z } from 'zod'
 import type { FieldBuilder } from './field'
 
 /**
@@ -39,7 +40,12 @@ export interface ModelOptions {
  * Model interface with schema metadata
  */
 export interface Model<TSchema extends SchemaDefinition> {
+  /** The database table name */
   $tableName: string
+  /** The schema definition with field builders */
   $schema: TSchema
-  $infer: InferSchema<TSchema>
+  /** Type-only property for TypeScript inference: `typeof Model.$infer` */
+  readonly $infer: InferSchema<TSchema>
+  /** Generated Zod schema for runtime validation */
+  $zodSchema: z.ZodObject<Record<string, z.ZodTypeAny>>
 }

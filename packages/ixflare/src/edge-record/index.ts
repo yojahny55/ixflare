@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-// Schema exports (NEW in Story 3.1)
+// Schema exports (Story 3.1)
 export {
   field,
   FieldBuilder,
@@ -13,6 +13,13 @@ export {
   getModel,
   getAllModels,
   clearModelRegistry,
+  toSQLType,
+  toSQLSchema,
+  getColumnMetadata,
+  escapeIdentifier,
+  escapeStringValue,
+  generateZodSchema,
+  toZodField,
 } from './schema'
 export type {
   FieldConfig,
@@ -22,8 +29,6 @@ export type {
   ModelOptions,
   Model,
 } from './schema'
-export { toSQLType, toSQLSchema, getColumnMetadata } from './schema/type-mapping'
-export { generateZodSchema, toZodField } from './schema/zod-generator'
 
 // Legacy exports (will be refactored in later stories)
 export { Model as LegacyModel } from './model'

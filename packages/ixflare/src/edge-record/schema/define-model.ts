@@ -3,13 +3,21 @@
  * @description Model definition function for EdgeRecord
  */
 
-import type { SchemaDefinition, InferSchema, ModelOptions, Model } from './types'
+import { generateZodSchema } from './zod-generator'
+import type { SchemaDefinition, ModelOptions, Model } from './types'
 
 /**
  * Internal model registry
- * Stores all defined models for later access
+ * Uses WeakRef to avoid memory leaks in long-running workers.
+ * Models are stored by table name for lookup.
  */
-const modelRegistry = new Map<string, Model<SchemaDefinition>>()
+const modelRegistry = new Map<string, WeakRef<Model<SchemaDefinition>>>()
+
+/**
+ * Symbol used to mark $infer as a type-only property
+ * Accessing it at runtime throws a helpful error
+ */
+const INFER_SYMBOL = Symbol.for('ixflare.model.$infer')
 
 /**
  * Define a new model with type-safe schema
@@ -18,7 +26,7 @@ const modelRegistry = new Map<string, Model<SchemaDefinition>>()
  * @param tableName The database table name (snake_case recommended)
  * @param schema The field definitions using field builders
  * @param options Optional model configuration
- * @returns Model object with $tableName, $schema, and $infer properties
+ * @returns Model object with $tableName, $schema, $infer, and $zodSchema properties
  *
  * @example
  * ```typescript
@@ -35,24 +43,48 @@ const modelRegistry = new Map<string, Model<SchemaDefinition>>()
  *
  * // Type is automatically inferred
  * export type User = typeof User.$infer
+ *
+ * // Validate data at runtime
+ * const result = User.$zodSchema.safeParse(input)
  * ```
  */
 export function defineModel<T extends SchemaDefinition>(
   tableName: string,
   schema: T,
   _options?: ModelOptions
-): Model<T> & { $infer: InferSchema<T> } {
-  // Create model object with metadata
-  const model: Model<T> & { $infer: InferSchema<T> } = {
+): Model<T> {
+  // Generate Zod schema for runtime validation
+  // We create a temporary object just for the zod generator
+  const zodSchema = generateZodSchema({
     $tableName: tableName,
     $schema: schema,
-    // $infer is a type-only property, no runtime value
-    // It exists for TypeScript inference: typeof Model.$infer
-    $infer: undefined as unknown as InferSchema<T>,
-  }
+  } as unknown as Model<SchemaDefinition>)
 
-  // Register model for later access
-  modelRegistry.set(tableName, model as Model<SchemaDefinition>)
+  // Create final model with all properties
+  const model = Object.defineProperties(
+    {
+      $tableName: tableName,
+      $schema: schema,
+    },
+    {
+      $zodSchema: {
+        value: zodSchema,
+        enumerable: true,
+        writable: false,
+      },
+      $infer: {
+        // $infer is a type-only property for TypeScript: `typeof Model.$infer`
+        // Accessing at runtime returns a symbol to indicate misuse
+        get() {
+          return INFER_SYMBOL
+        },
+        enumerable: true,
+      },
+    }
+  ) as Model<T>
+
+  // Register model with WeakRef to prevent memory leaks
+  modelRegistry.set(tableName, new WeakRef(model as Model<SchemaDefinition>))
 
   return model
 }
@@ -60,18 +92,40 @@ export function defineModel<T extends SchemaDefinition>(
 /**
  * Get a registered model by table name
  * @param tableName The table name
- * @returns The registered model or undefined
+ * @returns The registered model or undefined (if garbage collected)
  */
 export function getModel(tableName: string): Model<SchemaDefinition> | undefined {
-  return modelRegistry.get(tableName)
+  const weakRef = modelRegistry.get(tableName)
+  if (!weakRef) return undefined
+
+  const model = weakRef.deref()
+  if (!model) {
+    // Model was garbage collected, clean up the registry entry
+    modelRegistry.delete(tableName)
+    return undefined
+  }
+
+  return model
 }
 
 /**
- * Get all registered models
+ * Get all registered models that are still alive
  * @returns Array of all registered models
  */
 export function getAllModels(): Model<SchemaDefinition>[] {
-  return Array.from(modelRegistry.values())
+  const models: Model<SchemaDefinition>[] = []
+
+  for (const [tableName, weakRef] of modelRegistry.entries()) {
+    const model = weakRef.deref()
+    if (model) {
+      models.push(model)
+    } else {
+      // Clean up garbage collected entries
+      modelRegistry.delete(tableName)
+    }
+  }
+
+  return models
 }
 
 /**

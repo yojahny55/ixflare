@@ -4,11 +4,18 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { defineModel, field, timestamps, toSQLSchema, generateZodSchema } from '@/edge-record'
+import {
+  defineModel,
+  field,
+  timestamps,
+  toSQLSchema,
+  generateZodSchema,
+  escapeIdentifier,
+} from '@/edge-record'
 
 describe('Schema Integration Tests', () => {
   it('should create a complete model with all features', () => {
-    const User = defineModel('users', {
+    const User = defineModel('users_int_test_1', {
       id: field.id(),
       email: field.string().unique().min(5).max(255),
       name: field.string().min(2).max(100),
@@ -22,7 +29,7 @@ describe('Schema Integration Tests', () => {
     })
 
     // Should have table name
-    expect(User.$tableName).toBe('users')
+    expect(User.$tableName).toBe('users_int_test_1')
 
     // Should have all fields in schema
     expect(User.$schema).toHaveProperty('id')
@@ -36,10 +43,13 @@ describe('Schema Integration Tests', () => {
     expect(User.$schema).toHaveProperty('metadata')
     expect(User.$schema).toHaveProperty('createdAt')
     expect(User.$schema).toHaveProperty('updatedAt')
+
+    // Should have $zodSchema attached
+    expect(User.$zodSchema).toBeDefined()
   })
 
-  it('should generate SQL schema from model', () => {
-    const Product = defineModel('products', {
+  it('should generate SQL schema from model with escaped identifiers', () => {
+    const Product = defineModel('products_int_test', {
       id: field.id(),
       name: field.string(),
       price: field.decimal({ precision: 10, scale: 2 }),
@@ -48,22 +58,23 @@ describe('Schema Integration Tests', () => {
 
     const sql = toSQLSchema(Product)
 
-    expect(sql).toContain('CREATE TABLE products')
-    expect(sql).toContain('id INTEGER PRIMARY KEY AUTOINCREMENT')
-    expect(sql).toContain('name TEXT NOT NULL')
-    expect(sql).toContain('price REAL NOT NULL')
-    expect(sql).toContain('inStock INTEGER NOT NULL')
+    expect(sql).toContain('CREATE TABLE "products_int_test"')
+    expect(sql).toContain('"id" INTEGER PRIMARY KEY AUTOINCREMENT')
+    expect(sql).toContain('"name" TEXT NOT NULL')
+    expect(sql).toContain('"price" REAL NOT NULL')
+    expect(sql).toContain('"inStock" INTEGER NOT NULL')
   })
 
-  it('should generate Zod schema from model', () => {
-    const Post = defineModel('posts', {
+  it('should generate Zod schema from model via $zodSchema', () => {
+    const Post = defineModel('posts_int_test', {
       id: field.id(),
       title: field.string().min(5),
       content: field.text(),
       published: field.boolean(),
     })
 
-    const zodSchema = generateZodSchema(Post)
+    // Use $zodSchema directly from model
+    const zodSchema = Post.$zodSchema
 
     // Valid data should pass
     const validData = {
@@ -85,13 +96,13 @@ describe('Schema Integration Tests', () => {
     ).toThrow()
   })
 
-  it('should handle relationships with foreign keys', () => {
-    const Author = defineModel('authors', {
+  it('should handle relationships with foreign keys in SQL', () => {
+    const Author = defineModel('authors_int_test', {
       id: field.id(),
       name: field.string(),
     })
 
-    const Book = defineModel('books', {
+    const Book = defineModel('books_int_test', {
       id: field.id(),
       authorId: field.integer().references(Author),
       title: field.string(),
@@ -102,10 +113,14 @@ describe('Schema Integration Tests', () => {
     expect(Book.$schema.authorId.config.references).toBeDefined()
     expect(Book.$schema.authorId.config.references?.model).toBe(Author)
     expect(Book.$schema.authorId.config.references?.column).toBe('id')
+
+    // SQL should include FOREIGN KEY constraint
+    const sql = toSQLSchema(Book)
+    expect(sql).toContain('FOREIGN KEY ("authorId") REFERENCES "authors_int_test"("id")')
   })
 
   it('should work with timestamps helper', () => {
-    const Comment = defineModel('comments', {
+    const Comment = defineModel('comments_int_test', {
       id: field.id(),
       text: field.string(),
       ...timestamps(),
@@ -113,12 +128,12 @@ describe('Schema Integration Tests', () => {
 
     const sql = toSQLSchema(Comment)
 
-    expect(sql).toContain('createdAt INTEGER NOT NULL')
-    expect(sql).toContain('updatedAt INTEGER NOT NULL')
+    expect(sql).toContain('"createdAt" INTEGER NOT NULL')
+    expect(sql).toContain('"updatedAt" INTEGER NOT NULL')
   })
 
   it('should support complete workflow: define -> SQL -> Zod', () => {
-    const Article = defineModel('articles', {
+    const Article = defineModel('articles_int_test', {
       id: field.id(),
       title: field.string().min(10).max(200),
       slug: field.string().unique(),
@@ -127,14 +142,13 @@ describe('Schema Integration Tests', () => {
       ...timestamps(),
     })
 
-    // Generate SQL
+    // Generate SQL with escaped identifiers
     const sql = toSQLSchema(Article)
-    expect(sql).toContain('CREATE TABLE articles')
-    expect(sql).toContain('title TEXT NOT NULL')
-    expect(sql).toContain('slug TEXT NOT NULL UNIQUE')
+    expect(sql).toContain('CREATE TABLE "articles_int_test"')
+    expect(sql).toContain('"title" TEXT NOT NULL')
+    expect(sql).toContain('"slug" TEXT NOT NULL UNIQUE')
 
-    // Generate Zod schema
-    const zodSchema = generateZodSchema(Article)
+    // Use $zodSchema directly
     const validArticle = {
       id: 1,
       title: 'Complete Guide to EdgeRecord',
@@ -145,7 +159,7 @@ describe('Schema Integration Tests', () => {
       updatedAt: new Date(),
     }
 
-    expect(zodSchema.parse(validArticle)).toEqual(validArticle)
+    expect(Article.$zodSchema.parse(validArticle)).toEqual(validArticle)
   })
 
   it('should export from ixflare/orm subpath', async () => {
@@ -157,5 +171,35 @@ describe('Schema Integration Tests', () => {
     expect(ormModule.timestamps).toBeDefined()
     expect(ormModule.toSQLSchema).toBeDefined()
     expect(ormModule.generateZodSchema).toBeDefined()
+    expect(ormModule.escapeIdentifier).toBeDefined()
+    expect(ormModule.escapeStringValue).toBeDefined()
+  })
+
+  it('should handle SQL injection prevention in defaults', () => {
+    const Config = defineModel('config_int_test', {
+      id: field.id(),
+      value: field.string().default("O'Reilly; DROP TABLE users;--"),
+    })
+
+    const sql = toSQLSchema(Config)
+
+    // Should escape single quotes properly
+    expect(sql).toContain("DEFAULT 'O''Reilly; DROP TABLE users;--'")
+    expect(sql).not.toContain("O'Reilly; DROP TABLE users;--'")
+  })
+
+  it('should handle boolean defaults as SQLite INTEGER 0/1', () => {
+    const Feature = defineModel('features_int_test', {
+      id: field.id(),
+      enabled: field.boolean().default(true),
+      disabled: field.boolean().default(false),
+    })
+
+    const sql = toSQLSchema(Feature)
+
+    expect(sql).toContain('DEFAULT 1')
+    expect(sql).toContain('DEFAULT 0')
+    expect(sql).not.toContain('DEFAULT true')
+    expect(sql).not.toContain('DEFAULT false')
   })
 })
