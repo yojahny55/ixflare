@@ -5,6 +5,7 @@
 
 import { generateZodSchema } from './zod-generator'
 import type { SchemaDefinition, ModelOptions, Model } from './types'
+import { createModelProxy, type ModelWithCrud } from '@/edge-record/crud/model-proxy'
 
 /**
  * Internal model registry
@@ -52,7 +53,7 @@ export function defineModel<T extends SchemaDefinition>(
   tableName: string,
   schema: T,
   _options?: ModelOptions
-): Model<T> {
+): ModelWithCrud<T> {
   // Generate Zod schema for runtime validation
   // We create a temporary object just for the zod generator
   const zodSchema = generateZodSchema({
@@ -86,7 +87,8 @@ export function defineModel<T extends SchemaDefinition>(
   // Register model with WeakRef to prevent memory leaks
   modelRegistry.set(tableName, new WeakRef(model as Model<SchemaDefinition>))
 
-  return model
+  // Add CRUD methods to model via proxy
+  return createModelProxy(model)
 }
 
 /**

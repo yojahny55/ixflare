@@ -4,6 +4,7 @@ docs/
 .claude/
 .bmad/
 .agent/
+.github/
 
 # Dependencies
 node_modules/
