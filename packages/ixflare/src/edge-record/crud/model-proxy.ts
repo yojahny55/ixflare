@@ -79,8 +79,12 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
 
       if (typeof fieldOrConditions === 'object') {
         return qb.where(fieldOrConditions)
+      } else if (value !== undefined) {
+        // Two-argument form: where(field, value)
+        return qb.where(fieldOrConditions, value as InferSchema<T>[keyof InferSchema<T>])
       } else {
-        return qb.where(fieldOrConditions, value)
+        // Should not happen, but return empty query builder
+        return qb
       }
     },
 

@@ -55,9 +55,7 @@ export function createMockD1Database(): D1Database {
             // Parse conflict columns
             const conflictMatch = query.match(/ON CONFLICT\s*\(([^)]+)\)/i)
             const conflictColumns = conflictMatch
-              ? conflictMatch[1]
-                  .split(',')
-                  .map((c) => c.trim().replace(/^"|"$/g, ''))
+              ? conflictMatch[1].split(',').map((c) => c.trim().replace(/^"|"$/g, ''))
               : []
 
             // Parse INSERT fields

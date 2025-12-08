@@ -245,4 +245,205 @@ describe('QueryBuilder CRUD Operations', () => {
       expect(typeof count).toBe('number')
     })
   })
+
+  // NEW TESTS FOR STORY 3.3 - Advanced Operators
+
+  describe('where() with comparison operators - AC2', () => {
+    it('should support greater than operator', () => {
+      const qb = new QueryBuilder(User)
+      const { query, params } = qb.where('createdAt', '>', 1733311800000).toSQL()
+
+      expect(query).toContain('>')
+      expect(params).toContain(1733311800000)
+    })
+
+    it('should support less than operator', () => {
+      const qb = new QueryBuilder(User)
+      const { query, params } = qb.where('createdAt', '<', 1733311800000).toSQL()
+
+      expect(query).toContain('<')
+      expect(params).toContain(1733311800000)
+    })
+
+    it('should support greater than or equal operator', () => {
+      const qb = new QueryBuilder(User)
+      const { query, params } = qb.where('createdAt', '>=', 1733311800000).toSQL()
+
+      expect(query).toContain('>=')
+      expect(params).toContain(1733311800000)
+    })
+
+    it('should support less than or equal operator', () => {
+      const qb = new QueryBuilder(User)
+      const { query, params } = qb.where('createdAt', '<=', 1733311800000).toSQL()
+
+      expect(query).toContain('<=')
+      expect(params).toContain(1733311800000)
+    })
+
+    it('should support not equal operator', () => {
+      const qb = new QueryBuilder(User)
+      const { query, params } = qb.where('role', '!=', 'admin').toSQL()
+
+      expect(query).toContain('!=')
+      expect(params).toContain('admin')
+    })
+  })
+
+  describe('where() with IN operator - AC3', () => {
+    it('should support IN operator with array', () => {
+      const qb = new QueryBuilder(User)
+      const { query, params } = qb.where({ role: { in: ['admin', 'moderator', 'editor'] } }).toSQL()
+
+      expect(query).toContain('IN')
+      expect(query).toMatch(/\(\s*\?\s*,\s*\?\s*,\s*\?\s*\)/)
+      expect(params).toEqual(['admin', 'moderator', 'editor'])
+    })
+
+    it('should support NOT IN operator', () => {
+      const qb = new QueryBuilder(User)
+      const { query, params } = qb.where({ role: { notIn: ['banned', 'suspended'] } }).toSQL()
+
+      expect(query).toContain('NOT IN')
+      expect(params).toEqual(['banned', 'suspended'])
+    })
+  })
+
+  describe('where() with LIKE operator - AC4', () => {
+    it('should support LIKE operator', () => {
+      const qb = new QueryBuilder(User)
+      const { query, params } = qb.where({ email: { like: '%@company.com' } }).toSQL()
+
+      expect(query).toContain('LIKE')
+      expect(params).toContain('%@company.com')
+    })
+
+    it('should support NOT LIKE operator', () => {
+      const qb = new QueryBuilder(User)
+      const { query, params } = qb.where({ email: { notLike: '%@spam.com' } }).toSQL()
+
+      expect(query).toContain('NOT LIKE')
+      expect(params).toContain('%@spam.com')
+    })
+
+    it('should validate LIKE pattern length (50-byte limit)', () => {
+      const qb = new QueryBuilder(User)
+      const longPattern = 'a'.repeat(51) // 51 bytes
+
+      expect(() => {
+        qb.where({ email: { like: longPattern } }).toSQL()
+      }).toThrow(/LIKE pattern exceeds 50-byte limit/)
+    })
+  })
+
+  describe('where() with NULL checks - AC5', () => {
+    it('should support IS NULL', () => {
+      const qb = new QueryBuilder(User)
+      const { query, params } = qb.where({ deletedAt: { isNull: true } }).toSQL()
+
+      expect(query).toContain('IS NULL')
+      expect(params).not.toContain(null) // NULL doesn't need parameter
+    })
+
+    it('should support IS NOT NULL', () => {
+      const qb = new QueryBuilder(User)
+      const { query, params } = qb.where({ emailVerifiedAt: { isNotNull: true } }).toSQL()
+
+      expect(query).toContain('IS NOT NULL')
+      expect(params).not.toContain(null)
+    })
+  })
+
+  describe('where() with range queries - AC6', () => {
+    it('should support range with gte and lte', () => {
+      const qb = new QueryBuilder(User)
+      const { query, params } = qb.where({ createdAt: { gte: 1000000, lte: 2000000 } }).toSQL()
+
+      expect(query).toContain('>=')
+      expect(query).toContain('<=')
+      expect(params).toContain(1000000)
+      expect(params).toContain(2000000)
+    })
+
+    it('should support range with gt and lt', () => {
+      const qb = new QueryBuilder(User)
+      const { query, params } = qb.where({ createdAt: { gt: 1000000, lt: 2000000 } }).toSQL()
+
+      expect(query).toContain('>')
+      expect(query).toContain('<')
+      expect(params).toContain(1000000)
+      expect(params).toContain(2000000)
+    })
+
+    it('should support mixed range operators', () => {
+      const qb = new QueryBuilder(User)
+      const { query, params } = qb.where({ createdAt: { gte: 1000000, lt: 2000000 } }).toSQL()
+
+      expect(query).toContain('>=')
+      expect(query).toContain('<')
+      expect(params).toContain(1000000)
+      expect(params).toContain(2000000)
+    })
+  })
+
+  describe('orWhere() - AC7', () => {
+    it('should support OR logic between conditions', () => {
+      const qb = new QueryBuilder(User)
+      const { query, params } = qb.where({ role: 'admin' }).orWhere({ role: 'moderator' }).toSQL()
+
+      expect(query).toContain('OR')
+      expect(params).toEqual(['admin', 'moderator'])
+    })
+
+    it('should generate correct OR groups with multiple AND conditions', () => {
+      const qb = new QueryBuilder(User)
+      const { query } = qb
+        .where({ role: 'admin', name: 'John' })
+        .orWhere({ role: 'moderator', name: 'Jane' })
+        .toSQL()
+
+      // Should generate: (role = ? AND name = ?) OR (role = ? AND name = ?)
+      expect(query).toMatch(/\(.*AND.*\)\s+OR\s+\(.*AND.*\)/)
+    })
+  })
+
+  describe('select() with type narrowing - AC8', () => {
+    it('should generate SELECT with specific fields', () => {
+      const qb = new QueryBuilder(User)
+      const { query } = qb.select('id', 'email').toSQL()
+
+      expect(query).toContain('SELECT "id", "email"')
+      expect(query).not.toContain('SELECT *')
+    })
+
+    it('should transform camelCase fields to snake_case in SELECT', () => {
+      const qb = new QueryBuilder(User)
+      const { query } = qb.select('id', 'createdAt').toSQL()
+
+      expect(query).toContain('"created_at"')
+    })
+
+    it('should work with where conditions', () => {
+      const qb = new QueryBuilder(User)
+      const { query } = qb.select('id', 'email').where({ role: 'admin' }).toSQL()
+
+      expect(query).toContain('SELECT "id", "email"')
+      expect(query).toContain('WHERE')
+    })
+
+    it('should return plain objects when select is used', async () => {
+      await create(User, { email: 'test@example.com', name: 'Test User', role: 'admin' }, db)
+
+      const qb = new QueryBuilder(User)
+      const results = await qb.select('id', 'email').all(db)
+
+      expect(Array.isArray(results)).toBe(true)
+      if (results.length > 0) {
+        // Should be plain object, not ModelInstance
+        expect(typeof results[0]).toBe('object')
+        expect(results[0]).not.toHaveProperty('get')
+        expect(results[0]).not.toHaveProperty('save')
+      }
+    })
+  })
 })

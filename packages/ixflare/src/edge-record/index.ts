@@ -38,8 +38,15 @@ export { ModelInstance } from './crud/model-instance'
  * Most users should use the higher-level CRUD functions instead.
  */
 export { D1Adapter } from './crud/d1-adapter'
-export { QueryBuilder } from './query-builder'
-export type { WhereCondition } from './query-builder'
+export { QueryBuilder, GroupedQueryBuilder } from './query-builder'
+export type {
+  WhereCondition,
+  WhereOperator,
+  WhereValue,
+  WhereConditions,
+  NumericKeys,
+  GroupedResult,
+} from './query-builder'
 export { create, find, findOrFail, upsert, upsertAtomic, createMany } from './crud/crud-operations'
 export type { CreateInput, UpdateInput } from './crud/crud-operations'
 export { createModelProxy, type ModelCrudMethods, type ModelWithCrud } from './crud/model-proxy'

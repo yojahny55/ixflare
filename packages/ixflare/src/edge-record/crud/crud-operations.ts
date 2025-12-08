@@ -277,19 +277,27 @@ export async function upsertAtomic<T extends SchemaDefinition>(
   // Build INSERT ... ON CONFLICT ... DO UPDATE SQL
   const placeholders = dbFields.map(() => '?').join(', ')
   const escapedFields = dbFields.map((f) => escapeIdentifier(f)).join(', ')
-  const conflictCols = conflictColumns.map((c) => escapeIdentifier(toSnakeCase(c as string))).join(', ')
+  const conflictCols = conflictColumns
+    .map((c) => escapeIdentifier(toSnakeCase(c as string)))
+    .join(', ')
 
   // Build SET clause for update (exclude conflict columns and id)
   const updateFields = dbFields.filter((f) => {
     const camelKey = f.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
-    return !conflictColumns.includes(camelKey as keyof InferSchema<T>) && f !== 'id' && f !== 'created_at'
+    return (
+      !conflictColumns.includes(camelKey as keyof InferSchema<T>) &&
+      f !== 'id' &&
+      f !== 'created_at'
+    )
   })
-  const setClause = updateFields.map((f) => `${escapeIdentifier(f)} = excluded.${escapeIdentifier(f)}`).join(', ')
+  const setClause = updateFields
+    .map((f) => `${escapeIdentifier(f)} = excluded.${escapeIdentifier(f)}`)
+    .join(', ')
 
   const sql = `INSERT INTO ${escapeIdentifier(model.$tableName)} (${escapedFields}) VALUES (${placeholders}) ON CONFLICT(${conflictCols}) DO UPDATE SET ${setClause}`
 
   const stmt = db.prepare(sql).bind(...dbValues)
-  const result = await stmt.run()
+  await stmt.run()
 
   // Fetch the created/updated record to get the ID
   const conflictWhere = conflictColumns

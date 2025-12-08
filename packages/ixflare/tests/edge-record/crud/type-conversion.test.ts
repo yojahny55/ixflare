@@ -75,11 +75,7 @@ describe('Type Conversion', () => {
   describe('JSON type conversion', () => {
     it('should stringify JSON objects when saving', async () => {
       const preferences = { theme: 'dark', language: 'en', notifications: true }
-      const instance = new ModelInstance(
-        Settings,
-        { userId: 1, isActive: true, preferences },
-        true
-      )
+      const instance = new ModelInstance(Settings, { userId: 1, isActive: true, preferences }, true)
 
       await instance.save(db)
 
@@ -108,11 +104,7 @@ describe('Type Conversion', () => {
         theme: { mode: 'dark', accent: '#ff0000' },
         notifications: { email: true, push: false },
       }
-      const instance = new ModelInstance(
-        Settings,
-        { userId: 1, isActive: true, preferences },
-        true
-      )
+      const instance = new ModelInstance(Settings, { userId: 1, isActive: true, preferences }, true)
 
       await instance.save(db)
 
@@ -121,11 +113,7 @@ describe('Type Conversion', () => {
 
     it('should handle JSON arrays', async () => {
       const preferences = ['option1', 'option2', 'option3']
-      const instance = new ModelInstance(
-        Settings,
-        { userId: 1, isActive: true, preferences },
-        true
-      )
+      const instance = new ModelInstance(Settings, { userId: 1, isActive: true, preferences }, true)
 
       await instance.save(db)
 
@@ -161,7 +149,11 @@ describe('Type Conversion', () => {
 
     it('should handle JSON in create', async () => {
       const prefs = { theme: 'dark', fontSize: 14 }
-      const settings = await create(Settings, { userId: 1, isActive: false, preferences: prefs }, db)
+      const settings = await create(
+        Settings,
+        { userId: 1, isActive: false, preferences: prefs },
+        db
+      )
 
       expect(settings.get('preferences')).toEqual(prefs)
     })
