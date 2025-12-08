@@ -1,6 +1,31 @@
 /**
  * @module edge-record/query-builder
- * @description Type-safe query builder with CRUD operations
+ * @description Type-safe query builder with CRUD operations for D1/SQLite
+ *
+ * @example
+ * ```typescript
+ * // Simple equality
+ * const admins = await User.where({ role: 'admin' }).all(db)
+ *
+ * // Comparison operators
+ * const recent = await User.where('createdAt', '>', Date.now() - 86400000).all(db)
+ *
+ * // IN operator
+ * const users = await User.where({ role: { in: ['admin', 'moderator'] } }).all(db)
+ *
+ * // LIKE pattern
+ * const companyUsers = await User.where({ email: { like: '%@company.com' } }).all(db)
+ *
+ * // OR conditions
+ * const results = await User.where({ role: 'admin' }).orWhere({ role: 'moderator' }).all(db)
+ *
+ * // Select specific fields
+ * const emails = await User.select('id', 'email').all(db)
+ *
+ * // Aggregates
+ * const count = await User.where({ role: 'admin' }).count(db)
+ * const total = await Order.sum('amount', db)
+ * ```
  */
 
 import type { SchemaDefinition, InferSchema, Model } from './schema/types'
@@ -8,7 +33,21 @@ import { ModelInstance } from './crud/model-instance'
 import { toSnakeCase } from './crud/case-transform'
 import { escapeIdentifier } from './schema/type-mapping'
 
-// Comparison operators supported by SQLite
+/**
+ * D1 parameter limit - maximum bound parameters per query
+ * @see https://developers.cloudflare.com/d1/platform/limits/
+ */
+const D1_PARAM_LIMIT = 100
+
+/**
+ * D1 LIKE pattern byte limit
+ * @see https://developers.cloudflare.com/d1/platform/limits/
+ */
+const D1_LIKE_BYTE_LIMIT = 50
+
+/**
+ * Comparison operators supported by SQLite
+ */
 export type WhereOperator =
   | '='
   | '!='
@@ -51,12 +90,77 @@ export type NumericKeys<T extends SchemaDefinition> = {
   [K in keyof InferSchema<T>]: InferSchema<T>[K] extends number ? K : never
 }[keyof InferSchema<T>]
 
-// Grouped result type
+/**
+ * Grouped aggregation result type
+ */
 export interface GroupedResult {
   [key: string]: unknown
   count?: number
   sum?: number
   avg?: number | null
+}
+
+/**
+ * Build WHERE clause from AND groups with OR logic
+ * Shared utility function to avoid code duplication between QueryBuilder and GroupedQueryBuilder
+ * @internal
+ */
+function buildWhereClauseFromGroups(andGroups: WhereCondition[][]): string {
+  // Filter out empty groups
+  const nonEmptyGroups = andGroups.filter((group) => group.length > 0)
+
+  if (nonEmptyGroups.length === 0) {
+    return ''
+  }
+
+  // Build each AND group
+  const groupClauses = nonEmptyGroups.map((group) => {
+    // Group IN/NOT IN conditions by field
+    const inGroups = new Map<string, WhereCondition[]>()
+    const otherConditions: WhereCondition[] = []
+
+    for (const cond of group) {
+      if (cond.operator === 'IN' || cond.operator === 'NOT IN') {
+        const key = `${cond.field}:${cond.operator}`
+        if (!inGroups.has(key)) {
+          inGroups.set(key, [])
+        }
+        inGroups.get(key)!.push(cond)
+      } else {
+        otherConditions.push(cond)
+      }
+    }
+
+    // Build clauses for this group
+    const clauses: string[] = []
+
+    // Add IN/NOT IN clauses
+    for (const conditions of inGroups.values()) {
+      const field = conditions[0].field
+      const operator = conditions[0].operator
+      const dbField = escapeIdentifier(toSnakeCase(field))
+      const placeholders = conditions.map(() => '?').join(', ')
+      clauses.push(`${dbField} ${operator} (${placeholders})`)
+    }
+
+    // Add other conditions
+    for (const cond of otherConditions) {
+      const dbField = escapeIdentifier(toSnakeCase(cond.field))
+
+      if (cond.operator === 'IS NULL' || cond.operator === 'IS NOT NULL') {
+        clauses.push(`${dbField} ${cond.operator}`)
+      } else {
+        clauses.push(`${dbField} ${cond.operator} ?`)
+      }
+    }
+
+    // Return group with parentheses if needed
+    return clauses.length > 1 ? `(${clauses.join(' AND ')})` : clauses[0]
+  })
+
+  // Join groups with OR
+  const whereClause = groupClauses.join(' OR ')
+  return ' WHERE ' + whereClause
 }
 
 export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>> {
@@ -86,6 +190,26 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
   /**
    * Add WHERE conditions with support for advanced operators
+   *
+   * @example
+   * ```typescript
+   * // Object notation for simple equality
+   * User.where({ email: 'test@example.com', role: 'admin' })
+   *
+   * // Two-argument notation
+   * User.where('email', 'test@example.com')
+   *
+   * // Three-argument notation with comparison operator
+   * User.where('createdAt', '>', Date.now() - 86400000)
+   * User.where('age', '>=', 18)
+   * User.where('role', '!=', 'banned')
+   *
+   * // Advanced operators via object notation
+   * User.where({ role: { in: ['admin', 'moderator'] } })
+   * User.where({ email: { like: '%@company.com' } })
+   * User.where({ deletedAt: { isNull: true } })
+   * User.where({ age: { gte: 18, lte: 65 } })
+   * ```
    */
   where(conditions: WhereConditions<T>): this
   where<K extends keyof InferSchema<T>>(field: K, operator: WhereOperator, value: unknown): this
@@ -129,6 +253,7 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
   /**
    * Process WHERE condition value and extract operator
+   * @internal
    */
   private addWhereCondition(field: string, val: unknown): void {
     // Check if value is an operator object
@@ -137,7 +262,17 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
       // IN operator
       if ('in' in operatorObj && Array.isArray(operatorObj.in)) {
-        for (const item of operatorObj.in) {
+        const items = operatorObj.in as unknown[]
+        if (items.length === 0) {
+          throw new Error(`IN clause cannot have empty array for field "${field}"`)
+        }
+        if (items.length > D1_PARAM_LIMIT) {
+          throw new Error(
+            `IN clause for field "${field}" has ${items.length} values, exceeding D1 limit of ${D1_PARAM_LIMIT}. ` +
+              `Split into multiple queries.`
+          )
+        }
+        for (const item of items) {
           this.currentGroup.push({ field, operator: 'IN', value: item })
         }
         return
@@ -145,7 +280,17 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
       // NOT IN operator
       if ('notIn' in operatorObj && Array.isArray(operatorObj.notIn)) {
-        for (const item of operatorObj.notIn) {
+        const items = operatorObj.notIn as unknown[]
+        if (items.length === 0) {
+          throw new Error(`NOT IN clause cannot have empty array for field "${field}"`)
+        }
+        if (items.length > D1_PARAM_LIMIT) {
+          throw new Error(
+            `NOT IN clause for field "${field}" has ${items.length} values, exceeding D1 limit of ${D1_PARAM_LIMIT}. ` +
+              `Split into multiple queries.`
+          )
+        }
+        for (const item of items) {
           this.currentGroup.push({ field, operator: 'NOT IN', value: item })
         }
         return
@@ -208,33 +353,69 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
   /**
    * Validate LIKE pattern length (D1 limit: 50 bytes)
+   * @throws Error if pattern exceeds D1_LIKE_BYTE_LIMIT
+   * @internal
    */
   private validateLikePattern(pattern: string): void {
     const byteLength = new TextEncoder().encode(pattern).length
-    if (byteLength > 50) {
-      throw new Error(`LIKE pattern exceeds 50-byte limit (${byteLength} bytes)`)
+    if (byteLength > D1_LIKE_BYTE_LIMIT) {
+      throw new Error(`LIKE pattern exceeds ${D1_LIKE_BYTE_LIMIT}-byte limit (${byteLength} bytes)`)
     }
   }
 
   /**
    * Select specific fields (returns plain objects, not ModelInstances)
+   *
+   * When using select(), the return type is narrowed to only the selected fields,
+   * and results are returned as plain objects instead of ModelInstance wrappers.
+   *
+   * @example
+   * ```typescript
+   * // Returns { id: number, email: string }[]
+   * const users = await User.select('id', 'email').all(db)
+   *
+   * // Type-safe field access
+   * users[0].id    // OK
+   * users[0].email // OK
+   * users[0].name  // TypeScript error - not selected
+   * ```
    */
   select<K extends keyof InferSchema<T>>(...fields: K[]): QueryBuilder<T, Pick<InferSchema<T>, K>> {
     this.selectedFields = fields.map((f) => String(f))
     return this as unknown as QueryBuilder<T, Pick<InferSchema<T>, K>>
   }
 
+  /**
+   * Order results by a field
+   *
+   * @example
+   * ```typescript
+   * // Order by createdAt descending (newest first)
+   * const users = await User.where({ role: 'admin' }).orderBy('createdAt', 'desc').all(db)
+   *
+   * // Default is ascending
+   * const users = await User.orderBy('name').all(db)
+   * ```
+   */
   orderBy(field: keyof InferSchema<T>, direction: 'asc' | 'desc' = 'asc'): this {
     this.orderByField = String(field)
     this.orderDirection = direction
     return this
   }
 
+  /**
+   * Limit the number of results
+   * @example User.where({ role: 'admin' }).limit(10).all(db)
+   */
   limit(value: number): this {
     this.limitValue = value
     return this
   }
 
+  /**
+   * Skip the first N results (for pagination)
+   * @example User.where({ role: 'admin' }).limit(10).offset(20).all(db) // Page 3
+   */
   offset(value: number): this {
     this.offsetValue = value
     return this
@@ -325,6 +506,12 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
   /**
    * Count matching records
+   *
+   * @example
+   * ```typescript
+   * const totalAdmins = await User.where({ role: 'admin' }).count(db)
+   * const allUsers = await User.count(db) // Count all
+   * ```
    */
   async count(db: D1Database): Promise<number> {
     const whereClause = this.buildWhereClause()
@@ -341,6 +528,13 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
   /**
    * Sum numeric field values
+   *
+   * Only accepts numeric fields (integer, real) for type safety.
+   *
+   * @example
+   * ```typescript
+   * const totalRevenue = await Order.where({ status: 'completed' }).sum('amount', db)
+   * ```
    */
   async sum<K extends NumericKeys<T>>(field: K, db: D1Database): Promise<number> {
     const whereClause = this.buildWhereClause()
@@ -358,6 +552,13 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
   /**
    * Calculate average of numeric field
+   *
+   * Returns null if no matching records found.
+   *
+   * @example
+   * ```typescript
+   * const avgOrderValue = await Order.where({ status: 'completed' }).avg('amount', db)
+   * ```
    */
   async avg<K extends NumericKeys<T>>(field: K, db: D1Database): Promise<number | null> {
     const whereClause = this.buildWhereClause()
@@ -374,7 +575,15 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
   }
 
   /**
-   * Find minimum value
+   * Find minimum value in a field
+   *
+   * Works on any comparable field type. Returns null if no records match.
+   *
+   * @example
+   * ```typescript
+   * const lowestPrice = await Product.min('price', db)
+   * const oldestDate = await User.min('createdAt', db)
+   * ```
    */
   async min<K extends keyof InferSchema<T>>(
     field: K,
@@ -394,7 +603,15 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
   }
 
   /**
-   * Find maximum value
+   * Find maximum value in a field
+   *
+   * Works on any comparable field type. Returns null if no records match.
+   *
+   * @example
+   * ```typescript
+   * const highestPrice = await Product.max('price', db)
+   * const newestDate = await User.max('createdAt', db)
+   * ```
    */
   async max<K extends keyof InferSchema<T>>(
     field: K,
@@ -415,6 +632,19 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
   /**
    * Group by field for aggregation
+   *
+   * Returns a GroupedQueryBuilder that supports count(), sum(), and avg() aggregations.
+   *
+   * @example
+   * ```typescript
+   * // Count orders by status
+   * const stats = await Order.groupBy('status').count(db)
+   * // Returns: [{ status: 'pending', count: 5 }, { status: 'completed', count: 10 }]
+   *
+   * // Sum amounts by status
+   * const totals = await Order.groupBy('status').sum('amount', db)
+   * // Returns: [{ status: 'completed', sum: 1500 }, ...]
+   * ```
    */
   groupBy<K extends keyof InferSchema<T>>(field: K): GroupedQueryBuilder<T> {
     return new GroupedQueryBuilder(this.model, this.andGroups, String(field))
@@ -422,63 +652,10 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
   /**
    * Build WHERE clause from AND groups with OR logic
+   * @internal
    */
   private buildWhereClause(): string {
-    // Filter out empty groups
-    const nonEmptyGroups = this.andGroups.filter((group) => group.length > 0)
-
-    if (nonEmptyGroups.length === 0) {
-      return ''
-    }
-
-    // Build each AND group
-    const groupClauses = nonEmptyGroups.map((group) => {
-      // Group IN/NOT IN conditions by field
-      const inGroups = new Map<string, WhereCondition[]>()
-      const otherConditions: WhereCondition[] = []
-
-      for (const cond of group) {
-        if (cond.operator === 'IN' || cond.operator === 'NOT IN') {
-          const key = `${cond.field}:${cond.operator}`
-          if (!inGroups.has(key)) {
-            inGroups.set(key, [])
-          }
-          inGroups.get(key)!.push(cond)
-        } else {
-          otherConditions.push(cond)
-        }
-      }
-
-      // Build clauses for this group
-      const clauses: string[] = []
-
-      // Add IN/NOT IN clauses
-      for (const conditions of inGroups.values()) {
-        const field = conditions[0].field
-        const operator = conditions[0].operator
-        const dbField = escapeIdentifier(toSnakeCase(field))
-        const placeholders = conditions.map(() => '?').join(', ')
-        clauses.push(`${dbField} ${operator} (${placeholders})`)
-      }
-
-      // Add other conditions
-      for (const cond of otherConditions) {
-        const dbField = escapeIdentifier(toSnakeCase(cond.field))
-
-        if (cond.operator === 'IS NULL' || cond.operator === 'IS NOT NULL') {
-          clauses.push(`${dbField} ${cond.operator}`)
-        } else {
-          clauses.push(`${dbField} ${cond.operator} ?`)
-        }
-      }
-
-      // Return group with parentheses if needed
-      return clauses.length > 1 ? `(${clauses.join(' AND ')})` : clauses[0]
-    })
-
-    // Join groups with OR
-    const whereClause = groupClauses.join(' OR ')
-    return ' WHERE ' + whereClause
+    return buildWhereClauseFromGroups(this.andGroups)
   }
 
   /**
@@ -523,6 +700,17 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
 /**
  * Query builder for grouped aggregations
+ *
+ * Created by calling `QueryBuilder.groupBy(field)`. Supports count(), sum(), and avg() aggregations.
+ *
+ * @example
+ * ```typescript
+ * // Count orders by status
+ * const stats = await Order.groupBy('status').count(db)
+ *
+ * // Sum amounts by category
+ * const totals = await Product.groupBy('category').sum('price', db)
+ * ```
  */
 export class GroupedQueryBuilder<T extends SchemaDefinition> {
   constructor(
@@ -533,66 +721,28 @@ export class GroupedQueryBuilder<T extends SchemaDefinition> {
 
   /**
    * Get flattened conditions
+   * @internal
    */
   private get conditions(): WhereCondition[] {
     return this.andGroups.flat()
   }
 
   /**
-   * Build WHERE clause
+   * Build WHERE clause using shared utility
+   * @internal
    */
   private buildWhereClause(): string {
-    const nonEmptyGroups = this.andGroups.filter((group) => group.length > 0)
-
-    if (nonEmptyGroups.length === 0) {
-      return ''
-    }
-
-    const groupClauses = nonEmptyGroups.map((group) => {
-      const inGroups = new Map<string, WhereCondition[]>()
-      const otherConditions: WhereCondition[] = []
-
-      for (const cond of group) {
-        if (cond.operator === 'IN' || cond.operator === 'NOT IN') {
-          const key = `${cond.field}:${cond.operator}`
-          if (!inGroups.has(key)) {
-            inGroups.set(key, [])
-          }
-          inGroups.get(key)!.push(cond)
-        } else {
-          otherConditions.push(cond)
-        }
-      }
-
-      const clauses: string[] = []
-
-      for (const conditions of inGroups.values()) {
-        const field = conditions[0].field
-        const operator = conditions[0].operator
-        const dbField = escapeIdentifier(toSnakeCase(field))
-        const placeholders = conditions.map(() => '?').join(', ')
-        clauses.push(`${dbField} ${operator} (${placeholders})`)
-      }
-
-      for (const cond of otherConditions) {
-        const dbField = escapeIdentifier(toSnakeCase(cond.field))
-
-        if (cond.operator === 'IS NULL' || cond.operator === 'IS NOT NULL') {
-          clauses.push(`${dbField} ${cond.operator}`)
-        } else {
-          clauses.push(`${dbField} ${cond.operator} ?`)
-        }
-      }
-
-      return clauses.length > 1 ? `(${clauses.join(' AND ')})` : clauses[0]
-    })
-
-    const whereClause = groupClauses.join(' OR ')
-    return ' WHERE ' + whereClause
+    return buildWhereClauseFromGroups(this.andGroups)
   }
 
   /**
    * Count records in each group
+   *
+   * @example
+   * ```typescript
+   * const stats = await Order.groupBy('status').count(db)
+   * // Returns: [{ status: 'pending', count: 5 }, { status: 'completed', count: 10 }]
+   * ```
    */
   async count(db: D1Database): Promise<GroupedResult[]> {
     const whereClause = this.buildWhereClause()

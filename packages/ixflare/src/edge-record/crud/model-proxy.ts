@@ -6,7 +6,7 @@
 import type { SchemaDefinition, InferSchema, Model } from '@/edge-record/schema/types'
 import type { CreateInput } from '@/edge-record/crud/crud-operations'
 import type { ModelInstance } from '@/edge-record/crud/model-instance'
-import { QueryBuilder } from '@/edge-record/query-builder'
+import { QueryBuilder, type WhereOperator, type WhereConditions } from '@/edge-record/query-builder'
 import { create, find, findOrFail, upsert, createMany } from '@/edge-record/crud/crud-operations'
 
 /**
@@ -30,9 +30,23 @@ export interface ModelCrudMethods<T extends SchemaDefinition> {
 
   /**
    * Create query builder for WHERE queries
+   *
+   * @example
+   * ```typescript
+   * // Object notation
+   * User.where({ role: 'admin' })
+   *
+   * // Two-argument notation
+   * User.where('email', 'test@example.com')
+   *
+   * // Three-argument notation with comparison operator
+   * User.where('createdAt', '>', Date.now() - 86400000)
+   * User.where('age', '>=', 18)
+   * ```
    */
-  where(conditions: Partial<InferSchema<T>>): QueryBuilder<T>
-  where(field: keyof InferSchema<T>, value: unknown): QueryBuilder<T>
+  where(conditions: WhereConditions<T>): QueryBuilder<T>
+  where<K extends keyof InferSchema<T>>(field: K, value: InferSchema<T>[K]): QueryBuilder<T>
+  where<K extends keyof InferSchema<T>>(field: K, operator: WhereOperator, value: unknown): QueryBuilder<T>
 
   /**
    * Upsert a record (create or update based on match)
@@ -72,16 +86,21 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
     },
 
     where(
-      fieldOrConditions: keyof InferSchema<T> | Partial<InferSchema<T>>,
+      fieldOrConditions: keyof InferSchema<T> | WhereConditions<T>,
+      operatorOrValue?: WhereOperator | unknown,
       value?: unknown
     ): QueryBuilder<T> {
       const qb = new QueryBuilder(model)
 
       if (typeof fieldOrConditions === 'object') {
+        // Object notation: where({ role: 'admin' })
         return qb.where(fieldOrConditions)
       } else if (value !== undefined) {
+        // Three-argument form: where(field, operator, value)
+        return qb.where(fieldOrConditions, operatorOrValue as WhereOperator, value)
+      } else if (operatorOrValue !== undefined) {
         // Two-argument form: where(field, value)
-        return qb.where(fieldOrConditions, value as InferSchema<T>[keyof InferSchema<T>])
+        return qb.where(fieldOrConditions, operatorOrValue as InferSchema<T>[keyof InferSchema<T>])
       } else {
         // Should not happen, but return empty query builder
         return qb
