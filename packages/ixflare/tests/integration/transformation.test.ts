@@ -25,12 +25,7 @@ describe('Request/Response Transformation Integration', () => {
     it('should work with errorHandler + requestId + logging + timing', async () => {
       const logger = vi.fn()
 
-      const middleware = [
-        errorHandler(),
-        requestId(),
-        logging({ logger }),
-        timing(),
-      ]
+      const middleware = [errorHandler(), requestId(), logging({ logger }), timing()]
 
       const handler = createHandler(new Response('Success'))
       const composed = compose(...middleware)(handler)
@@ -61,11 +56,7 @@ describe('Request/Response Transformation Integration', () => {
       const logger = vi.fn()
       let capturedRequestId: string | undefined
 
-      const middleware = [
-        errorHandler(),
-        requestId(),
-        logging({ logger }),
-      ]
+      const middleware = [errorHandler(), requestId(), logging({ logger })]
 
       const handler = createHandler(() => {
         const ctx = mockContext(mockRequest())
@@ -90,11 +81,7 @@ describe('Request/Response Transformation Integration', () => {
     it('should handle errors through full chain with request ID', async () => {
       const logger = vi.fn()
 
-      const middleware = [
-        errorHandler(),
-        requestId(),
-        logging({ logger }),
-      ]
+      const middleware = [errorHandler(), requestId(), logging({ logger })]
 
       const handler = createHandler(() => {
         throw new AuthError('UNAUTHORIZED', 'Missing token')
@@ -178,13 +165,14 @@ describe('Request/Response Transformation Integration', () => {
     it('should preserve and add headers throughout chain', async () => {
       const middleware = [requestId(), timing()]
 
-      const handler = createHandler(() =>
-        new Response('test', {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Custom': 'value',
-          },
-        })
+      const handler = createHandler(
+        () =>
+          new Response('test', {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Custom': 'value',
+            },
+          })
       )
 
       const composed = compose(...middleware)(handler)

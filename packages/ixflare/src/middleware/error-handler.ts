@@ -181,9 +181,11 @@ export interface ErrorHandlerConfig {
 export function errorHandler<Env = unknown>(config?: ErrorHandlerConfig): Middleware<Env> {
   const includeStack = config?.includeStackTrace ?? false
   const requestIdHeader = config?.requestIdHeader ?? 'X-Request-ID'
-  const log = config?.logger ?? ((error: Error, ctx: EdgeContext<Env>) => {
-    console.error(`[Error] ${ctx.requestId ?? 'no-id'}:`, error)
-  })
+  const log =
+    config?.logger ??
+    ((error: Error, ctx: EdgeContext<Env>) => {
+      console.error(`[Error] ${ctx.requestId ?? 'no-id'}:`, error)
+    })
 
   return async (ctx, next) => {
     try {
@@ -200,15 +202,18 @@ export function errorHandler<Env = unknown>(config?: ErrorHandlerConfig): Middle
 
       // Handle AppError and subclasses
       if (error instanceof AppError) {
-        const response = Response.json({
-          error: {
-            code: error.code,
-            message: error.message,
-            status: error.status,
-            timestamp: Date.now(),
-            ...(ctx.requestId && { rayId: ctx.requestId }),
+        const response = Response.json(
+          {
+            error: {
+              code: error.code,
+              message: error.message,
+              status: error.status,
+              timestamp: Date.now(),
+              ...(ctx.requestId && { rayId: ctx.requestId }),
+            },
           },
-        }, { status: error.status })
+          { status: error.status }
+        )
 
         // Add request ID header if available
         if (ctx.requestId) {
@@ -219,18 +224,22 @@ export function errorHandler<Env = unknown>(config?: ErrorHandlerConfig): Middle
       }
 
       // Unexpected error - sanitize for production
-      const response = Response.json({
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'An unexpected error occurred',
-          status: 500,
-          timestamp: Date.now(),
-          ...(ctx.requestId && { rayId: ctx.requestId }),
-          ...(includeStack && error instanceof Error && {
-            stack: error.stack
-          }),
+      const response = Response.json(
+        {
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'An unexpected error occurred',
+            status: 500,
+            timestamp: Date.now(),
+            ...(ctx.requestId && { rayId: ctx.requestId }),
+            ...(includeStack &&
+              error instanceof Error && {
+                stack: error.stack,
+              }),
+          },
         },
-      }, { status: 500 })
+        { status: 500 }
+      )
 
       // Add request ID header if available
       if (ctx.requestId) {

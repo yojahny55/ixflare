@@ -212,10 +212,11 @@ describe('logging middleware', () => {
     })
     const ctx = mockContext(request)
 
-    const next = vi.fn(async () =>
-      new Response('test', {
-        headers: { 'X-Response-Header': 'response-value' },
-      })
+    const next = vi.fn(
+      async () =>
+        new Response('test', {
+          headers: { 'X-Response-Header': 'response-value' },
+        })
     )
     await middleware(ctx, next)
 

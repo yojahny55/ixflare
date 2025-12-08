@@ -58,13 +58,14 @@ describe('timing middleware', () => {
     const request = mockRequest()
     const ctx = mockContext(request)
 
-    const next = vi.fn(async () =>
-      new Response('test', {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Custom': 'value',
-        },
-      })
+    const next = vi.fn(
+      async () =>
+        new Response('test', {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Custom': 'value',
+          },
+        })
     )
 
     const response = await middleware(ctx, next)

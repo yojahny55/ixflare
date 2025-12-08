@@ -104,10 +104,7 @@ export function cloneResponse(response: Response, init?: ResponseInit): Response
  * })
  * ```
  */
-export function withRequestHeaders(
-  request: Request,
-  headers: Record<string, string>
-): Request {
+export function withRequestHeaders(request: Request, headers: Record<string, string>): Request {
   const newHeaders = new Headers(request.headers)
   for (const [key, value] of Object.entries(headers)) {
     newHeaders.set(key, value)
@@ -139,10 +136,7 @@ export function withRequestHeaders(
  * })
  * ```
  */
-export function withResponseHeaders(
-  response: Response,
-  headers: Record<string, string>
-): Response {
+export function withResponseHeaders(response: Response, headers: Record<string, string>): Response {
   const newHeaders = new Headers(response.headers)
   for (const [key, value] of Object.entries(headers)) {
     newHeaders.set(key, value)

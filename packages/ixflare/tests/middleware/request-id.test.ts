@@ -110,10 +110,11 @@ describe('requestId middleware', () => {
     const request = mockRequest()
     const ctx = mockContext(request)
 
-    const next = vi.fn(async () =>
-      new Response('test', {
-        headers: { 'Content-Type': 'application/json' },
-      })
+    const next = vi.fn(
+      async () =>
+        new Response('test', {
+          headers: { 'Content-Type': 'application/json' },
+        })
     )
 
     const response = await middleware(ctx, next)
@@ -131,8 +132,7 @@ describe('requestId middleware', () => {
     await middleware(ctx, next)
 
     // UUID v4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
     expect(ctx.requestId).toMatch(uuidRegex)
   })
 

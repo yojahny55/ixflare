@@ -1,12 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { errorHandler } from '@/middleware/error-handler'
-import {
-  AppError,
-  AuthError,
-  ValidationError,
-  NotFoundError,
-  HttpError,
-} from '@/errors'
+import { AppError, AuthError, ValidationError, NotFoundError, HttpError } from '@/errors'
 import { createEdgeContext } from '@/types'
 import type { EdgeContext } from '@/types'
 

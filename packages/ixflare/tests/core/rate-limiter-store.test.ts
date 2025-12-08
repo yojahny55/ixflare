@@ -279,9 +279,7 @@ describe('KVRateLimitStore', () => {
       await store.reset('reset-key')
 
       // Verify KV data was cleared
-      const keysAfterReset = Array.from(kvData.keys()).filter((k) =>
-        k.includes('reset-key')
-      )
+      const keysAfterReset = Array.from(kvData.keys()).filter((k) => k.includes('reset-key'))
       expect(keysAfterReset.length).toBe(0)
 
       // New increment should start at 1
