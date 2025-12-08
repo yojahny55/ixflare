@@ -33,8 +33,7 @@ describe('Aggregate Methods', () => {
       const qb = new QueryBuilder(Order)
       const count = await qb.count(db)
 
-      expect(typeof count).toBe('number')
-      expect(count).toBeGreaterThanOrEqual(0)
+      expect(count).toBe(2)
     })
 
     it('should count records matching where clause', async () => {
@@ -45,7 +44,7 @@ describe('Aggregate Methods', () => {
       const qb = new QueryBuilder(Order)
       const count = await qb.where({ status: 'completed' }).count(db)
 
-      expect(typeof count).toBe('number')
+      expect(count).toBe(2)
     })
 
     it('should return 0 when no matches', async () => {
@@ -64,7 +63,7 @@ describe('Aggregate Methods', () => {
       const qb = new QueryBuilder(Order)
       const total = await qb.sum('amount', db)
 
-      expect(typeof total).toBe('number')
+      expect(total).toBe(300)
     })
 
     it('should sum with where clause', async () => {
@@ -75,7 +74,7 @@ describe('Aggregate Methods', () => {
       const qb = new QueryBuilder(Order)
       const total = await qb.where({ status: 'completed' }).sum('amount', db)
 
-      expect(typeof total).toBe('number')
+      expect(total).toBe(300)
     })
 
     it('should return 0 when no records', async () => {
@@ -94,7 +93,7 @@ describe('Aggregate Methods', () => {
       const qb = new QueryBuilder(Order)
       const avg = await qb.avg('amount', db)
 
-      expect(typeof avg === 'number' || avg === null).toBe(true)
+      expect(avg).toBe(150) // (100 + 200) / 2
     })
 
     it('should return null when no records', async () => {
@@ -114,7 +113,7 @@ describe('Aggregate Methods', () => {
       const qb = new QueryBuilder(Order)
       const min = await qb.min('amount', db)
 
-      expect(typeof min === 'number' || min === null).toBe(true)
+      expect(min).toBe(50)
     })
 
     it('should return null when no records', async () => {
@@ -134,7 +133,7 @@ describe('Aggregate Methods', () => {
       const qb = new QueryBuilder(Order)
       const max = await qb.max('amount', db)
 
-      expect(typeof max === 'number' || max === null).toBe(true)
+      expect(max).toBe(200)
     })
 
     it('should return null when no records', async () => {
@@ -154,14 +153,14 @@ describe('Aggregate Methods', () => {
       const qb = new QueryBuilder(Order)
       const results = await qb.groupBy('status').count(db)
 
-      expect(Array.isArray(results)).toBe(true)
-      // Mock DB returns all fields, real D1 would return only grouped fields + aggregates
-      // Just verify structure is valid and contains the grouped field
-      if (results.length > 0) {
-        expect(results[0]).toHaveProperty('status')
-        // count may be in results or may not depending on mock implementation
-        expect(typeof results[0]).toBe('object')
-      }
+      expect(results).toHaveLength(2)
+      const completedGroup = results.find((r) => r.status === 'completed')
+      const pendingGroup = results.find((r) => r.status === 'pending')
+
+      expect(completedGroup).toBeDefined()
+      expect(completedGroup?.count).toBe(2)
+      expect(pendingGroup).toBeDefined()
+      expect(pendingGroup?.count).toBe(1)
     })
 
     it('should group by and sum', async () => {
@@ -172,12 +171,12 @@ describe('Aggregate Methods', () => {
       const qb = new QueryBuilder(Order)
       const results = await qb.groupBy('status').sum('amount', db)
 
-      expect(Array.isArray(results)).toBe(true)
-      // Verify structure contains grouped field
-      if (results.length > 0) {
-        expect(results[0]).toHaveProperty('status')
-        expect(typeof results[0]).toBe('object')
-      }
+      expect(results).toHaveLength(2)
+      const completedGroup = results.find((r) => r.status === 'completed')
+      const pendingGroup = results.find((r) => r.status === 'pending')
+
+      expect(completedGroup?.sum).toBe(300)
+      expect(pendingGroup?.sum).toBe(150)
     })
 
     it('should group by and average', async () => {
@@ -187,12 +186,42 @@ describe('Aggregate Methods', () => {
       const qb = new QueryBuilder(Order)
       const results = await qb.groupBy('status').avg('amount', db)
 
+      expect(results).toHaveLength(1)
+      expect(results[0].status).toBe('completed')
+      expect(results[0].avg).toBe(150) // (100 + 200) / 2
+    })
+
+    it('should support orderBy on grouped results', async () => {
+      await create(Order, { amount: 100, quantity: 2, status: 'alpha', userId: 1 }, db)
+      await create(Order, { amount: 200, quantity: 3, status: 'beta', userId: 1 }, db)
+      await create(Order, { amount: 150, quantity: 1, status: 'gamma', userId: 2 }, db)
+
+      const qb = new QueryBuilder(Order)
+      const results = await qb.groupBy('status').orderBy('status', 'asc').count(db)
+
+      expect(results).toHaveLength(3)
+      // Verify all statuses are present
+      expect(results.map((r) => r.status)).toContain('alpha')
+      expect(results.map((r) => r.status)).toContain('beta')
+      expect(results.map((r) => r.status)).toContain('gamma')
+    })
+
+    it('should support limit on grouped results', async () => {
+      await create(Order, { amount: 100, quantity: 2, status: 'completed', userId: 1 }, db)
+      await create(Order, { amount: 200, quantity: 3, status: 'completed', userId: 1 }, db)
+      await create(Order, { amount: 150, quantity: 1, status: 'pending', userId: 2 }, db)
+      await create(Order, { amount: 75, quantity: 1, status: 'cancelled', userId: 3 }, db)
+
+      const qb = new QueryBuilder(Order)
+      // Note: Mock doesn't implement LIMIT for grouped queries, but this tests the API
+      const results = await qb.groupBy('status').limit(2).count(db)
+
       expect(Array.isArray(results)).toBe(true)
-      // Verify structure contains grouped field
-      if (results.length > 0) {
-        expect(results[0]).toHaveProperty('status')
-        expect(typeof results[0]).toBe('object')
-      }
+      // Each status should have a count
+      results.forEach((r) => {
+        expect(r).toHaveProperty('count')
+        expect(typeof r.count).toBe('number')
+      })
     })
   })
 })

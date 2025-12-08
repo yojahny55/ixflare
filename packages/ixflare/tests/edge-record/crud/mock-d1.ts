@@ -233,16 +233,196 @@ export function createMockD1Database(): D1Database {
         async all<T = unknown>(): Promise<D1Result<T>> {
           // Handle SELECT
           if (query.toUpperCase().includes('SELECT')) {
-            const results = Array.from(store.values()) as T[]
+            let records = Array.from(store.values())
+
+            // Apply WHERE clause filtering
+            if (query.toUpperCase().includes('WHERE')) {
+              const whereMatch = query.match(/WHERE\s+(.+?)(?:\s+GROUP|\s+ORDER|\s+LIMIT|$)/i)
+              if (whereMatch) {
+                const conditions = whereMatch[1]
+                // Extract field names and match against bound values
+                const fieldMatches = [...conditions.matchAll(/"([^"]+)"\s*=\s*\?/g)]
+                if (fieldMatches.length > 0) {
+                  records = records.filter((record) => {
+                    return fieldMatches.every((match, index) => {
+                      const fieldName = match[1]
+                      return record[fieldName] === boundValues[index]
+                    })
+                  })
+                }
+              }
+            }
+
+            // Handle GROUP BY with aggregates
+            if (query.toUpperCase().includes('GROUP BY')) {
+              const groupMatch = query.match(/GROUP BY\s+"?([^"\s,]+)"?/i)
+              if (groupMatch) {
+                const groupField = groupMatch[1]
+                const groups = new Map<unknown, Record<string, unknown>[]>()
+
+                // Group records
+                for (const record of records) {
+                  const key = record[groupField]
+                  if (!groups.has(key)) {
+                    groups.set(key, [])
+                  }
+                  groups.get(key)!.push(record)
+                }
+
+                // Build grouped results
+                const groupedResults: Record<string, unknown>[] = []
+                for (const [key, groupRecords] of groups) {
+                  const result: Record<string, unknown> = { [groupField]: key }
+
+                  // Check for COUNT(*)
+                  if (query.toUpperCase().includes('COUNT(*)')) {
+                    result.count = groupRecords.length
+                  }
+
+                  // Check for SUM
+                  const sumMatch = query.match(/SUM\("?([^")]+)"?\)/i)
+                  if (sumMatch) {
+                    const sumField = sumMatch[1]
+                    result.sum = groupRecords.reduce((acc, r) => acc + (Number(r[sumField]) || 0), 0)
+                  }
+
+                  // Check for AVG
+                  const avgMatch = query.match(/AVG\("?([^")]+)"?\)/i)
+                  if (avgMatch) {
+                    const avgField = avgMatch[1]
+                    const sum = groupRecords.reduce((acc, r) => acc + (Number(r[avgField]) || 0), 0)
+                    result.avg = groupRecords.length > 0 ? sum / groupRecords.length : null
+                  }
+
+                  groupedResults.push(result)
+                }
+
+                return {
+                  results: groupedResults as T[],
+                  success: true,
+                  meta: {
+                    duration: 1,
+                    changes: 0,
+                    last_row_id: 0,
+                    rows_read: records.length,
+                    rows_written: 0,
+                  },
+                }
+              }
+            }
+
+            // Handle non-grouped aggregates
+            if (query.toUpperCase().includes('COUNT(*)') && !query.toUpperCase().includes('GROUP BY')) {
+              return {
+                results: [{ count: records.length }] as T[],
+                success: true,
+                meta: {
+                  duration: 1,
+                  changes: 0,
+                  last_row_id: 0,
+                  rows_read: records.length,
+                  rows_written: 0,
+                },
+              }
+            }
+
+            // Handle SUM without GROUP BY
+            const sumMatch = query.match(/SUM\("?([^")]+)"?\)/i)
+            if (sumMatch && !query.toUpperCase().includes('GROUP BY')) {
+              const sumField = sumMatch[1]
+              const sum = records.reduce((acc, r) => acc + (Number(r[sumField]) || 0), 0)
+              return {
+                results: [{ sum }] as T[],
+                success: true,
+                meta: {
+                  duration: 1,
+                  changes: 0,
+                  last_row_id: 0,
+                  rows_read: records.length,
+                  rows_written: 0,
+                },
+              }
+            }
+
+            // Handle AVG without GROUP BY
+            const avgMatch = query.match(/AVG\("?([^")]+)"?\)/i)
+            if (avgMatch && !query.toUpperCase().includes('GROUP BY')) {
+              const avgField = avgMatch[1]
+              if (records.length === 0) {
+                return {
+                  results: [{ avg: null }] as T[],
+                  success: true,
+                  meta: {
+                    duration: 1,
+                    changes: 0,
+                    last_row_id: 0,
+                    rows_read: 0,
+                    rows_written: 0,
+                  },
+                }
+              }
+              const sum = records.reduce((acc, r) => acc + (Number(r[avgField]) || 0), 0)
+              return {
+                results: [{ avg: sum / records.length }] as T[],
+                success: true,
+                meta: {
+                  duration: 1,
+                  changes: 0,
+                  last_row_id: 0,
+                  rows_read: records.length,
+                  rows_written: 0,
+                },
+              }
+            }
+
+            // Handle MIN without GROUP BY
+            const minMatch = query.match(/MIN\("?([^")]+)"?\)/i)
+            if (minMatch && !query.toUpperCase().includes('GROUP BY')) {
+              const minField = minMatch[1]
+              if (records.length === 0) {
+                return {
+                  results: [{ min: null }] as T[],
+                  success: true,
+                  meta: { duration: 1, changes: 0, last_row_id: 0, rows_read: 0, rows_written: 0 },
+                }
+              }
+              const values = records.map((r) => r[minField]).filter((v) => v !== null && v !== undefined)
+              const min = values.length > 0 ? Math.min(...values.map(Number)) : null
+              return {
+                results: [{ min }] as T[],
+                success: true,
+                meta: { duration: 1, changes: 0, last_row_id: 0, rows_read: records.length, rows_written: 0 },
+              }
+            }
+
+            // Handle MAX without GROUP BY
+            const maxMatch = query.match(/MAX\("?([^")]+)"?\)/i)
+            if (maxMatch && !query.toUpperCase().includes('GROUP BY')) {
+              const maxField = maxMatch[1]
+              if (records.length === 0) {
+                return {
+                  results: [{ max: null }] as T[],
+                  success: true,
+                  meta: { duration: 1, changes: 0, last_row_id: 0, rows_read: 0, rows_written: 0 },
+                }
+              }
+              const values = records.map((r) => r[maxField]).filter((v) => v !== null && v !== undefined)
+              const max = values.length > 0 ? Math.max(...values.map(Number)) : null
+              return {
+                results: [{ max }] as T[],
+                success: true,
+                meta: { duration: 1, changes: 0, last_row_id: 0, rows_read: records.length, rows_written: 0 },
+              }
+            }
 
             return {
-              results,
+              results: records as T[],
               success: true,
               meta: {
                 duration: 1,
                 changes: 0,
                 last_row_id: 0,
-                rows_read: results.length,
+                rows_read: records.length,
                 rows_written: 0,
               },
             }
@@ -262,43 +442,108 @@ export function createMockD1Database(): D1Database {
         },
 
         async first<T = unknown>(): Promise<T | null> {
-          // Handle SELECT with WHERE
-          if (query.toUpperCase().includes('SELECT') && query.toUpperCase().includes('WHERE')) {
-            // Try to match records based on WHERE conditions
-            // Parse WHERE clause to extract field names (handles both quoted "field" and unquoted field)
-            const whereMatch = query.match(/WHERE\s+(.+?)(?:\s+ORDER|\s+LIMIT|$)/i)
-            if (whereMatch) {
-              const conditions = whereMatch[1]
-              // Extract field names - handle both "field_name" = ? and field_name = ?
-              const fieldNames: string[] = []
-              const regex = /"([^"]+)"\s*=\s*\?|(\w+)\s*=\s*\?/g
-              let match
-              while ((match = regex.exec(conditions)) !== null) {
-                // match[1] is for "quoted", match[2] is for unquoted
-                fieldNames.push(match[1] || match[2])
-              }
+          // Handle aggregate queries (COUNT, SUM, AVG, MIN, MAX without GROUP BY)
+          if (query.toUpperCase().includes('SELECT')) {
+            let records = Array.from(store.values())
 
-              if (fieldNames.length > 0) {
-                // Try each record to find a match
-                for (const record of store.values()) {
-                  let matches = true
-                  fieldNames.forEach((fieldName, index) => {
-                    if (record[fieldName] !== boundValues[index]) {
-                      matches = false
-                    }
+            // Apply WHERE clause filtering for aggregates
+            if (query.toUpperCase().includes('WHERE')) {
+              const whereMatch = query.match(/WHERE\s+(.+?)(?:\s+GROUP|\s+ORDER|\s+LIMIT|$)/i)
+              if (whereMatch) {
+                const conditions = whereMatch[1]
+                const fieldMatches = [...conditions.matchAll(/"([^"]+)"\s*=\s*\?/g)]
+                if (fieldMatches.length > 0) {
+                  records = records.filter((record) => {
+                    return fieldMatches.every((match, index) => {
+                      const fieldName = match[1]
+                      return record[fieldName] === boundValues[index]
+                    })
                   })
-                  if (matches) {
-                    return record as T
-                  }
                 }
               }
             }
 
-            // Fallback: try id-based lookup
-            const id = boundValues[0] as number
-            if (typeof id === 'number') {
-              const record = store.get(id)
-              return (record as T) || null
+            // Handle COUNT(*)
+            if (query.toUpperCase().includes('COUNT(*)')) {
+              return { count: records.length } as T
+            }
+
+            // Handle SUM
+            const sumMatch = query.match(/SUM\("?([^")]+)"?\)/i)
+            if (sumMatch) {
+              const sumField = sumMatch[1]
+              const sum = records.reduce((acc, r) => acc + (Number(r[sumField]) || 0), 0)
+              return { sum } as T
+            }
+
+            // Handle AVG
+            const avgMatch = query.match(/AVG\("?([^")]+)"?\)/i)
+            if (avgMatch) {
+              const avgField = avgMatch[1]
+              if (records.length === 0) {
+                return { avg: null } as T
+              }
+              const sum = records.reduce((acc, r) => acc + (Number(r[avgField]) || 0), 0)
+              return { avg: sum / records.length } as T
+            }
+
+            // Handle MIN
+            const minMatch = query.match(/MIN\("?([^")]+)"?\)/i)
+            if (minMatch) {
+              const minField = minMatch[1]
+              if (records.length === 0) {
+                return { min: null } as T
+              }
+              const values = records.map((r) => r[minField]).filter((v) => v !== null && v !== undefined)
+              const min = values.length > 0 ? Math.min(...values.map(Number)) : null
+              return { min } as T
+            }
+
+            // Handle MAX
+            const maxMatch = query.match(/MAX\("?([^")]+)"?\)/i)
+            if (maxMatch) {
+              const maxField = maxMatch[1]
+              if (records.length === 0) {
+                return { max: null } as T
+              }
+              const values = records.map((r) => r[maxField]).filter((v) => v !== null && v !== undefined)
+              const max = values.length > 0 ? Math.max(...values.map(Number)) : null
+              return { max } as T
+            }
+
+            // Handle regular SELECT with WHERE (existing logic)
+            if (query.toUpperCase().includes('WHERE')) {
+              const whereMatch = query.match(/WHERE\s+(.+?)(?:\s+ORDER|\s+LIMIT|$)/i)
+              if (whereMatch) {
+                const conditions = whereMatch[1]
+                const fieldNames: string[] = []
+                const regex = /"([^"]+)"\s*=\s*\?|(\w+)\s*=\s*\?/g
+                let match
+                while ((match = regex.exec(conditions)) !== null) {
+                  fieldNames.push(match[1] || match[2])
+                }
+
+                if (fieldNames.length > 0) {
+                  for (const record of store.values()) {
+                    let matches = true
+                    fieldNames.forEach((fieldName, index) => {
+                      if (record[fieldName] !== boundValues[index]) {
+                        matches = false
+                      }
+                    })
+                    if (matches) {
+                      return record as T
+                    }
+                  }
+                }
+              }
+
+              // Fallback: try id-based lookup
+              const id = boundValues[0] as number
+              if (typeof id === 'number') {
+                const record = store.get(id)
+                return (record as T) || null
+              }
             }
           }
 

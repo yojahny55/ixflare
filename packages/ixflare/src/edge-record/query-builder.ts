@@ -91,12 +91,17 @@ export type NumericKeys<T extends SchemaDefinition> = {
 }[keyof InferSchema<T>]
 
 /**
- * Grouped aggregation result type
+ * Grouped aggregation result type with typed group field
+ * @template K - The type of the grouping field value
  */
-export interface GroupedResult {
-  [key: string]: unknown
+export interface GroupedResult<K = unknown> {
+  /** The grouped field value - type matches the schema field type */
+  [key: string]: K | number | null | undefined
+  /** Count of records in this group (present when using count()) */
   count?: number
+  /** Sum of values in this group (present when using sum()) */
   sum?: number
+  /** Average of values in this group (present when using avg()) */
   avg?: number | null
 }
 
@@ -190,6 +195,11 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
   /**
    * Add WHERE conditions with support for advanced operators
+   *
+   * @remarks
+   * When using object notation with multiple fields, parameters are bound in
+   * Object.entries() iteration order. Per ECMAScript spec, this is insertion order
+   * for string keys, which is deterministic for object literals.
    *
    * @example
    * ```typescript
@@ -634,6 +644,7 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
    * Group by field for aggregation
    *
    * Returns a GroupedQueryBuilder that supports count(), sum(), and avg() aggregations.
+   * Results are typed to include the grouped field with its correct type.
    *
    * @example
    * ```typescript
@@ -641,13 +652,13 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
    * const stats = await Order.groupBy('status').count(db)
    * // Returns: [{ status: 'pending', count: 5 }, { status: 'completed', count: 10 }]
    *
-   * // Sum amounts by status
-   * const totals = await Order.groupBy('status').sum('amount', db)
+   * // Sum amounts by status, ordered by sum descending
+   * const totals = await Order.groupBy('status').orderBy('sum', 'desc').sum('amount', db)
    * // Returns: [{ status: 'completed', sum: 1500 }, ...]
    * ```
    */
-  groupBy<K extends keyof InferSchema<T>>(field: K): GroupedQueryBuilder<T> {
-    return new GroupedQueryBuilder(this.model, this.andGroups, String(field))
+  groupBy<K extends keyof InferSchema<T> & string>(field: K): GroupedQueryBuilder<T, K> {
+    return new GroupedQueryBuilder<T, K>(this.model, this.andGroups, field)
   }
 
   /**
@@ -694,6 +705,14 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
       .filter((c) => c.operator !== 'IS NULL' && c.operator !== 'IS NOT NULL')
       .map((c) => c.value)
 
+    // Validate total parameter count against D1 limit
+    if (params.length > D1_PARAM_LIMIT) {
+      throw new Error(
+        `Query exceeds D1 parameter limit: ${params.length} total parameters (max: ${D1_PARAM_LIMIT}). ` +
+          `Reduce the number of conditions or split into multiple queries.`
+      )
+    }
+
     return { query: sql, params }
   }
 }
@@ -708,15 +727,23 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
  * // Count orders by status
  * const stats = await Order.groupBy('status').count(db)
  *
- * // Sum amounts by category
- * const totals = await Product.groupBy('category').sum('price', db)
+ * // Sum amounts by category with ordering
+ * const topCategories = await Product.groupBy('category').orderBy('sum', 'desc').limit(5).sum('price', db)
  * ```
+ *
+ * @template T - The schema definition type
+ * @template K - The key of the field being grouped by
  */
-export class GroupedQueryBuilder<T extends SchemaDefinition> {
+export class GroupedQueryBuilder<T extends SchemaDefinition, K extends keyof InferSchema<T> = keyof InferSchema<T>> {
+  private orderByField?: string
+  private orderDirection: 'asc' | 'desc' = 'asc'
+  private limitValue?: number
+  private offsetValue?: number
+
   constructor(
     private model: Model<T>,
     private andGroups: WhereCondition[][],
-    private groupField: string
+    private groupField: K & string
   ) {}
 
   /**
@@ -736,6 +763,63 @@ export class GroupedQueryBuilder<T extends SchemaDefinition> {
   }
 
   /**
+   * Build ORDER BY, LIMIT, OFFSET clauses
+   * @internal
+   */
+  private buildTailClauses(): string {
+    let tail = ''
+    if (this.orderByField) {
+      // Order by can be the group field or an aggregate (count, sum, avg)
+      const isAggregate = ['count', 'sum', 'avg'].includes(this.orderByField)
+      const orderField = isAggregate ? this.orderByField : escapeIdentifier(toSnakeCase(this.orderByField))
+      tail += ` ORDER BY ${orderField} ${this.orderDirection.toUpperCase()}`
+    }
+    if (this.limitValue !== undefined) {
+      tail += ` LIMIT ${this.limitValue}`
+    }
+    if (this.offsetValue !== undefined) {
+      tail += ` OFFSET ${this.offsetValue}`
+    }
+    return tail
+  }
+
+  /**
+   * Order grouped results by a field or aggregate
+   *
+   * @example
+   * ```typescript
+   * // Order by count descending (most frequent first)
+   * Order.groupBy('status').orderBy('count', 'desc').count(db)
+   *
+   * // Order by the grouped field
+   * Order.groupBy('status').orderBy('status', 'asc').count(db)
+   * ```
+   */
+  orderBy(field: K | 'count' | 'sum' | 'avg', direction: 'asc' | 'desc' = 'asc'): this {
+    this.orderByField = String(field)
+    this.orderDirection = direction
+    return this
+  }
+
+  /**
+   * Limit the number of grouped results
+   * @example Order.groupBy('status').limit(5).count(db) // Top 5 statuses
+   */
+  limit(value: number): this {
+    this.limitValue = value
+    return this
+  }
+
+  /**
+   * Skip the first N grouped results (for pagination)
+   * @example Order.groupBy('status').limit(5).offset(5).count(db) // Page 2
+   */
+  offset(value: number): this {
+    this.offsetValue = value
+    return this
+  }
+
+  /**
    * Count records in each group
    *
    * @example
@@ -744,16 +828,17 @@ export class GroupedQueryBuilder<T extends SchemaDefinition> {
    * // Returns: [{ status: 'pending', count: 5 }, { status: 'completed', count: 10 }]
    * ```
    */
-  async count(db: D1Database): Promise<GroupedResult[]> {
+  async count(db: D1Database): Promise<Array<Pick<InferSchema<T>, K> & { count: number }>> {
     const whereClause = this.buildWhereClause()
     const whereParams = this.conditions
       .filter((c) => c.operator !== 'IS NULL' && c.operator !== 'IS NOT NULL')
       .map((c) => c.value)
 
     const dbField = escapeIdentifier(toSnakeCase(this.groupField))
-    const sql = `SELECT ${dbField} as ${this.groupField}, COUNT(*) as count FROM ${escapeIdentifier(this.model.$tableName)}${whereClause} GROUP BY ${dbField}`
+    const tailClauses = this.buildTailClauses()
+    const sql = `SELECT ${dbField} as ${this.groupField}, COUNT(*) as count FROM ${escapeIdentifier(this.model.$tableName)}${whereClause} GROUP BY ${dbField}${tailClauses}`
     const stmt = db.prepare(sql).bind(...whereParams)
-    const result = await stmt.all<GroupedResult>()
+    const result = await stmt.all<Pick<InferSchema<T>, K> & { count: number }>()
 
     return result.results
   }
@@ -761,7 +846,7 @@ export class GroupedQueryBuilder<T extends SchemaDefinition> {
   /**
    * Sum field values in each group
    */
-  async sum<F extends NumericKeys<T>>(field: F, db: D1Database): Promise<GroupedResult[]> {
+  async sum<F extends NumericKeys<T>>(field: F, db: D1Database): Promise<Array<Pick<InferSchema<T>, K> & { sum: number }>> {
     const whereClause = this.buildWhereClause()
     const whereParams = this.conditions
       .filter((c) => c.operator !== 'IS NULL' && c.operator !== 'IS NOT NULL')
@@ -769,9 +854,10 @@ export class GroupedQueryBuilder<T extends SchemaDefinition> {
 
     const groupDbField = escapeIdentifier(toSnakeCase(this.groupField))
     const sumDbField = escapeIdentifier(toSnakeCase(String(field)))
-    const sql = `SELECT ${groupDbField} as ${this.groupField}, COALESCE(SUM(${sumDbField}), 0) as sum FROM ${escapeIdentifier(this.model.$tableName)}${whereClause} GROUP BY ${groupDbField}`
+    const tailClauses = this.buildTailClauses()
+    const sql = `SELECT ${groupDbField} as ${this.groupField}, COALESCE(SUM(${sumDbField}), 0) as sum FROM ${escapeIdentifier(this.model.$tableName)}${whereClause} GROUP BY ${groupDbField}${tailClauses}`
     const stmt = db.prepare(sql).bind(...whereParams)
-    const result = await stmt.all<GroupedResult>()
+    const result = await stmt.all<Pick<InferSchema<T>, K> & { sum: number }>()
 
     return result.results
   }
@@ -779,7 +865,7 @@ export class GroupedQueryBuilder<T extends SchemaDefinition> {
   /**
    * Average field values in each group
    */
-  async avg<F extends NumericKeys<T>>(field: F, db: D1Database): Promise<GroupedResult[]> {
+  async avg<F extends NumericKeys<T>>(field: F, db: D1Database): Promise<Array<Pick<InferSchema<T>, K> & { avg: number | null }>> {
     const whereClause = this.buildWhereClause()
     const whereParams = this.conditions
       .filter((c) => c.operator !== 'IS NULL' && c.operator !== 'IS NOT NULL')
@@ -787,9 +873,10 @@ export class GroupedQueryBuilder<T extends SchemaDefinition> {
 
     const groupDbField = escapeIdentifier(toSnakeCase(this.groupField))
     const avgDbField = escapeIdentifier(toSnakeCase(String(field)))
-    const sql = `SELECT ${groupDbField} as ${this.groupField}, AVG(${avgDbField}) as avg FROM ${escapeIdentifier(this.model.$tableName)}${whereClause} GROUP BY ${groupDbField}`
+    const tailClauses = this.buildTailClauses()
+    const sql = `SELECT ${groupDbField} as ${this.groupField}, AVG(${avgDbField}) as avg FROM ${escapeIdentifier(this.model.$tableName)}${whereClause} GROUP BY ${groupDbField}${tailClauses}`
     const stmt = db.prepare(sql).bind(...whereParams)
-    const result = await stmt.all<GroupedResult>()
+    const result = await stmt.all<Pick<InferSchema<T>, K> & { avg: number | null }>()
 
     return result.results
   }
