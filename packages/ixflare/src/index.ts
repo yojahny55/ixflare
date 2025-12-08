@@ -12,6 +12,20 @@ export type { Middleware, MiddlewareContext } from './core/middleware'
 export { createApp, App } from './core/app'
 export type { AppConfig, RouteConfig } from './core/app'
 
+// Request/Response transformation utilities
+export {
+  cloneRequest,
+  cloneResponse,
+  withRequestHeaders,
+  withResponseHeaders,
+} from './core/request-helpers'
+
+// Middleware
+export { requestId, type RequestIdConfig } from './middleware/request-id'
+export { logging, type LoggingConfig } from './middleware/logging'
+export { timing, type TimingConfig } from './middleware/timing'
+export { errorHandler, type ErrorHandlerConfig } from './middleware/error-handler'
+
 // Rate limiting exports
 export {
   rateLimit,

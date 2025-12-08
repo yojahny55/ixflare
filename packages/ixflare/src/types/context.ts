@@ -65,6 +65,15 @@ export interface EdgeContext<Env = Record<string, unknown>> {
 
   /** Data from page loader (if loader was executed) */
   loaderData?: unknown
+
+  /**
+   * Unique request ID for correlation tracking
+   *
+   * Set by requestId() middleware
+   *
+   * @see {@link requestId} middleware
+   */
+  requestId?: string
 }
 
 /**
