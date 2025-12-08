@@ -12,7 +12,7 @@ describe('parseQuery', () => {
   // Basic Query Parsing Tests
   // ========================================================================
 
-  it('should parse basic query parameters with Zod coercion', async () => {
+  it('should parse basic query parameters with Zod coercion', () => {
     const schema = z.object({
       page: z.coerce.number().positive().default(1),
       limit: z.coerce.number().min(1).max(100).default(20),
@@ -24,7 +24,7 @@ describe('parseQuery', () => {
     expect(query).toEqual({ page: 2, limit: 10 })
   })
 
-  it('should apply default values when parameters are missing', async () => {
+  it('should apply default values when parameters are missing', () => {
     const schema = z.object({
       page: z.coerce.number().positive().default(1),
       limit: z.coerce.number().min(1).max(100).default(20),
@@ -36,7 +36,7 @@ describe('parseQuery', () => {
     expect(query).toEqual({ page: 1, limit: 20 })
   })
 
-  it('should handle empty query string', async () => {
+  it('should handle empty query string', () => {
     const schema = z.object({
       page: z.coerce.number().default(1),
     })
@@ -51,7 +51,7 @@ describe('parseQuery', () => {
   // Zod Coercion Tests
   // ========================================================================
 
-  it('should coerce string to number using z.coerce.number()', async () => {
+  it('should coerce string to number using z.coerce.number()', () => {
     const schema = z.object({
       page: z.coerce.number(),
     })
@@ -63,7 +63,7 @@ describe('parseQuery', () => {
     expect(typeof query.page).toBe('number')
   })
 
-  it('should handle decimal numbers with coercion', async () => {
+  it('should handle decimal numbers with coercion', () => {
     const schema = z.object({
       price: z.coerce.number(),
     })
@@ -74,7 +74,7 @@ describe('parseQuery', () => {
     expect(query.price).toBe(19.99)
   })
 
-  it('should validate coerced numbers against constraints', async () => {
+  it('should validate coerced numbers against constraints', () => {
     const schema = z.object({
       page: z.coerce.number().positive(),
     })
@@ -89,7 +89,7 @@ describe('parseQuery', () => {
   // Enum Validation Tests
   // ========================================================================
 
-  it('should validate enum values correctly', async () => {
+  it('should validate enum values correctly', () => {
     const schema = z.object({
       sort: z.enum(['name', 'createdAt', 'email']),
     })
@@ -100,7 +100,7 @@ describe('parseQuery', () => {
     expect(query.sort).toBe('name')
   })
 
-  it('should throw ValidationError for invalid enum value', async () => {
+  it('should throw ValidationError for invalid enum value', () => {
     const schema = z.object({
       sort: z.enum(['name', 'createdAt', 'email']),
     })
@@ -110,7 +110,7 @@ describe('parseQuery', () => {
     expect(() => parseQuery(request, schema)).toThrow(ValidationError)
   })
 
-  it('should handle optional enum parameters', async () => {
+  it('should handle optional enum parameters', () => {
     const schema = z.object({
       sort: z.enum(['name', 'createdAt', 'email']).optional(),
     })
@@ -125,7 +125,7 @@ describe('parseQuery', () => {
   // Optional Parameters Tests
   // ========================================================================
 
-  it('should handle optional parameters correctly', async () => {
+  it('should handle optional parameters correctly', () => {
     const schema = z.object({
       page: z.coerce.number().default(1),
       filter: z.string().optional(),
@@ -137,7 +137,7 @@ describe('parseQuery', () => {
     expect(query).toEqual({ page: 2, filter: undefined })
   })
 
-  it('should include optional parameters when provided', async () => {
+  it('should include optional parameters when provided', () => {
     const schema = z.object({
       page: z.coerce.number().default(1),
       filter: z.string().optional(),
@@ -153,7 +153,7 @@ describe('parseQuery', () => {
   // Multiple Values Support Tests (AC3)
   // ========================================================================
 
-  it('should handle multiple values with same key as array', async () => {
+  it('should handle multiple values with same key as array', () => {
     const schema = z.object({
       id: z.array(z.string()),
     })
@@ -165,7 +165,7 @@ describe('parseQuery', () => {
     expect(Array.isArray(query.id)).toBe(true)
   })
 
-  it('should coerce array of strings to numbers', async () => {
+  it('should coerce array of strings to numbers', () => {
     const schema = z.object({
       ids: z.preprocess(
         v => (Array.isArray(v) ? v : [v]),
@@ -179,7 +179,7 @@ describe('parseQuery', () => {
     expect(query.ids).toEqual([1, 2, 3])
   })
 
-  it('should handle single value when schema expects array', async () => {
+  it('should handle single value when schema expects array', () => {
     const schema = z.object({
       tags: z.preprocess(
         v => (Array.isArray(v) ? v : v ? [v] : []),
@@ -197,7 +197,7 @@ describe('parseQuery', () => {
   // Validation Error Tests
   // ========================================================================
 
-  it('should throw ValidationError with field-level errors', async () => {
+  it('should throw ValidationError with field-level errors', () => {
     const schema = z.object({
       page: z.coerce.number().positive(),
       email: z.string().email(),
@@ -216,7 +216,7 @@ describe('parseQuery', () => {
     }
   })
 
-  it('should format validation errors matching body-parser pattern', async () => {
+  it('should format validation errors matching body-parser pattern', () => {
     const schema = z.object({
       page: z.coerce.number().positive(),
     })
@@ -236,7 +236,7 @@ describe('parseQuery', () => {
     }
   })
 
-  it('should handle missing required parameter', async () => {
+  it('should handle missing required parameter', () => {
     const schema = z.object({
       id: z.string(),
     })
@@ -250,7 +250,7 @@ describe('parseQuery', () => {
   // Edge Cases Tests
   // ========================================================================
 
-  it('should handle empty string values', async () => {
+  it('should handle empty string values', () => {
     const schema = z.object({
       query: z.string().optional(),
     })
@@ -261,7 +261,7 @@ describe('parseQuery', () => {
     expect(query.query).toBe('')
   })
 
-  it('should handle URL-encoded values', async () => {
+  it('should handle URL-encoded values', () => {
     const schema = z.object({
       name: z.string(),
     })
@@ -272,7 +272,7 @@ describe('parseQuery', () => {
     expect(query.name).toBe('John Doe')
   })
 
-  it('should handle special characters in values', async () => {
+  it('should handle special characters in values', () => {
     const schema = z.object({
       search: z.string(),
     })
@@ -283,7 +283,7 @@ describe('parseQuery', () => {
     expect(query.search).toBe('hello world')
   })
 
-  it('should handle complex query string with mixed types', async () => {
+  it('should handle complex query string with mixed types', () => {
     const schema = z.object({
       page: z.coerce.number().default(1),
       limit: z.coerce.number().min(1).max(100).default(20),
@@ -307,7 +307,7 @@ describe('parseQuery', () => {
     })
   })
 
-  it('should handle no query parameters when all are optional', async () => {
+  it('should handle no query parameters when all are optional', () => {
     const schema = z.object({
       page: z.coerce.number().optional().default(1),
       search: z.string().optional(),
@@ -323,7 +323,7 @@ describe('parseQuery', () => {
   // Type Safety Tests
   // ========================================================================
 
-  it('should maintain type safety with complex schemas', async () => {
+  it('should maintain type safety with complex schemas', () => {
     const schema = z.object({
       page: z.coerce.number().positive().default(1),
       limit: z.coerce.number().min(1).max(100).default(20),
