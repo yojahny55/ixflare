@@ -27,13 +27,16 @@ export type InferSchema<T extends SchemaDefinition> = {
 /**
  * Model options for configuration
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface ModelOptions {
   // Future options can be added here:
   // - timestamps?: boolean
   // - tableName?: string (override)
   // - indexes?: IndexDefinition[]
   // - constraints?: ConstraintDefinition[]
+
+  /** Relationship definitions for this model */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  relations?: Record<string, any> // RelationConfig, but avoiding circular import
 }
 
 /**
@@ -48,4 +51,7 @@ export interface Model<TSchema extends SchemaDefinition> {
   readonly $infer: InferSchema<TSchema>
   /** Generated Zod schema for runtime validation */
   $zodSchema: z.ZodObject<Record<string, z.ZodTypeAny>>
+  /** Relationship configurations for this model */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  $relations?: Record<string, any> // RelationConfig, but avoiding circular import
 }

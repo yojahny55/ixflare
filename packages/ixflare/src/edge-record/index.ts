@@ -58,6 +58,11 @@ export {
   transformKeysToSnakeCase,
 } from './crud/case-transform'
 
+// Relationship exports (Story 3.4)
+export { hasMany, hasOne, belongsTo, manyToMany } from './relations'
+export type { RelationConfig, RelationType, RelationsConfig } from './relations'
+export { EagerLoader, type ModelInstanceWithRelations } from './relations'
+
 // Legacy exports (will be refactored in later stories)
 export { Model as LegacyModel } from './model'
 export type { ModelDefinition, ModelSchema, QueryOptions } from './types'

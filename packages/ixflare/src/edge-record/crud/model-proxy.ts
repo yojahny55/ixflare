@@ -46,7 +46,28 @@ export interface ModelCrudMethods<T extends SchemaDefinition> {
    */
   where(conditions: WhereConditions<T>): QueryBuilder<T>
   where<K extends keyof InferSchema<T>>(field: K, value: InferSchema<T>[K]): QueryBuilder<T>
-  where<K extends keyof InferSchema<T>>(field: K, operator: WhereOperator, value: unknown): QueryBuilder<T>
+  where<K extends keyof InferSchema<T>>(
+    field: K,
+    operator: WhereOperator,
+    value: unknown
+  ): QueryBuilder<T>
+
+  /**
+   * Eager load relationships
+   *
+   * @example
+   * ```typescript
+   * // Load single relation
+   * const users = await User.with('posts').all(db)
+   *
+   * // Load multiple relations
+   * const users = await User.with('posts', 'profile').all(db)
+   *
+   * // Nested relations
+   * const posts = await Post.with('author', 'author.profile').all(db)
+   * ```
+   */
+  with(...relations: string[]): QueryBuilder<T>
 
   /**
    * Upsert a record (create or update based on match)
@@ -105,6 +126,11 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
         // Should not happen, but return empty query builder
         return qb
       }
+    },
+
+    with(...relations: string[]): QueryBuilder<T> {
+      const qb = new QueryBuilder(model)
+      return qb.with(...relations)
     },
 
     upsert(

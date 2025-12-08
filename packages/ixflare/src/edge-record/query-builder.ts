@@ -32,6 +32,7 @@ import type { SchemaDefinition, InferSchema, Model } from './schema/types'
 import { ModelInstance } from './crud/model-instance'
 import { toSnakeCase } from './crud/case-transform'
 import { escapeIdentifier } from './schema/type-mapping'
+import { EagerLoader, type ModelInstanceWithRelations } from './relations/eager-loader'
 
 /**
  * D1 parameter limit - maximum bound parameters per query
@@ -176,6 +177,7 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
   private limitValue?: number
   private offsetValue?: number
   private selectedFields?: string[]
+  private eagerRelations: string[] = []
 
   constructor(private model: Model<T>) {}
 
@@ -432,6 +434,30 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
   }
 
   /**
+   * Eager load relationships to prevent N+1 queries
+   * Supports dot notation for nested relations
+   *
+   * @param relations Relation names to load
+   * @returns this
+   *
+   * @example
+   * ```typescript
+   * // Load single relation
+   * const users = await User.with('posts').all(db)
+   *
+   * // Load multiple relations
+   * const users = await User.with('posts', 'profile').all(db)
+   *
+   * // Nested eager loading
+   * const posts = await Post.with('author', 'author.profile', 'tags').all(db)
+   * ```
+   */
+  with(...relations: string[]): this {
+    this.eagerRelations.push(...relations)
+    return this
+  }
+
+  /**
    * Execute query and return all matching records
    * Returns ModelInstances when selecting all fields, plain objects when specific fields selected
    */
@@ -448,9 +474,17 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
     }
 
     // Otherwise return ModelInstances
-    return result.results.map(
+    const instances = result.results.map(
       (row) => new ModelInstance(this.model, row as Partial<InferSchema<T>>, false)
-    ) as Selected extends InferSchema<T> ? ModelInstance<T>[] : Selected[]
+    ) as ModelInstanceWithRelations<T>[]
+
+    // Load eager relations if any
+    if (this.eagerRelations.length > 0) {
+      const loader = new EagerLoader(this.model, this.eagerRelations)
+      await loader.load(instances, db)
+    }
+
+    return instances as Selected extends InferSchema<T> ? ModelInstance<T>[] : Selected[]
   }
 
   /**
@@ -466,7 +500,19 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
       return null
     }
 
-    return new ModelInstance(this.model, row as Partial<InferSchema<T>>, false)
+    const instance = new ModelInstance(
+      this.model,
+      row as Partial<InferSchema<T>>,
+      false
+    ) as ModelInstanceWithRelations<T>
+
+    // Load eager relations if any
+    if (this.eagerRelations.length > 0) {
+      const loader = new EagerLoader(this.model, this.eagerRelations)
+      await loader.load([instance], db)
+    }
+
+    return instance
   }
 
   /**
@@ -734,7 +780,10 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
  * @template T - The schema definition type
  * @template K - The key of the field being grouped by
  */
-export class GroupedQueryBuilder<T extends SchemaDefinition, K extends keyof InferSchema<T> = keyof InferSchema<T>> {
+export class GroupedQueryBuilder<
+  T extends SchemaDefinition,
+  K extends keyof InferSchema<T> = keyof InferSchema<T>,
+> {
   private orderByField?: string
   private orderDirection: 'asc' | 'desc' = 'asc'
   private limitValue?: number
@@ -771,7 +820,9 @@ export class GroupedQueryBuilder<T extends SchemaDefinition, K extends keyof Inf
     if (this.orderByField) {
       // Order by can be the group field or an aggregate (count, sum, avg)
       const isAggregate = ['count', 'sum', 'avg'].includes(this.orderByField)
-      const orderField = isAggregate ? this.orderByField : escapeIdentifier(toSnakeCase(this.orderByField))
+      const orderField = isAggregate
+        ? this.orderByField
+        : escapeIdentifier(toSnakeCase(this.orderByField))
       tail += ` ORDER BY ${orderField} ${this.orderDirection.toUpperCase()}`
     }
     if (this.limitValue !== undefined) {
@@ -846,7 +897,10 @@ export class GroupedQueryBuilder<T extends SchemaDefinition, K extends keyof Inf
   /**
    * Sum field values in each group
    */
-  async sum<F extends NumericKeys<T>>(field: F, db: D1Database): Promise<Array<Pick<InferSchema<T>, K> & { sum: number }>> {
+  async sum<F extends NumericKeys<T>>(
+    field: F,
+    db: D1Database
+  ): Promise<Array<Pick<InferSchema<T>, K> & { sum: number }>> {
     const whereClause = this.buildWhereClause()
     const whereParams = this.conditions
       .filter((c) => c.operator !== 'IS NULL' && c.operator !== 'IS NOT NULL')
@@ -865,7 +919,10 @@ export class GroupedQueryBuilder<T extends SchemaDefinition, K extends keyof Inf
   /**
    * Average field values in each group
    */
-  async avg<F extends NumericKeys<T>>(field: F, db: D1Database): Promise<Array<Pick<InferSchema<T>, K> & { avg: number | null }>> {
+  async avg<F extends NumericKeys<T>>(
+    field: F,
+    db: D1Database
+  ): Promise<Array<Pick<InferSchema<T>, K> & { avg: number | null }>> {
     const whereClause = this.buildWhereClause()
     const whereParams = this.conditions
       .filter((c) => c.operator !== 'IS NULL' && c.operator !== 'IS NOT NULL')

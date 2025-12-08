@@ -142,7 +142,9 @@ describe('QueryBuilder Type Safety (AC14)', () => {
       const narrowedQb = qb.select('id', 'email')
 
       // Type should be Pick<InferSchema<User>, 'id' | 'email'>
-      expectTypeOf(narrowedQb).toMatchTypeOf<QueryBuilder<typeof User.$schema, { id: number; email: string }>>()
+      expectTypeOf(narrowedQb).toMatchTypeOf<
+        QueryBuilder<typeof User.$schema, { id: number; email: string }>
+      >()
     })
 
     it('should reject invalid field names in select', () => {
@@ -251,13 +253,12 @@ describe('QueryBuilder Type Safety (AC14)', () => {
     it('should preserve selected type through chains', () => {
       const qb = new QueryBuilder(User)
 
-      const result = qb
-        .select('id', 'email')
-        .where({ isActive: true })
-        .orderBy('email', 'asc')
+      const result = qb.select('id', 'email').where({ isActive: true }).orderBy('email', 'asc')
 
       // Return type should still be narrowed
-      expectTypeOf(result).toMatchTypeOf<QueryBuilder<typeof User.$schema, { id: number; email: string }>>()
+      expectTypeOf(result).toMatchTypeOf<
+        QueryBuilder<typeof User.$schema, { id: number; email: string }>
+      >()
     })
   })
 })

@@ -283,7 +283,10 @@ export function createMockD1Database(): D1Database {
                   const sumMatch = query.match(/SUM\("?([^")]+)"?\)/i)
                   if (sumMatch) {
                     const sumField = sumMatch[1]
-                    result.sum = groupRecords.reduce((acc, r) => acc + (Number(r[sumField]) || 0), 0)
+                    result.sum = groupRecords.reduce(
+                      (acc, r) => acc + (Number(r[sumField]) || 0),
+                      0
+                    )
                   }
 
                   // Check for AVG
@@ -312,7 +315,10 @@ export function createMockD1Database(): D1Database {
             }
 
             // Handle non-grouped aggregates
-            if (query.toUpperCase().includes('COUNT(*)') && !query.toUpperCase().includes('GROUP BY')) {
+            if (
+              query.toUpperCase().includes('COUNT(*)') &&
+              !query.toUpperCase().includes('GROUP BY')
+            ) {
               return {
                 results: [{ count: records.length }] as T[],
                 success: true,
@@ -386,12 +392,20 @@ export function createMockD1Database(): D1Database {
                   meta: { duration: 1, changes: 0, last_row_id: 0, rows_read: 0, rows_written: 0 },
                 }
               }
-              const values = records.map((r) => r[minField]).filter((v) => v !== null && v !== undefined)
+              const values = records
+                .map((r) => r[minField])
+                .filter((v) => v !== null && v !== undefined)
               const min = values.length > 0 ? Math.min(...values.map(Number)) : null
               return {
                 results: [{ min }] as T[],
                 success: true,
-                meta: { duration: 1, changes: 0, last_row_id: 0, rows_read: records.length, rows_written: 0 },
+                meta: {
+                  duration: 1,
+                  changes: 0,
+                  last_row_id: 0,
+                  rows_read: records.length,
+                  rows_written: 0,
+                },
               }
             }
 
@@ -406,12 +420,20 @@ export function createMockD1Database(): D1Database {
                   meta: { duration: 1, changes: 0, last_row_id: 0, rows_read: 0, rows_written: 0 },
                 }
               }
-              const values = records.map((r) => r[maxField]).filter((v) => v !== null && v !== undefined)
+              const values = records
+                .map((r) => r[maxField])
+                .filter((v) => v !== null && v !== undefined)
               const max = values.length > 0 ? Math.max(...values.map(Number)) : null
               return {
                 results: [{ max }] as T[],
                 success: true,
-                meta: { duration: 1, changes: 0, last_row_id: 0, rows_read: records.length, rows_written: 0 },
+                meta: {
+                  duration: 1,
+                  changes: 0,
+                  last_row_id: 0,
+                  rows_read: records.length,
+                  rows_written: 0,
+                },
               }
             }
 
@@ -494,7 +516,9 @@ export function createMockD1Database(): D1Database {
               if (records.length === 0) {
                 return { min: null } as T
               }
-              const values = records.map((r) => r[minField]).filter((v) => v !== null && v !== undefined)
+              const values = records
+                .map((r) => r[minField])
+                .filter((v) => v !== null && v !== undefined)
               const min = values.length > 0 ? Math.min(...values.map(Number)) : null
               return { min } as T
             }
@@ -506,7 +530,9 @@ export function createMockD1Database(): D1Database {
               if (records.length === 0) {
                 return { max: null } as T
               }
-              const values = records.map((r) => r[maxField]).filter((v) => v !== null && v !== undefined)
+              const values = records
+                .map((r) => r[maxField])
+                .filter((v) => v !== null && v !== undefined)
               const max = values.length > 0 ? Math.max(...values.map(Number)) : null
               return { max } as T
             }

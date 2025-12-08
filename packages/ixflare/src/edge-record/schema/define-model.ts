@@ -52,7 +52,7 @@ const INFER_SYMBOL = Symbol.for('ixflare.model.$infer')
 export function defineModel<T extends SchemaDefinition>(
   tableName: string,
   schema: T,
-  _options?: ModelOptions
+  options?: ModelOptions
 ): ModelWithCrud<T> {
   // Generate Zod schema for runtime validation
   // We create a temporary object just for the zod generator
@@ -66,6 +66,7 @@ export function defineModel<T extends SchemaDefinition>(
     {
       $tableName: tableName,
       $schema: schema,
+      $relations: options?.relations,
     },
     {
       $zodSchema: {
