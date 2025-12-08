@@ -7,7 +7,8 @@
 // Core exports
 export { createRouter, Router } from './core/router'
 export type { HttpMethod } from './core/router'
-export { createMiddleware, compose } from './core/middleware'
+export { createMiddleware, defineMiddleware, compose, withErrorBoundary } from './core/middleware'
+export type { Middleware, MiddlewareContext } from './core/middleware'
 export { createContext, type Context } from './core/context'
 export { json, html, htmlResponse, redirect, notFound, text, stream, eventStream, type SSEEvent } from './core/helpers'
 export {

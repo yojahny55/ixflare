@@ -157,5 +157,135 @@ describe('Middleware', () => {
 
       expect(response.headers.get('X-Custom-Header')).toBe('test-value')
     })
+
+    it('should allow middleware to modify context', async () => {
+      const context = createMockContext()
+
+      const middleware = createMiddleware(async (ctx, next) => {
+        // Type-safe context mutation
+        ;(ctx as any).customData = 'test-value'
+        return next()
+      })
+
+      let capturedContext: EdgeContext | null = null
+      const handler = compose(middleware)((ctx) => {
+        capturedContext = ctx
+        return new Response('OK')
+      })
+
+      await handler(context)
+
+      expect((capturedContext as any).customData).toBe('test-value')
+    })
+
+    it('should support timing middleware pattern (response interception)', async () => {
+      const timingMiddleware = createMiddleware(async (ctx, next) => {
+        const start = Date.now()
+        const response = await next()
+        const duration = Date.now() - start
+
+        const newHeaders = new Headers(response.headers)
+        newHeaders.set('X-Response-Time', `${duration}ms`)
+
+        return new Response(response.body, {
+          status: response.status,
+          headers: newHeaders,
+        })
+      })
+
+      const handler = compose(timingMiddleware)(() => new Response('OK'))
+      const response = await handler(createMockContext())
+
+      expect(response.headers.has('X-Response-Time')).toBe(true)
+      expect(response.headers.get('X-Response-Time')).toMatch(/^\d+ms$/)
+    })
+  })
+
+  describe('withErrorBoundary', () => {
+    it('should catch and handle AppError instances', async () => {
+      const { AppError } = await import('../../src/errors')
+      const { withErrorBoundary } = await import('../../src/core/middleware')
+
+      const errorMiddleware = createMiddleware(async () => {
+        throw new AppError('TEST_ERROR', 'Something went wrong', 500)
+      })
+
+      const handler = compose(withErrorBoundary(errorMiddleware))(() => new Response('OK'))
+      const response = await handler(createMockContext())
+
+      expect(response.status).toBe(500)
+      const body = await response.json()
+      expect(body.error).toMatchObject({
+        code: 'TEST_ERROR',
+        message: 'Something went wrong',
+        status: 500,
+      })
+    })
+
+    it('should handle AuthError with 401 status', async () => {
+      const { AuthError } = await import('../../src/errors')
+      const { withErrorBoundary } = await import('../../src/core/middleware')
+
+      const errorMiddleware = createMiddleware(async () => {
+        throw new AuthError('UNAUTHORIZED', 'Missing token')
+      })
+
+      const handler = compose(withErrorBoundary(errorMiddleware))(() => new Response('OK'))
+      const response = await handler(createMockContext())
+
+      expect(response.status).toBe(401)
+      const body = await response.json()
+      expect(body.error.code).toBe('AUTH.UNAUTHORIZED')
+    })
+
+    it('should handle ValidationError with 422 status and errors array', async () => {
+      const { ValidationError } = await import('../../src/errors')
+      const { withErrorBoundary } = await import('../../src/core/middleware')
+
+      const errorMiddleware = createMiddleware(async () => {
+        throw new ValidationError('Validation failed', [
+          { field: 'email', message: 'Invalid email' }
+        ])
+      })
+
+      const handler = compose(withErrorBoundary(errorMiddleware))(() => new Response('OK'))
+      const response = await handler(createMockContext())
+
+      expect(response.status).toBe(422)
+      const body = await response.json()
+      expect(body.error.errors).toEqual([
+        { field: 'email', message: 'Invalid email' }
+      ])
+    })
+
+    it('should handle unexpected errors with 500 status', async () => {
+      const { withErrorBoundary } = await import('../../src/core/middleware')
+
+      const errorMiddleware = createMiddleware(async () => {
+        throw new Error('Unexpected error')
+      })
+
+      const handler = compose(withErrorBoundary(errorMiddleware))(() => new Response('OK'))
+      const response = await handler(createMockContext())
+
+      expect(response.status).toBe(500)
+      const body = await response.json()
+      expect(body.error.code).toBe('INTERNAL_ERROR')
+      expect(body.error.message).toBe('An unexpected error occurred')
+    })
+
+    it('should not interfere with successful middleware execution', async () => {
+      const { withErrorBoundary } = await import('../../src/core/middleware')
+
+      const successMiddleware = createMiddleware(async (ctx, next) => {
+        return next()
+      })
+
+      const handler = compose(withErrorBoundary(successMiddleware))(() => new Response('Success'))
+      const response = await handler(createMockContext())
+
+      expect(response.status).toBe(200)
+      expect(await response.text()).toBe('Success')
+    })
   })
 })

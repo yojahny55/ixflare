@@ -191,4 +191,76 @@ describe('Router', () => {
       })
     })
   })
+
+  describe('HTTP Method Handling', () => {
+    it('should return 405 with Allow header for unsupported methods', async () => {
+      const router = createRouter()
+
+      router.add('/users', () => new Response('GET users'), { methods: ['GET'] })
+
+      const request = new Request('http://localhost/users', { method: 'POST' })
+      const response = await router.handle(request, {})
+
+      expect(response.status).toBe(405)
+      expect(response.headers.get('Allow')).toContain('GET')
+      expect(response.headers.get('Allow')).toContain('HEAD')
+      expect(response.headers.get('Allow')).toContain('OPTIONS')
+
+      const body = await response.json()
+      expect(body.error.code).toBe('ROUTING.METHOD_NOT_ALLOWED')
+      expect(body.error.message).toContain('Method POST not allowed')
+    })
+
+    it('should auto-generate OPTIONS response with Allow header', async () => {
+      const router = createRouter()
+
+      router.add('/users', () => new Response('GET'), { methods: ['GET'] })
+      router.add('/users', () => new Response('POST'), { methods: ['POST'] })
+
+      const request = new Request('http://localhost/users', { method: 'OPTIONS' })
+      const response = await router.handle(request, {})
+
+      expect(response.status).toBe(204)
+      const allowHeader = response.headers.get('Allow')
+      expect(allowHeader).toContain('GET')
+      expect(allowHeader).toContain('POST')
+      expect(allowHeader).toContain('HEAD')
+      expect(allowHeader).toContain('OPTIONS')
+    })
+
+    it('should auto-generate HEAD handler from GET handler', async () => {
+      const router = createRouter()
+
+      router.add('/users', () => new Response('User list', {
+        headers: { 'Content-Type': 'text/plain', 'X-Custom': 'value' }
+      }), { methods: ['GET'] })
+
+      const request = new Request('http://localhost/users', { method: 'HEAD' })
+      const response = await router.handle(request, {})
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get('X-Custom')).toBe('value')
+      expect(await response.text()).toBe('') // HEAD should have no body
+    })
+
+    it('should include all methods in Allow header for 405', async () => {
+      const router = createRouter()
+
+      router.add('/api/resource', () => new Response('GET'), { methods: ['GET'] })
+      router.add('/api/resource', () => new Response('POST'), { methods: ['POST'] })
+      router.add('/api/resource', () => new Response('PUT'), { methods: ['PUT'] })
+
+      const request = new Request('http://localhost/api/resource', { method: 'DELETE' })
+      const response = await router.handle(request, {})
+
+      expect(response.status).toBe(405)
+      const allowHeader = response.headers.get('Allow')
+      expect(allowHeader).toContain('GET')
+      expect(allowHeader).toContain('POST')
+      expect(allowHeader).toContain('PUT')
+      expect(allowHeader).toContain('HEAD') // Auto-added because GET exists
+      expect(allowHeader).toContain('OPTIONS') // Always added
+      expect(allowHeader).not.toContain('DELETE')
+    })
+  })
 })

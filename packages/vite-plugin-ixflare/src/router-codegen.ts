@@ -111,6 +111,11 @@ export async function parseRouteFile(filePath: string, routesDir: string): Promi
   const loaderConstRegex = /export\s+const\s+loader\s*[:=]/g
   const hasLoader = loaderFunctionRegex.test(content) || loaderConstRegex.test(content)
 
+  // Detect exported middleware array
+  // Match: export const middleware = [...] or export const middleware: Middleware[] = [...]
+  const middlewareRegex = /export\s+const\s+middleware\s*[:=]/
+  const hasMiddleware = middlewareRegex.test(content)
+
   // Extract dynamic params
   const params = extractDynamicParams(relativePath)
 
@@ -133,7 +138,7 @@ export async function parseRouteFile(filePath: string, routesDir: string): Promi
     routePath = '/'
   }
 
-  return {
+  const route: Route = {
     path: routePath,
     file: relativePath,
     params,
@@ -141,6 +146,13 @@ export async function parseRouteFile(filePath: string, routesDir: string): Promi
     hasParamsSchema,
     hasLoader,
   }
+
+  // Only add middleware property if it exists
+  if (hasMiddleware) {
+    route.middleware = [] // Will be populated during route processing
+  }
+
+  return route
 }
 
 /**

@@ -270,6 +270,56 @@ export function DELETE() {}`
       expect(route.hasLoader).toBe(true)
       expect(route.handlers).toEqual(['GET', 'POST', 'DELETE'])
     })
+
+    it('should detect middleware const export', async () => {
+      const file = join(testDir, 'with-middleware.tsx')
+      await writeFile(
+        file,
+        `import { createMiddleware } from 'ixflare'
+
+export const middleware = [
+  createMiddleware(async (ctx, next) => next())
+]
+
+export function GET() {}`
+      )
+
+      const route = await parseRouteFile(file, testDir)
+
+      expect(route.middleware).toEqual([])
+      expect(route.handlers).toContain('GET')
+    })
+
+    it('should detect typed middleware export', async () => {
+      const file = join(testDir, 'with-typed-middleware.tsx')
+      await writeFile(
+        file,
+        `import type { Middleware } from 'ixflare'
+import { requireAuth, rateLimit } from '@/middleware'
+
+export const middleware: Middleware[] = [requireAuth, rateLimit]
+
+export function GET() {}`
+      )
+
+      const route = await parseRouteFile(file, testDir)
+
+      expect(route.middleware).toEqual([])
+    })
+
+    it('should not detect middleware if not exported', async () => {
+      const file = join(testDir, 'without-middleware.tsx')
+      await writeFile(
+        file,
+        `const middleware = [someMiddleware]
+
+export function GET() {}`
+      )
+
+      const route = await parseRouteFile(file, testDir)
+
+      expect(route.middleware).toBeUndefined()
+    })
   })
 
   describe('discoverRoutes', () => {
