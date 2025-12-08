@@ -36,6 +36,7 @@
 
 import type { RouteHandler } from './router'
 import type { EdgeContext } from '@/types/context'
+import { AppError } from '@/errors'
 
 /**
  * Middleware function signature
@@ -163,9 +164,6 @@ export function withErrorBoundary<Env = unknown>(
     try {
       return await middleware(ctx, next)
     } catch (error) {
-      // Import AppError dynamically to avoid circular dependencies
-      const { AppError } = await import('@/errors')
-
       if (error instanceof AppError) {
         // Use AppError's toJSON method for consistent error format
         const errorResponse = error.toJSON()
@@ -189,6 +187,47 @@ export function withErrorBoundary<Env = unknown>(
   }
 }
 
+/**
+ * Compose multiple middleware functions into a single handler wrapper
+ *
+ * Creates an onion-model middleware chain where each middleware can:
+ * - Execute code before passing to the next middleware (pre-processing)
+ * - Call `next()` to pass control to the next middleware
+ * - Execute code after `next()` returns (post-processing)
+ * - Short-circuit the chain by returning a Response without calling `next()`
+ *
+ * @template Env - Environment bindings type
+ * @param middlewares - Middleware functions to compose (executed left to right)
+ * @returns A function that wraps a handler with the middleware chain
+ *
+ * @example
+ * ```typescript
+ * import { compose, createMiddleware } from 'ixflare'
+ *
+ * const logger = createMiddleware(async (ctx, next) => {
+ *   console.log('Before')
+ *   const response = await next()
+ *   console.log('After')
+ *   return response
+ * })
+ *
+ * const auth = createMiddleware(async (ctx, next) => {
+ *   if (!ctx.headers.get('Authorization')) {
+ *     return new Response('Unauthorized', { status: 401 })
+ *   }
+ *   return next()
+ * })
+ *
+ * // Compose middlewares: logger runs first, then auth, then handler
+ * const handler = compose(logger, auth)((ctx) => {
+ *   return new Response('Hello!')
+ * })
+ *
+ * // Execution order: logger:before → auth → handler → auth:after → logger:after
+ * ```
+ *
+ * @throws {Error} If `next()` is called multiple times within a single middleware
+ */
 export function compose<Env = unknown>(...middlewares: Middleware<Env>[]): (handler: RouteHandler<Env>) => RouteHandler<Env> {
   return (handler: RouteHandler<Env>): RouteHandler<Env> => {
     return async (context: EdgeContext<Env>): Promise<Response> => {

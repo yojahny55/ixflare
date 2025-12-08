@@ -113,7 +113,8 @@ export async function parseRouteFile(filePath: string, routesDir: string): Promi
 
   // Detect exported middleware array
   // Match: export const middleware = [...] or export const middleware: Middleware[] = [...]
-  const middlewareRegex = /export\s+const\s+middleware\s*[:=]/
+  // Uses word boundary (\b) to avoid matching middlewareConfig, middlewareFactory, etc.
+  const middlewareRegex = /export\s+const\s+middleware\b\s*[:=]/
   const hasMiddleware = middlewareRegex.test(content)
 
   // Extract dynamic params
@@ -147,9 +148,11 @@ export async function parseRouteFile(filePath: string, routesDir: string): Promi
     hasLoader,
   }
 
-  // Only add middleware property if it exists
+  // Only add middleware property if route exports middleware array
+  // Note: The actual middleware functions are imported and executed at runtime by the router.
+  // This flag indicates to the build system that middleware exists for this route.
   if (hasMiddleware) {
-    route.middleware = [] // Will be populated during route processing
+    route.middleware = [] // Presence indicates route has middleware; actual functions loaded at runtime
   }
 
   return route

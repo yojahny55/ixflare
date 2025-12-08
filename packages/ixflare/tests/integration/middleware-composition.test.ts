@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { createMiddleware, withErrorBoundary, compose } from '../../src/core/middleware'
-import { AuthError, ValidationError, NotFoundError } from '../../src/errors'
+import { AuthError, ValidationError, NotFoundError, HttpError } from '../../src/errors'
 import type { EdgeContext } from '../../src/types/context'
 
 function createMockContext(overrides: Partial<EdgeContext> = {}): EdgeContext {
@@ -300,7 +300,8 @@ describe('Middleware Composition Integration', () => {
             const count = requestCounts.get(ip) || 0
 
             if (count >= maxRequests) {
-              throw new Error('Rate limit exceeded')
+              // Use HttpError with 429 Too Many Requests status
+              throw new HttpError(429, 'RATE_LIMITED', 'Too many requests. Please try again later.')
             }
 
             requestCounts.set(ip, count + 1)
@@ -317,9 +318,12 @@ describe('Middleware Composition Integration', () => {
       expect((await handler(context)).status).toBe(200)
       expect((await handler(context)).status).toBe(200)
 
-      // 4th request should fail
+      // 4th request should fail with 429 Too Many Requests
       const response = await handler(context)
-      expect(response.status).toBe(500)
+      expect(response.status).toBe(429)
+      const body = await response.json()
+      expect(body.error.code).toBe('RATE_LIMITED')
+      expect(body.error.message).toBe('Too many requests. Please try again later.')
     })
   })
 })
