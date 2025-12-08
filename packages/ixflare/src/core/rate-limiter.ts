@@ -40,8 +40,8 @@ import type {
   RateLimitWindow,
   RateLimitKeyStrategy,
   RateLimitStore,
+  RateLimitAlgorithm,
 } from '@/types/rate-limiter'
-import { HttpError } from '@/errors'
 import { createKVStore } from './rate-limiter-store'
 
 /**
@@ -225,6 +225,7 @@ export function rateLimit<Env = unknown>(config: RateLimitConfig<Env>): Middlewa
   const windowSeconds = parseWindow(config.window)
   const windowMs = windowSeconds * 1000
   const keyExtractor = resolveKeyBy(config.keyBy)
+  const algorithm: RateLimitAlgorithm = config.algorithm || 'sliding-window'
 
   // Store will be validated at runtime when first request comes in
   // This allows store to be provided later or use default KV store
@@ -238,8 +239,8 @@ export function rateLimit<Env = unknown>(config: RateLimitConfig<Env>): Middlewa
       return next()
     }
 
-    // Get or create store
-    const store: RateLimitStore = config.store || createDefaultStore(ctx.env)
+    // Get or create store, passing algorithm config
+    const store: RateLimitStore = config.store || createDefaultStore(ctx.env, algorithm)
 
     // Check rate limit
     const result = await store.increment(key, windowMs)
@@ -272,14 +273,17 @@ async function handleRateLimited<Env = unknown>(
     return config.onLimit(ctx)
   }
 
-  // Default 429 response with standard error format
-  const error = new HttpError(429, 'RATE_LIMIT_EXCEEDED', 'Too many requests')
-  const errorResponse = error.toJSON()
-
+  // Default 429 response with standard error envelope format
+  // Architecture pattern: { error: { code, message, status, timestamp, ... } }
   return Response.json(
     {
-      ...errorResponse.error,
-      retryAfter: result.retryAfter,
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many requests',
+        status: 429,
+        timestamp: Date.now(),
+        retryAfter: result.retryAfter,
+      },
     },
     {
       status: 429,
@@ -292,8 +296,15 @@ async function handleRateLimited<Env = unknown>(
 }
 
 /**
- * Create default KV-based store
+ * Create default KV-based store with specified algorithm
+ *
+ * @param env - Environment bindings containing KV namespace
+ * @param algorithm - Rate limiting algorithm ('sliding-window' | 'fixed-window')
+ * @returns Configured KV rate limit store
  */
-function createDefaultStore(env: unknown): RateLimitStore {
-  return createKVStore(env as Record<string, unknown>)
+function createDefaultStore(
+  env: unknown,
+  algorithm: RateLimitAlgorithm = 'sliding-window'
+): RateLimitStore {
+  return createKVStore(env as Record<string, unknown>, 'RATE_LIMIT_KV', algorithm)
 }

@@ -187,11 +187,15 @@ describe('Rate Limiting - Integration Tests', () => {
       expect(response.status).toBe(429)
 
       const body = await response.json()
-      expect(body).toHaveProperty('code', 'RATE_LIMIT_EXCEEDED')
-      expect(body).toHaveProperty('message', 'Too many requests')
-      expect(body).toHaveProperty('status', 429)
-      expect(body).toHaveProperty('timestamp')
-      expect(body).toHaveProperty('retryAfter')
+      // Verify architecture-compliant error envelope format
+      expect(body).toHaveProperty('error')
+      expect(body.error).toHaveProperty('code', 'RATE_LIMIT_EXCEEDED')
+      expect(body.error).toHaveProperty('message', 'Too many requests')
+      expect(body.error).toHaveProperty('status', 429)
+      expect(body.error).toHaveProperty('timestamp')
+      expect(typeof body.error.timestamp).toBe('number')
+      expect(body.error).toHaveProperty('retryAfter')
+      expect(typeof body.error.retryAfter).toBe('number')
     })
 
     it('should use custom onLimit response', async () => {

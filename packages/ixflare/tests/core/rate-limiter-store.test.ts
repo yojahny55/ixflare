@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { MemoryRateLimitStore, KVRateLimitStore } from '../../src/core/rate-limiter-store'
+import {
+  MemoryRateLimitStore,
+  KVRateLimitStore,
+  createKVStore,
+} from '../../src/core/rate-limiter-store'
 
 describe('MemoryRateLimitStore', () => {
   let store: MemoryRateLimitStore
@@ -103,28 +107,45 @@ describe('MemoryRateLimitStore', () => {
   })
 })
 
+/**
+ * Create a complete mock KV namespace for testing
+ */
+function createMockKV() {
+  const kvStore = new Map<string, string>()
+
+  return {
+    store: kvStore,
+    mock: {
+      get: async (key: string, type?: string) => {
+        const value = kvStore.get(key)
+        if (!value) return null
+        return type === 'json' ? JSON.parse(value) : value
+      },
+      put: async (key: string, value: string) => {
+        kvStore.set(key, value)
+      },
+      delete: async (key: string) => {
+        kvStore.delete(key)
+      },
+      list: async (options?: { prefix?: string }) => {
+        const prefix = options?.prefix || ''
+        const keys = Array.from(kvStore.keys())
+          .filter((k) => k.startsWith(prefix))
+          .map((name) => ({ name }))
+        return { keys }
+      },
+    } as unknown as KVNamespace,
+  }
+}
+
 describe('KVRateLimitStore', () => {
   describe('with mock KV (fixed-window)', () => {
-    let mockKV: any
+    let mockKV: KVNamespace
     let store: KVRateLimitStore
 
     beforeEach(() => {
-      const kvStore = new Map<string, string>()
-
-      mockKV = {
-        get: async (key: string, type?: string) => {
-          const value = kvStore.get(key)
-          if (!value) return null
-          return type === 'json' ? JSON.parse(value) : value
-        },
-        put: async (key: string, value: string) => {
-          kvStore.set(key, value)
-        },
-        delete: async (key: string) => {
-          kvStore.delete(key)
-        },
-      }
-
+      const { mock } = createMockKV()
+      mockKV = mock
       store = new KVRateLimitStore(mockKV, 'fixed-window')
     })
 
@@ -163,26 +184,14 @@ describe('KVRateLimitStore', () => {
   })
 
   describe('with mock KV (sliding-window)', () => {
-    let mockKV: any
+    let mockKV: KVNamespace
+    let kvData: Map<string, string>
     let store: KVRateLimitStore
 
     beforeEach(() => {
-      const kvStore = new Map<string, string>()
-
-      mockKV = {
-        get: async (key: string, type?: string) => {
-          const value = kvStore.get(key)
-          if (!value) return null
-          return type === 'json' ? JSON.parse(value) : value
-        },
-        put: async (key: string, value: string) => {
-          kvStore.set(key, value)
-        },
-        delete: async (key: string) => {
-          kvStore.delete(key)
-        },
-      }
-
+      const { mock, store: data } = createMockKV()
+      mockKV = mock
+      kvData = data
       store = new KVRateLimitStore(mockKV, 'sliding-window')
     })
 
@@ -203,14 +212,38 @@ describe('KVRateLimitStore', () => {
 
     it('should use sliding window algorithm for accurate counting', async () => {
       // This test verifies sliding window behavior
-      // In practice, the sliding window should smooth out bursts at boundaries
+      // Sliding window weights bucket counts by time overlap
       const result1 = await store.increment('test-key', 60000)
-      const result2 = await store.increment('test-key', 60000)
-      const result3 = await store.increment('test-key', 60000)
+      expect(result1.count).toBeGreaterThanOrEqual(1)
 
-      // All increments are in same bucket, so count should be at least 1 (current bucket)
-      expect(result3.count).toBeGreaterThanOrEqual(1)
-      expect(result3.count).toBeLessThanOrEqual(3)
+      const result2 = await store.increment('test-key', 60000)
+      expect(result2.count).toBeGreaterThanOrEqual(result1.count)
+
+      const result3 = await store.increment('test-key', 60000)
+      // Count should increase with each increment
+      expect(result3.count).toBeGreaterThanOrEqual(result2.count)
+    })
+
+    it('should return accurate reset time based on oldest bucket', async () => {
+      const now = Date.now()
+      const windowMs = 60000 // 1 minute
+
+      const result = await store.increment('reset-test-key', windowMs)
+
+      // Reset time should be approximately now + window
+      // With sliding window, it's based on oldest bucket expiry
+      expect(result.resetAt).toBeGreaterThan(Math.floor(now / 1000))
+      expect(result.resetAt).toBeLessThanOrEqual(Math.floor((now + windowMs + 1000) / 1000))
+    })
+
+    it('should return retryAfter as seconds until reset', async () => {
+      const windowMs = 60000 // 1 minute
+
+      const result = await store.increment('retry-test-key', windowMs)
+
+      // retryAfter should be positive and not exceed window duration
+      expect(result.retryAfter).toBeGreaterThan(0)
+      expect(result.retryAfter).toBeLessThanOrEqual(60)
     })
 
     it('should track multiple keys independently', async () => {
@@ -232,6 +265,62 @@ describe('KVRateLimitStore', () => {
 
       // Reset times should be close (within window)
       expect(Math.abs(result1.resetAt - result2.resetAt)).toBeLessThan(60)
+    })
+
+    it('should reset counters correctly', async () => {
+      // Increment a few times
+      await store.increment('reset-key', 60000)
+      await store.increment('reset-key', 60000)
+      const result1 = await store.increment('reset-key', 60000)
+      // Sliding window weights counts, so expect at least 1
+      expect(result1.count).toBeGreaterThanOrEqual(1)
+
+      // Reset should clear the counter
+      await store.reset('reset-key')
+
+      // Verify KV data was cleared
+      const keysAfterReset = Array.from(kvData.keys()).filter((k) =>
+        k.includes('reset-key')
+      )
+      expect(keysAfterReset.length).toBe(0)
+
+      // New increment should start at 1
+      const result2 = await store.increment('reset-key', 60000)
+      expect(result2.count).toBe(1)
+    })
+  })
+
+  describe('createKVStore helper', () => {
+    it('should create store with default algorithm (sliding-window)', () => {
+      const { mock } = createMockKV()
+      const env = { RATE_LIMIT_KV: mock }
+
+      const store = createKVStore(env)
+      expect(store).toBeInstanceOf(KVRateLimitStore)
+    })
+
+    it('should create store with specified algorithm', () => {
+      const { mock } = createMockKV()
+      const env = { RATE_LIMIT_KV: mock }
+
+      const store = createKVStore(env, 'RATE_LIMIT_KV', 'fixed-window')
+      expect(store).toBeInstanceOf(KVRateLimitStore)
+    })
+
+    it('should create store with custom binding name', () => {
+      const { mock } = createMockKV()
+      const env = { CUSTOM_KV: mock }
+
+      const store = createKVStore(env, 'CUSTOM_KV')
+      expect(store).toBeInstanceOf(KVRateLimitStore)
+    })
+
+    it('should throw if KV binding not found', () => {
+      const env = {} // No KV binding
+
+      expect(() => {
+        createKVStore(env)
+      }).toThrow("KV binding 'RATE_LIMIT_KV' not found")
     })
   })
 })

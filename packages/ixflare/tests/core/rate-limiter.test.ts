@@ -269,9 +269,13 @@ describe('Rate Limiter - Middleware Factory', () => {
       expect(response.status).toBe(429)
 
       const body = await response.json()
-      expect(body).toHaveProperty('code', 'RATE_LIMIT_EXCEEDED')
-      expect(body).toHaveProperty('message', 'Too many requests')
-      expect(body).toHaveProperty('retryAfter')
+      // Verify error envelope format per architecture pattern
+      expect(body).toHaveProperty('error')
+      expect(body.error).toHaveProperty('code', 'RATE_LIMIT_EXCEEDED')
+      expect(body.error).toHaveProperty('message', 'Too many requests')
+      expect(body.error).toHaveProperty('status', 429)
+      expect(body.error).toHaveProperty('timestamp')
+      expect(body.error).toHaveProperty('retryAfter')
       expect(response.headers.get('Retry-After')).toBeDefined()
     })
 
@@ -409,6 +413,44 @@ describe('Rate Limiter - Middleware Factory', () => {
 
       const response = await middleware(ctx, next)
       expect(response.status).toBe(429)
+    })
+
+    it('should accept algorithm configuration', async () => {
+      const request = new Request('http://localhost/test', {
+        headers: { 'CF-Connecting-IP': '203.0.113.42' },
+      })
+      const ctx = createMockContext({ request, headers: request.headers })
+
+      // Test fixed-window algorithm
+      const middlewareFixed = rateLimit({
+        max: 2,
+        window: '1m',
+        algorithm: 'fixed-window',
+        store,
+      })
+      const next = () => Promise.resolve(new Response('OK'))
+
+      const response = await middlewareFixed(ctx, next)
+      expect(response.status).toBe(200)
+    })
+
+    it('should default to sliding-window algorithm', async () => {
+      const request = new Request('http://localhost/test', {
+        headers: { 'CF-Connecting-IP': '203.0.113.42' },
+      })
+      const ctx = createMockContext({ request, headers: request.headers })
+
+      // No algorithm specified - should default to sliding-window
+      const middleware = rateLimit({
+        max: 2,
+        window: '1m',
+        store,
+      })
+      const next = () => Promise.resolve(new Response('OK'))
+
+      const response = await middleware(ctx, next)
+      expect(response.status).toBe(200)
+      expect(response.headers.get('X-RateLimit-Limit')).toBe('2')
     })
   })
 })
