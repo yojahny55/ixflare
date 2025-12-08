@@ -112,6 +112,7 @@ export interface LoggingConfig {
 export function logging(config?: LoggingConfig): Middleware {
   const log = config?.logger ?? console.log
   const excludePaths = config?.excludePaths ?? []
+  const includeHeaders = config?.includeHeaders ?? false
 
   return async (ctx, next) => {
     const { method, url } = ctx
@@ -124,20 +125,40 @@ export function logging(config?: LoggingConfig): Middleware {
 
     const startTime = Date.now()
 
-    log(`--> ${method} ${pathname}`, {
+    const requestLogData: Record<string, unknown> = {
       requestId: ctx.requestId,
       timestamp: startTime,
-    })
+    }
+
+    if (includeHeaders) {
+      const headersObj: Record<string, string> = {}
+      ctx.request.headers.forEach((value, key) => {
+        headersObj[key] = value
+      })
+      requestLogData.headers = headersObj
+    }
+
+    log(`--> ${method} ${pathname}`, requestLogData)
 
     const response = await next()
     const duration = Date.now() - startTime
 
-    log(`<-- ${method} ${pathname} ${response.status} ${duration}ms`, {
+    const responseLogData: Record<string, unknown> = {
       requestId: ctx.requestId,
       status: response.status,
       duration,
       timestamp: Date.now(),
-    })
+    }
+
+    if (includeHeaders) {
+      const headersObj: Record<string, string> = {}
+      response.headers.forEach((value, key) => {
+        headersObj[key] = value
+      })
+      responseLogData.headers = headersObj
+    }
+
+    log(`<-- ${method} ${pathname} ${response.status} ${duration}ms`, responseLogData)
 
     return response
   }

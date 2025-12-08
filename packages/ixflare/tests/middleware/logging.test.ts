@@ -202,4 +202,65 @@ describe('logging middleware', () => {
 
     expect(logger).toHaveBeenNthCalledWith(1, '--> GET /api/users', expect.any(Object))
   })
+
+  it('should include headers in logs when includeHeaders is true', async () => {
+    const logger = vi.fn()
+    const middleware = logging({ logger, includeHeaders: true })
+
+    const request = new Request('https://example.com/api/users', {
+      headers: { 'X-Custom-Header': 'test-value', 'Content-Type': 'application/json' },
+    })
+    const ctx = mockContext(request)
+
+    const next = vi.fn(async () =>
+      new Response('test', {
+        headers: { 'X-Response-Header': 'response-value' },
+      })
+    )
+    await middleware(ctx, next)
+
+    // Check request log includes headers
+    expect(logger).toHaveBeenNthCalledWith(
+      1,
+      '--> GET /api/users',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-custom-header': 'test-value',
+          'content-type': 'application/json',
+        }),
+      })
+    )
+
+    // Check response log includes headers
+    expect(logger).toHaveBeenNthCalledWith(
+      2,
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-response-header': 'response-value',
+        }),
+      })
+    )
+  })
+
+  it('should not include headers in logs by default', async () => {
+    const logger = vi.fn()
+    const middleware = logging({ logger })
+
+    const request = new Request('https://example.com/api/users', {
+      headers: { 'X-Custom-Header': 'test-value' },
+    })
+    const ctx = mockContext(request)
+
+    const next = vi.fn(async () => new Response('test'))
+    await middleware(ctx, next)
+
+    // Check request log does NOT include headers
+    const requestLogData = logger.mock.calls[0][1] as Record<string, unknown>
+    expect(requestLogData).not.toHaveProperty('headers')
+
+    // Check response log does NOT include headers
+    const responseLogData = logger.mock.calls[1][1] as Record<string, unknown>
+    expect(responseLogData).not.toHaveProperty('headers')
+  })
 })

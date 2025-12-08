@@ -296,4 +296,82 @@ describe('errorHandler middleware', () => {
     expect(response.status).toBe(500)
     expect(body.error.code).toBe('INTERNAL_ERROR')
   })
+
+  it('should use custom requestIdHeader when configured', async () => {
+    const middleware = errorHandler({ requestIdHeader: 'X-Correlation-ID' })
+    const requestId = 'custom-correlation-id'
+    const request = mockRequest()
+    const ctx = mockContext(request, requestId)
+
+    const next = vi.fn(async () => {
+      throw new AppError('TEST_ERROR', 'Test message')
+    })
+
+    const response = await middleware(ctx, next)
+
+    expect(response.headers.get('X-Correlation-ID')).toBe(requestId)
+    expect(response.headers.get('X-Request-ID')).toBeNull()
+  })
+
+  it('should catch and format ForbiddenError with 403 status', async () => {
+    const { ForbiddenError } = await import('@/errors')
+    const middleware = errorHandler()
+    const request = mockRequest()
+    const ctx = mockContext(request)
+
+    const next = vi.fn(async () => {
+      throw new ForbiddenError('Access denied to resource')
+    })
+
+    const response = await middleware(ctx, next)
+    const body = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(body.error).toMatchObject({
+      code: 'FORBIDDEN',
+      status: 403,
+    })
+  })
+
+  it('should catch and format ConflictError with 409 status', async () => {
+    const { ConflictError } = await import('@/errors')
+    const middleware = errorHandler()
+    const request = mockRequest()
+    const ctx = mockContext(request)
+
+    const next = vi.fn(async () => {
+      throw new ConflictError('Resource already exists')
+    })
+
+    const response = await middleware(ctx, next)
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error).toMatchObject({
+      code: 'CONFLICT',
+      message: 'Resource already exists',
+      status: 409,
+    })
+  })
+
+  it('should catch and format InfraError with 500 status', async () => {
+    const { InfraError } = await import('@/errors')
+    const middleware = errorHandler()
+    const request = mockRequest()
+    const ctx = mockContext(request)
+
+    const next = vi.fn(async () => {
+      throw new InfraError('DB_CONNECT', 'Database connection failed')
+    })
+
+    const response = await middleware(ctx, next)
+    const body = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(body.error).toMatchObject({
+      code: 'INFRA.DB_CONNECT',
+      message: 'Database connection failed',
+      status: 500,
+    })
+  })
 })

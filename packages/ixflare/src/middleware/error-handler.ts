@@ -95,6 +95,24 @@ export interface ErrorHandlerConfig {
    * ```
    */
   logger?: (error: Error, ctx: EdgeContext<any>) => void
+
+  /**
+   * Header name for request ID in error responses
+   *
+   * Should match the header configured in requestId() middleware.
+   *
+   * @default 'X-Request-ID'
+   *
+   * @example
+   * ```typescript
+   * // If using custom header in requestId middleware:
+   * const middleware = [
+   *   errorHandler({ requestIdHeader: 'X-Correlation-ID' }),
+   *   requestId({ header: 'X-Correlation-ID' }),
+   * ]
+   * ```
+   */
+  requestIdHeader?: string
 }
 
 /**
@@ -162,6 +180,7 @@ export interface ErrorHandlerConfig {
  */
 export function errorHandler<Env = unknown>(config?: ErrorHandlerConfig): Middleware<Env> {
   const includeStack = config?.includeStackTrace ?? false
+  const requestIdHeader = config?.requestIdHeader ?? 'X-Request-ID'
   const log = config?.logger ?? ((error: Error, ctx: EdgeContext<Env>) => {
     console.error(`[Error] ${ctx.requestId ?? 'no-id'}:`, error)
   })
@@ -193,7 +212,7 @@ export function errorHandler<Env = unknown>(config?: ErrorHandlerConfig): Middle
 
         // Add request ID header if available
         if (ctx.requestId) {
-          response.headers.set('X-Request-ID', ctx.requestId)
+          response.headers.set(requestIdHeader, ctx.requestId)
         }
 
         return response
@@ -215,7 +234,7 @@ export function errorHandler<Env = unknown>(config?: ErrorHandlerConfig): Middle
 
       // Add request ID header if available
       if (ctx.requestId) {
-        response.headers.set('X-Request-ID', ctx.requestId)
+        response.headers.set(requestIdHeader, ctx.requestId)
       }
 
       return response

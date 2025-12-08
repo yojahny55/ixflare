@@ -371,4 +371,57 @@ describe('Request/Response Transformation Integration', () => {
       expect(body.error.code).toBe('MAINTENANCE')
     })
   })
+
+  describe('Request ID accessibility in handlers', () => {
+    it('should make requestId accessible to route handlers via context', async () => {
+      let handlerReceivedRequestId: string | undefined
+
+      const middleware = [requestId()]
+
+      const handler = async (ctx: EdgeContext) => {
+        // This simulates a route handler accessing ctx.requestId
+        handlerReceivedRequestId = ctx.requestId
+        return Response.json({ requestId: ctx.requestId })
+      }
+
+      const composed = compose(...middleware)(handler)
+
+      const request = mockRequest()
+      const ctx = mockContext(request)
+      const response = await composed(ctx)
+
+      const body = await response.json()
+
+      // Verify handler received the requestId
+      expect(handlerReceivedRequestId).toBeDefined()
+      expect(typeof handlerReceivedRequestId).toBe('string')
+
+      // Verify it matches what's in response body and header
+      expect(body.requestId).toBe(handlerReceivedRequestId)
+      expect(response.headers.get('X-Request-ID')).toBe(handlerReceivedRequestId)
+    })
+
+    it('should preserve upstream requestId through to handler', async () => {
+      const upstreamId = 'upstream-service-id-12345'
+      let handlerReceivedRequestId: string | undefined
+
+      const middleware = [requestId()]
+
+      const handler = async (ctx: EdgeContext) => {
+        handlerReceivedRequestId = ctx.requestId
+        return Response.json({ received: ctx.requestId })
+      }
+
+      const composed = compose(...middleware)(handler)
+
+      const request = new Request('https://example.com/', {
+        headers: { 'X-Request-ID': upstreamId },
+      })
+      const ctx = mockContext(request)
+      const response = await composed(ctx)
+
+      expect(handlerReceivedRequestId).toBe(upstreamId)
+      expect(response.headers.get('X-Request-ID')).toBe(upstreamId)
+    })
+  })
 })
