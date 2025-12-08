@@ -3,6 +3,7 @@
 docs/
 .claude/
 .bmad/
+.agent/
 
 # Dependencies
 node_modules/
