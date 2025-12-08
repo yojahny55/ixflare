@@ -49,5 +49,15 @@ export type {
   ParseBodyOptions,
 } from './handlers'
 
+// Export rate limiter types
+export type {
+  RateLimitConfig,
+  RateLimitWindow,
+  RateLimitKeyStrategy,
+  RateLimitAlgorithm,
+  RateLimitResult,
+  RateLimitStore,
+} from './rate-limiter'
+
 // Note: Cloudflare Workers types now provided by @cloudflare/workers-types
 // Global type augmentation removed to prevent conflicts

@@ -11,6 +11,26 @@ export { createMiddleware, defineMiddleware, compose, withErrorBoundary } from '
 export type { Middleware, MiddlewareContext } from './core/middleware'
 export { createApp, App } from './core/app'
 export type { AppConfig, RouteConfig } from './core/app'
+
+// Rate limiting exports
+export {
+  rateLimit,
+  parseWindow,
+  calculateReset,
+  extractIpKey,
+  extractUserKey,
+  extractApiKeyKey,
+  resolveKeyBy,
+} from './core/rate-limiter'
+export { MemoryRateLimitStore, KVRateLimitStore, createKVStore } from './core/rate-limiter-store'
+export type {
+  RateLimitConfig,
+  RateLimitWindow,
+  RateLimitKeyStrategy,
+  RateLimitAlgorithm,
+  RateLimitResult,
+  RateLimitStore,
+} from './types/rate-limiter'
 export { createContext, type Context } from './core/context'
 export {
   json,
