@@ -32,10 +32,15 @@ export type {
 
 // CRUD exports (Story 3.2)
 export { ModelInstance } from './crud/model-instance'
+/**
+ * D1Adapter - Optional utility class for advanced D1 operations
+ * Provides type conversion helpers (toD1Value, fromD1Value) and batch utilities.
+ * Most users should use the higher-level CRUD functions instead.
+ */
 export { D1Adapter } from './crud/d1-adapter'
 export { QueryBuilder } from './query-builder'
 export type { WhereCondition } from './query-builder'
-export { create, find, findOrFail, upsert, createMany } from './crud/crud-operations'
+export { create, find, findOrFail, upsert, upsertAtomic, createMany } from './crud/crud-operations'
 export type { CreateInput, UpdateInput } from './crud/crud-operations'
 export { createModelProxy, type ModelCrudMethods, type ModelWithCrud } from './crud/model-proxy'
 export { EdgeRecordError, NotFoundError, ValidationError, ConflictError } from './crud/errors'

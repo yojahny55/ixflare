@@ -189,5 +189,46 @@ describe('Bulk Operations - AC11', () => {
 
       expect(results).toHaveLength(100)
     })
+
+    it('should handle batches larger than D1 limit (100)', async () => {
+      // Create 150 records - should be split into 2 batches (100 + 50)
+      const records = Array.from({ length: 150 }, (_, i) => ({
+        email: `user${i}@example.com`,
+        name: `User ${i}`,
+        role: 'user',
+      }))
+
+      const results = await createMany(User, records, db)
+
+      expect(results).toHaveLength(150)
+      // Verify all IDs are assigned correctly
+      expect(results[0].get('id')).toBe(1)
+      expect(results[149].get('id')).toBe(150)
+    })
+
+    it('should handle batches of exactly 200 records (2 full batches)', async () => {
+      const records = Array.from({ length: 200 }, (_, i) => ({
+        email: `user${i}@example.com`,
+        name: `User ${i}`,
+        role: 'user',
+      }))
+
+      const results = await createMany(User, records, db)
+
+      expect(results).toHaveLength(200)
+    })
+
+    it('should handle very large batches (500 records)', async () => {
+      const records = Array.from({ length: 500 }, (_, i) => ({
+        email: `user${i}@example.com`,
+        name: `User ${i}`,
+        role: 'user',
+      }))
+
+      const results = await createMany(User, records, db)
+
+      expect(results).toHaveLength(500)
+      // Should be split into 5 batches of 100
+    })
   })
 })

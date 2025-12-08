@@ -1,10 +1,10 @@
 /**
  * @module tests/edge-record/crud/upsert.test
- * @description Tests for upsert operation (AC10)
+ * @description Tests for upsert and upsertAtomic operations (AC10)
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { upsert, create, find } from '@/edge-record/crud/crud-operations'
+import { upsert, upsertAtomic, create, find } from '@/edge-record/crud/crud-operations'
 import { defineModel, field, timestamps } from '@/edge-record/schema'
 import { createMockD1Database } from './mock-d1'
 
@@ -142,6 +142,91 @@ describe('Upsert Operation - AC10', () => {
       )
 
       // If parameterized, these should work without SQL errors
+      expect(result).toBeDefined()
+    })
+  })
+
+  describe('upsertAtomic()', () => {
+    it('should insert new record when no conflict', async () => {
+      const result = await upsertAtomic(
+        User,
+        ['email'], // Conflict column
+        { email: 'new@example.com', name: 'New User', role: 'user' },
+        db
+      )
+
+      expect(result).toBeDefined()
+      expect(result.get('email')).toBe('new@example.com')
+      expect(result.get('name')).toBe('New User')
+    })
+
+    it('should update existing record on conflict', async () => {
+      // First create a record
+      await create(User, { email: 'existing@example.com', name: 'Original', role: 'user' }, db)
+
+      // Now upsertAtomic with same email
+      const result = await upsertAtomic(
+        User,
+        ['email'],
+        { email: 'existing@example.com', name: 'Updated Name', role: 'admin' },
+        db
+      )
+
+      expect(result.get('name')).toBe('Updated Name')
+      expect(result.get('role')).toBe('admin')
+    })
+
+    it('should return ModelInstance', async () => {
+      const result = await upsertAtomic(
+        User,
+        ['email'],
+        { email: 'test@example.com', name: 'Test', role: 'user' },
+        db
+      )
+
+      expect(typeof result.get).toBe('function')
+      expect(typeof result.set).toBe('function')
+      expect(typeof result.update).toBe('function')
+      expect(typeof result.delete).toBe('function')
+    })
+
+    it('should set timestamps on insert', async () => {
+      const beforeUpsert = Date.now()
+      const result = await upsertAtomic(
+        User,
+        ['email'],
+        { email: 'new@example.com', name: 'New User', role: 'user' },
+        db
+      )
+      const afterUpsert = Date.now()
+
+      const createdAt = result.get('createdAt') as number
+      expect(createdAt).toBeGreaterThanOrEqual(beforeUpsert)
+      expect(createdAt).toBeLessThanOrEqual(afterUpsert)
+    })
+
+    it('should support multiple conflict columns', async () => {
+      // Create with composite unique key
+      await create(User, { email: 'user@example.com', name: 'Original', role: 'admin' }, db)
+
+      const result = await upsertAtomic(
+        User,
+        ['email', 'role'], // Composite conflict key
+        { email: 'user@example.com', name: 'Updated', role: 'admin' },
+        db
+      )
+
+      expect(result.get('name')).toBe('Updated')
+    })
+
+    it('should use parameterized queries', async () => {
+      const result = await upsertAtomic(
+        User,
+        ['email'],
+        { email: "test'@example.com", name: "O'Brien", role: 'user' },
+        db
+      )
+
       expect(result).toBeDefined()
     })
   })

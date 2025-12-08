@@ -4,10 +4,49 @@
  */
 
 import type { SchemaDefinition, InferSchema, Model } from '@/edge-record/schema/types'
+import type { FieldConfig, FieldBuilder } from '@/edge-record/schema/field'
 import { ModelInstance } from '@/edge-record/crud/model-instance'
 import { NotFoundError } from '@/edge-record/crud/errors'
 import { toSnakeCase } from '@/edge-record/crud/case-transform'
 import { escapeIdentifier } from '@/edge-record/schema/type-mapping'
+
+/**
+ * Helper to extract FieldConfig from schema entry (handles FieldBuilder)
+ */
+function getFieldConfig(schemaEntry: unknown): FieldConfig | undefined {
+  if (!schemaEntry) return undefined
+  // Schema entries are FieldBuilder instances with a .config property
+  if (typeof schemaEntry === 'object' && 'config' in schemaEntry) {
+    return (schemaEntry as FieldBuilder).config
+  }
+  return undefined
+}
+
+/**
+ * Convert JavaScript value to D1-compatible value
+ */
+function toD1Value(value: unknown, fieldType: string): unknown {
+  if (value === null || value === undefined) {
+    return null
+  }
+
+  switch (fieldType) {
+    case 'boolean':
+      return value ? 1 : 0
+
+    case 'datetime':
+      if (value instanceof Date) {
+        return value.getTime()
+      }
+      return value
+
+    case 'json':
+      return typeof value === 'string' ? value : JSON.stringify(value)
+
+    default:
+      return value
+  }
+}
 
 /**
  * Input type for create operations (excludes auto-generated fields)
@@ -129,6 +168,13 @@ export async function findOrFail<T extends SchemaDefinition>(
 /**
  * Create or update a record based on match criteria (upsert)
  *
+ * **WARNING: Race Condition**
+ * This function uses SELECT-then-INSERT/UPDATE which is NOT atomic.
+ * Concurrent calls with the same match criteria may create duplicates.
+ *
+ * For atomic upserts on unique columns, use {@link upsertAtomic} instead,
+ * which uses SQLite's `INSERT ... ON CONFLICT` syntax.
+ *
  * @template T The schema definition type
  * @param model The model definition
  * @param match Fields to match on to find existing record
@@ -176,7 +222,103 @@ export async function upsert<T extends SchemaDefinition>(
 }
 
 /**
+ * Atomic upsert using SQLite's INSERT ... ON CONFLICT syntax
+ *
+ * This is the preferred method for upserts when the conflict column(s) have
+ * a UNIQUE constraint. It's atomic and safe for concurrent operations.
+ *
+ * @template T The schema definition type
+ * @param model The model definition
+ * @param conflictColumns Column(s) with UNIQUE constraint to detect conflicts
+ * @param data All data to insert (or update on conflict)
+ * @param db The D1Database instance
+ * @returns ModelInstance (created or updated)
+ *
+ * @example
+ * ```typescript
+ * // Table must have UNIQUE constraint on email column
+ * const user = await upsertAtomic(
+ *   User,
+ *   ['email'],  // Conflict detection column(s)
+ *   { email: 'alex@example.com', name: 'Alex Rivera', role: 'user' },
+ *   env.DB
+ * )
+ * ```
+ */
+export async function upsertAtomic<T extends SchemaDefinition>(
+  model: Model<T>,
+  conflictColumns: Array<keyof InferSchema<T>>,
+  data: CreateInput<T>,
+  db: D1Database
+): Promise<ModelInstance<T>> {
+  const now = Date.now()
+
+  // Prepare data with timestamps
+  const dataWithTimestamps: Partial<InferSchema<T>> = { ...data } as Partial<InferSchema<T>>
+  if ('createdAt' in model.$schema) {
+    ;(dataWithTimestamps as Record<string, unknown>)['createdAt'] = now
+  }
+  if ('updatedAt' in model.$schema) {
+    ;(dataWithTimestamps as Record<string, unknown>)['updatedAt'] = now
+  }
+
+  // Transform to snake_case for DB with type conversion
+  const dbData: Record<string, unknown> = {}
+  for (const key in dataWithTimestamps) {
+    const snakeKey = toSnakeCase(key)
+    const fieldConfig = getFieldConfig(model.$schema[key])
+    const value = dataWithTimestamps[key]
+    dbData[snakeKey] = fieldConfig ? toD1Value(value, fieldConfig.type) : value
+  }
+
+  const dbFields = Object.keys(dbData)
+  const dbValues = dbFields.map((f) => dbData[f])
+
+  // Build INSERT ... ON CONFLICT ... DO UPDATE SQL
+  const placeholders = dbFields.map(() => '?').join(', ')
+  const escapedFields = dbFields.map((f) => escapeIdentifier(f)).join(', ')
+  const conflictCols = conflictColumns.map((c) => escapeIdentifier(toSnakeCase(c as string))).join(', ')
+
+  // Build SET clause for update (exclude conflict columns and id)
+  const updateFields = dbFields.filter((f) => {
+    const camelKey = f.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
+    return !conflictColumns.includes(camelKey as keyof InferSchema<T>) && f !== 'id' && f !== 'created_at'
+  })
+  const setClause = updateFields.map((f) => `${escapeIdentifier(f)} = excluded.${escapeIdentifier(f)}`).join(', ')
+
+  const sql = `INSERT INTO ${escapeIdentifier(model.$tableName)} (${escapedFields}) VALUES (${placeholders}) ON CONFLICT(${conflictCols}) DO UPDATE SET ${setClause}`
+
+  const stmt = db.prepare(sql).bind(...dbValues)
+  const result = await stmt.run()
+
+  // Fetch the created/updated record to get the ID
+  const conflictWhere = conflictColumns
+    .map((c) => `${escapeIdentifier(toSnakeCase(c as string))} = ?`)
+    .join(' AND ')
+  const conflictValues = conflictColumns.map((c) => dbData[toSnakeCase(c as string)])
+
+  const fetchSql = `SELECT * FROM ${escapeIdentifier(model.$tableName)} WHERE ${conflictWhere}`
+  const fetchStmt = db.prepare(fetchSql).bind(...conflictValues)
+  const row = await fetchStmt.first<Record<string, unknown>>()
+
+  if (!row) {
+    throw new Error(`Failed to fetch upserted record from ${model.$tableName}`)
+  }
+
+  return new ModelInstance(model, row as Partial<InferSchema<T>>, false)
+}
+
+/**
+ * D1 batch limit - maximum statements per batch call
+ * D1 enforces a limit of 100 statements per batch operation
+ */
+const D1_BATCH_LIMIT = 100
+
+/**
  * Bulk insert multiple records
+ *
+ * Automatically handles D1's 100 statement batch limit by splitting
+ * large inserts into multiple batch calls.
  *
  * @template T The schema definition type
  * @param model The model definition
@@ -198,8 +340,13 @@ export async function createMany<T extends SchemaDefinition>(
   records: Array<CreateInput<T>>,
   db: D1Database
 ): Promise<ModelInstance<T>[]> {
+  if (records.length === 0) {
+    return []
+  }
+
   const now = Date.now()
-  const statements: D1PreparedStatement[] = []
+  const allStatements: D1PreparedStatement[] = []
+  const recordsWithTimestamps: Array<Partial<InferSchema<T>>> = []
 
   for (const record of records) {
     // Add timestamps
@@ -210,11 +357,15 @@ export async function createMany<T extends SchemaDefinition>(
     if ('updatedAt' in model.$schema) {
       ;(dataWithTimestamps as Record<string, unknown>)['updatedAt'] = now
     }
+    recordsWithTimestamps.push(dataWithTimestamps)
 
-    // Transform to snake_case for DB
+    // Transform to snake_case for DB with type conversion
     const dbData: Record<string, unknown> = {}
     for (const key in dataWithTimestamps) {
-      dbData[toSnakeCase(key)] = dataWithTimestamps[key]
+      const snakeKey = toSnakeCase(key)
+      const fieldConfig = getFieldConfig(model.$schema[key])
+      const value = dataWithTimestamps[key]
+      dbData[snakeKey] = fieldConfig ? toD1Value(value, fieldConfig.type) : value
     }
 
     const dbFields = Object.keys(dbData)
@@ -224,15 +375,20 @@ export async function createMany<T extends SchemaDefinition>(
     const escapedFields = dbFields.map((f) => escapeIdentifier(f)).join(', ')
     const sql = `INSERT INTO ${escapeIdentifier(model.$tableName)} (${escapedFields}) VALUES (${placeholders})`
 
-    statements.push(db.prepare(sql).bind(...dbValues))
+    allStatements.push(db.prepare(sql).bind(...dbValues))
   }
 
-  // Execute batch
-  const results = await db.batch(statements)
+  // Execute in batches to respect D1's 100 statement limit
+  const allResults: D1Result<unknown>[] = []
+  for (let i = 0; i < allStatements.length; i += D1_BATCH_LIMIT) {
+    const batch = allStatements.slice(i, i + D1_BATCH_LIMIT)
+    const batchResults = await db.batch(batch)
+    allResults.push(...batchResults)
+  }
 
   // Create ModelInstances with returned IDs
   return records.map((record, index) => {
-    const id = results[index].meta.last_row_id
+    const id = allResults[index].meta.last_row_id
     const dataWithId = { ...record, id, createdAt: now, updatedAt: now } as Partial<InferSchema<T>>
     return new ModelInstance(model, dataWithId, false)
   })

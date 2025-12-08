@@ -47,7 +47,99 @@ export function createMockD1Database(): D1Database {
         },
 
         async run<T = unknown>(): Promise<D1Result<T>> {
-          // Handle INSERT
+          // Handle INSERT ... ON CONFLICT (upsert)
+          if (
+            query.toUpperCase().includes('INSERT') &&
+            query.toUpperCase().includes('ON CONFLICT')
+          ) {
+            // Parse conflict columns
+            const conflictMatch = query.match(/ON CONFLICT\s*\(([^)]+)\)/i)
+            const conflictColumns = conflictMatch
+              ? conflictMatch[1]
+                  .split(',')
+                  .map((c) => c.trim().replace(/^"|"$/g, ''))
+              : []
+
+            // Parse INSERT fields
+            const fieldsMatch = query.match(/INSERT INTO.*?\(([^)]+)\)\s*VALUES/i)
+            const fields = fieldsMatch
+              ? fieldsMatch[1].split(',').map((f) => f.trim().replace(/^"|"$/g, ''))
+              : []
+
+            // Build a record with the values
+            const newRecord: Record<string, unknown> = {}
+            fields.forEach((field, index) => {
+              newRecord[field] = boundValues[index]
+            })
+
+            // Check if a record with matching conflict columns exists
+            let existingRecord: Record<string, unknown> | undefined
+            let existingId: number | undefined
+            for (const [id, record] of store.entries()) {
+              let matches = true
+              for (const col of conflictColumns) {
+                if (record[col] !== newRecord[col]) {
+                  matches = false
+                  break
+                }
+              }
+              if (matches) {
+                existingRecord = record
+                existingId = id
+                break
+              }
+            }
+
+            if (existingRecord && existingId !== undefined) {
+              // Parse SET clause from DO UPDATE
+              const setMatch = query.match(/DO UPDATE SET\s+(.+)$/i)
+              if (setMatch) {
+                // Parse the set clause: "field" = excluded."field", ...
+                const setParts = setMatch[1].split(',')
+                for (const part of setParts) {
+                  const fieldMatch = part.match(/"?(\w+)"?\s*=/)
+                  if (fieldMatch) {
+                    const fieldName = fieldMatch[1]
+                    // Get value from newRecord (which represents "excluded")
+                    if (fieldName in newRecord) {
+                      existingRecord[fieldName] = newRecord[fieldName]
+                    }
+                  }
+                }
+              }
+
+              return {
+                results: [] as T[],
+                success: true,
+                meta: {
+                  duration: 1,
+                  changes: 1,
+                  last_row_id: existingId,
+                  rows_read: 1,
+                  rows_written: 1,
+                },
+              }
+            } else {
+              // Insert new record
+              const id = nextId++
+              newRecord.id = id
+              store.set(id, newRecord)
+
+              return {
+                results: [] as T[],
+                success: true,
+                meta: {
+                  duration: 1,
+                  changes: 1,
+                  last_row_id: id,
+                  rows_read: 0,
+                  rows_written: 1,
+                },
+              }
+            }
+          }
+
+          // Handle regular INSERT
           if (query.toUpperCase().includes('INSERT')) {
             const id = nextId++
             const fields = query

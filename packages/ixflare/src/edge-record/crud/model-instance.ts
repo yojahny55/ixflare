@@ -4,7 +4,20 @@
  */
 
 import type { SchemaDefinition, InferSchema, Model } from '@/edge-record/schema/types'
+import type { FieldConfig, FieldBuilder } from '@/edge-record/schema/field'
 import { toSnakeCase, toCamelCase } from '@/edge-record/crud/case-transform'
+
+/**
+ * Helper to extract FieldConfig from schema entry (handles FieldBuilder)
+ */
+function getFieldConfig(schemaEntry: unknown): FieldConfig | undefined {
+  if (!schemaEntry) return undefined
+  // Schema entries are FieldBuilder instances with a .config property
+  if (typeof schemaEntry === 'object' && 'config' in schemaEntry) {
+    return (schemaEntry as FieldBuilder).config
+  }
+  return undefined
+}
 import { escapeIdentifier } from '@/edge-record/schema/type-mapping'
 
 /**
@@ -175,30 +188,90 @@ export class ModelInstance<T extends SchemaDefinition> {
   }
 
   /**
-   * Transform snake_case DB columns to camelCase API
+   * Transform snake_case DB columns to camelCase API with type conversion
    */
   private transformFromDb(data: Partial<InferSchema<T>>): Partial<InferSchema<T>> {
     const transformed: Record<string, unknown> = {}
 
     for (const key in data) {
       const camelKey = toCamelCase(key)
-      transformed[camelKey] = data[key]
+      const fieldConfig = getFieldConfig(this._model.$schema[camelKey])
+      const value = data[key]
+
+      if (fieldConfig) {
+        transformed[camelKey] = this.fromD1Value(value, fieldConfig)
+      } else {
+        transformed[camelKey] = value
+      }
     }
 
     return transformed as Partial<InferSchema<T>>
   }
 
   /**
-   * Transform camelCase API to snake_case DB columns
+   * Transform camelCase API to snake_case DB columns with type conversion
    */
   private transformToDb(data: Partial<InferSchema<T>>): Record<string, unknown> {
     const transformed: Record<string, unknown> = {}
 
     for (const key in data) {
       const snakeKey = toSnakeCase(key)
-      transformed[snakeKey] = data[key]
+      const fieldConfig = getFieldConfig(this._model.$schema[key])
+      const value = data[key]
+
+      if (fieldConfig) {
+        transformed[snakeKey] = this.toD1Value(value, fieldConfig.type)
+      } else {
+        transformed[snakeKey] = value
+      }
     }
 
     return transformed
+  }
+
+  /**
+   * Convert JavaScript value to D1-compatible value
+   */
+  private toD1Value(value: unknown, fieldType: string): unknown {
+    if (value === null || value === undefined) {
+      return null
+    }
+
+    switch (fieldType) {
+      case 'boolean':
+        return value ? 1 : 0
+
+      case 'datetime':
+        if (value instanceof Date) {
+          return value.getTime()
+        }
+        return value
+
+      case 'json':
+        return typeof value === 'string' ? value : JSON.stringify(value)
+
+      default:
+        return value
+    }
+  }
+
+  /**
+   * Convert D1 value to JavaScript value
+   */
+  private fromD1Value(value: unknown, fieldConfig: FieldConfig): unknown {
+    if (value === null || value === undefined) {
+      return fieldConfig.nullable ? null : undefined
+    }
+
+    switch (fieldConfig.type) {
+      case 'boolean':
+        return value === 1 || value === true
+
+      case 'json':
+        return typeof value === 'string' ? JSON.parse(value) : value
+
+      default:
+        return value
+    }
   }
 }
