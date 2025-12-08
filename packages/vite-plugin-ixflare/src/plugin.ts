@@ -24,7 +24,12 @@
 import { join } from 'node:path'
 import type { Plugin, ViteDevServer, ModuleNode } from 'vite'
 import type { IxflarePluginOptions } from './types'
-import { discoverRoutes, detectRouteConflicts, generateRouteManifest, type RouteManifest } from './router-codegen'
+import {
+  discoverRoutes,
+  detectRouteConflicts,
+  generateRouteManifest,
+  type RouteManifest,
+} from './router-codegen'
 import { createDevServer, type DevServer } from './dev-server'
 import { bundleManifest, optimizeRoutes } from './build'
 import { setupHMR, handleRouteHMR } from './hmr'
@@ -102,19 +107,20 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
               // Send HMR update for the virtual module
               server.ws.send({
                 type: 'update',
-                updates: [{
-                  type: 'js-update',
-                  path: VIRTUAL_MODULE_ID,
-                  acceptedPath: VIRTUAL_MODULE_ID,
-                  timestamp: Date.now(),
-                }],
+                updates: [
+                  {
+                    type: 'js-update',
+                    path: VIRTUAL_MODULE_ID,
+                    acceptedPath: VIRTUAL_MODULE_ID,
+                    timestamp: Date.now(),
+                  },
+                ],
               })
             }
 
-            server.config.logger.info(
-              `[ixflare] Route ${result.event}: ${result.path}`,
-              { timestamp: true }
-            )
+            server.config.logger.info(`[ixflare] Route ${result.event}: ${result.path}`, {
+              timestamp: true,
+            })
           }
         },
       })
@@ -124,10 +130,7 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
       detectRouteConflicts(routes)
       routeManifest = generateRouteManifest(routes)
 
-      server.config.logger.info(
-        `[ixflare] Discovered ${routes.length} routes`,
-        { timestamp: true }
-      )
+      server.config.logger.info(`[ixflare] Discovered ${routes.length} routes`, { timestamp: true })
     },
 
     async buildStart() {
@@ -150,9 +153,7 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
           // Optimize routes for production (sort by specificity)
           routeManifest = optimizeRoutes(manifest)
 
-          this.info(
-            `[ixflare] Built ${routeManifest.routes.length} routes for production`
-          )
+          this.info(`[ixflare] Built ${routeManifest.routes.length} routes for production`)
         } catch (error) {
           // Route discovery might fail if routesDir doesn't exist yet
           this.warn('[ixflare] Could not discover routes: ' + (error as Error).message)

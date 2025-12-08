@@ -11,8 +11,8 @@ const args = process.argv.slice(2)
 const command = args[0]
 
 const commands: Record<string, () => Promise<void>> = {
-  dev: () => import('./commands/dev').then(m => m.dev()),
-  build: () => import('./commands/build').then(m => m.build()),
+  dev: () => import('./commands/dev').then((m) => m.dev()),
+  build: () => import('./commands/build').then((m) => m.build()),
   deploy: async () => {
     const m = await import('./commands/deploy')
     const result = await m.deploy()
@@ -20,9 +20,10 @@ const commands: Record<string, () => Promise<void>> = {
       process.exit(result.exitCode)
     }
   },
-  migrate: () => import('./commands/migrate').then(m => m.migrate()),
-  generate: () => import('./commands/generate').then(m => m.generate()),
-  'generate:env': () => import('./commands/generate-env-types').then(m => m.generateEnvCommand({})),
+  migrate: () => import('./commands/migrate').then((m) => m.migrate()),
+  generate: () => import('./commands/generate').then((m) => m.generate()),
+  'generate:env': () =>
+    import('./commands/generate-env-types').then((m) => m.generateEnvCommand({})),
 }
 
 async function main(): Promise<void> {
@@ -85,7 +86,7 @@ ${customCommandsList ? '\n  Custom Commands:\n' + customCommandsList : ''}
   process.exit(1)
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error(err)
   process.exit(1)
 })

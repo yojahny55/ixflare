@@ -12,7 +12,7 @@ import type { EdgeContext } from './context'
  * @returns Parsed JSON body
  */
 export async function parseJson<T = unknown>(request: Request): Promise<T> {
-  return await request.json() as T
+  return (await request.json()) as T
 }
 
 /**
@@ -42,10 +42,7 @@ export async function parseText(request: Request): Promise<string> {
  * @param key - Parameter name
  * @returns Parameter value or null
  */
-export function getQueryParam(
-  context: EdgeContext,
-  key: string
-): string | null {
+export function getQueryParam(context: EdgeContext, key: string): string | null {
   return context.query.get(key)
 }
 
@@ -56,10 +53,7 @@ export function getQueryParam(
  * @param key - Parameter name
  * @returns Array of parameter values
  */
-export function getQueryParams(
-  context: EdgeContext,
-  key: string
-): string[] {
+export function getQueryParams(context: EdgeContext, key: string): string[] {
   return context.query.getAll(key)
 }
 
@@ -70,9 +64,6 @@ export function getQueryParams(
  * @param key - Parameter name
  * @returns Parameter value or undefined
  */
-export function getParam(
-  context: EdgeContext,
-  key: string
-): string | undefined {
+export function getParam(context: EdgeContext, key: string): string | undefined {
   return context.params[key]
 }

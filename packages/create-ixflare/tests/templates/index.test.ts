@@ -31,7 +31,10 @@ describe('Templates: Cross-template verification', () => {
       describe(`${template} template`, () => {
         for (const file of baseFiles) {
           it(`should have ${file}`, () => {
-            expect(existsSync(join(TEMPLATES_DIR, template, file)), `${template} missing ${file}`).toBe(true)
+            expect(
+              existsSync(join(TEMPLATES_DIR, template, file)),
+              `${template} missing ${file}`
+            ).toBe(true)
           })
         }
       })
@@ -91,9 +94,15 @@ describe('Templates: Cross-template verification', () => {
 
   describe('template differentiation', () => {
     it('fullstack-react should have React, api-backend and minimal should not', () => {
-      const fullstackPkg = JSON.parse(readFileSync(join(TEMPLATES_DIR, 'fullstack-react/package.json'), 'utf-8'))
-      const apiPkg = JSON.parse(readFileSync(join(TEMPLATES_DIR, 'api-backend/package.json'), 'utf-8'))
-      const minimalPkg = JSON.parse(readFileSync(join(TEMPLATES_DIR, 'minimal/package.json'), 'utf-8'))
+      const fullstackPkg = JSON.parse(
+        readFileSync(join(TEMPLATES_DIR, 'fullstack-react/package.json'), 'utf-8')
+      )
+      const apiPkg = JSON.parse(
+        readFileSync(join(TEMPLATES_DIR, 'api-backend/package.json'), 'utf-8')
+      )
+      const minimalPkg = JSON.parse(
+        readFileSync(join(TEMPLATES_DIR, 'minimal/package.json'), 'utf-8')
+      )
 
       expect(fullstackPkg.dependencies?.react).toBeDefined()
       expect(apiPkg.dependencies?.react).toBeUndefined()
@@ -101,9 +110,15 @@ describe('Templates: Cross-template verification', () => {
     })
 
     it('fullstack-react and api-backend should have Zod, minimal should not', () => {
-      const fullstackPkg = JSON.parse(readFileSync(join(TEMPLATES_DIR, 'fullstack-react/package.json'), 'utf-8'))
-      const apiPkg = JSON.parse(readFileSync(join(TEMPLATES_DIR, 'api-backend/package.json'), 'utf-8'))
-      const minimalPkg = JSON.parse(readFileSync(join(TEMPLATES_DIR, 'minimal/package.json'), 'utf-8'))
+      const fullstackPkg = JSON.parse(
+        readFileSync(join(TEMPLATES_DIR, 'fullstack-react/package.json'), 'utf-8')
+      )
+      const apiPkg = JSON.parse(
+        readFileSync(join(TEMPLATES_DIR, 'api-backend/package.json'), 'utf-8')
+      )
+      const minimalPkg = JSON.parse(
+        readFileSync(join(TEMPLATES_DIR, 'minimal/package.json'), 'utf-8')
+      )
 
       expect(fullstackPkg.dependencies?.zod).toBeDefined()
       expect(apiPkg.dependencies?.zod).toBeDefined()

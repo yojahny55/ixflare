@@ -49,7 +49,7 @@ const FIX_SUGGESTIONS: Record<string, string> = {
   'hooks.post-build': 'Provide a function: (ctx: { outputPath: string }) => void',
   'hooks.pre-deploy': 'Provide a function: (ctx: { environment: string }) => void',
   'hooks.post-deploy': 'Provide a function: (ctx: { url: string }) => void',
-  'commands': 'Provide an object with description and handler for each command',
+  commands: 'Provide an object with description and handler for each command',
 }
 
 /**
@@ -144,10 +144,7 @@ For configuration reference, see: https://ixflare.dev/docs/configuration
  * @param filePath - Optional path to the config file
  * @returns ConfigError with formatted message and issues
  */
-export function createConfigError(
-  error: ZodError,
-  filePath?: string
-): ConfigError {
+export function createConfigError(error: ZodError, filePath?: string): ConfigError {
   const issues = error.issues.map(formatIssue)
   const message = formatConfigError(error, filePath)
   return new ConfigError(message, issues, filePath)

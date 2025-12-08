@@ -75,16 +75,12 @@ describe('Router - Page Loader Execution', () => {
     it('should pass correct LoaderArgs to loader', async () => {
       let capturedArgs: LoaderArgs | undefined
 
-      router.add(
-        '/posts/:postId',
-        async () => new Response('OK'),
-        {
-          loader: async (args: LoaderArgs) => {
-            capturedArgs = args
-            return { post: { id: args.params.postId } }
-          },
-        }
-      )
+      router.add('/posts/:postId', async () => new Response('OK'), {
+        loader: async (args: LoaderArgs) => {
+          capturedArgs = args
+          return { post: { id: args.params.postId } }
+        },
+      })
 
       const request = new Request('http://localhost/posts/456?sort=asc')
       await router.handle(request, env)
@@ -100,15 +96,11 @@ describe('Router - Page Loader Execution', () => {
 
   describe('AC2: Typed Error Handling in Loaders', () => {
     it('should return 404 response when loader throws NotFoundError', async () => {
-      router.add(
-        '/users/:userId',
-        async () => new Response('OK'),
-        {
-          loader: async ({ params }: LoaderArgs) => {
-            throw new NotFoundError('User', params.userId)
-          },
-        }
-      )
+      router.add('/users/:userId', async () => new Response('OK'), {
+        loader: async ({ params }: LoaderArgs) => {
+          throw new NotFoundError('User', params.userId)
+        },
+      })
 
       const request = new Request('http://localhost/users/999')
       const response = await router.handle(request, env)
@@ -128,15 +120,11 @@ describe('Router - Page Loader Execution', () => {
     })
 
     it('should return 401 response when loader throws AuthError', async () => {
-      router.add(
-        '/profile',
-        async () => new Response('OK'),
-        {
-          loader: async () => {
-            throw new AuthError('TOKEN_EXPIRED', 'Session has expired')
-          },
-        }
-      )
+      router.add('/profile', async () => new Response('OK'), {
+        loader: async () => {
+          throw new AuthError('TOKEN_EXPIRED', 'Session has expired')
+        },
+      })
 
       const request = new Request('http://localhost/profile')
       const response = await router.handle(request, env)
@@ -148,15 +136,11 @@ describe('Router - Page Loader Execution', () => {
     })
 
     it('should return 403 response when loader throws ForbiddenError', async () => {
-      router.add(
-        '/admin',
-        async () => new Response('OK'),
-        {
-          loader: async () => {
-            throw new ForbiddenError('Admin access required')
-          },
-        }
-      )
+      router.add('/admin', async () => new Response('OK'), {
+        loader: async () => {
+          throw new ForbiddenError('Admin access required')
+        },
+      })
 
       const request = new Request('http://localhost/admin')
       const response = await router.handle(request, env)
@@ -168,17 +152,13 @@ describe('Router - Page Loader Execution', () => {
     })
 
     it('should return 422 response when loader throws ValidationError with errors array', async () => {
-      router.add(
-        '/validate',
-        async () => new Response('OK'),
-        {
-          loader: async () => {
-            throw new ValidationError('Email format is invalid', [
-              { field: 'email', message: 'Invalid email format' },
-            ])
-          },
-        }
-      )
+      router.add('/validate', async () => new Response('OK'), {
+        loader: async () => {
+          throw new ValidationError('Email format is invalid', [
+            { field: 'email', message: 'Invalid email format' },
+          ])
+        },
+      })
 
       const request = new Request('http://localhost/validate')
       const response = await router.handle(request, env)
@@ -189,21 +169,15 @@ describe('Router - Page Loader Execution', () => {
       expect(body.error.status).toBe(422)
       expect(body.error.timestamp).toBeDefined()
       // Verify errors array is preserved from ValidationError
-      expect(body.error.errors).toEqual([
-        { field: 'email', message: 'Invalid email format' },
-      ])
+      expect(body.error.errors).toEqual([{ field: 'email', message: 'Invalid email format' }])
     })
 
     it('should return 500 response for unknown errors with safe message', async () => {
-      router.add(
-        '/error',
-        async () => new Response('OK'),
-        {
-          loader: async () => {
-            throw new Error('Some internal error')
-          },
-        }
-      )
+      router.add('/error', async () => new Response('OK'), {
+        loader: async () => {
+          throw new Error('Some internal error')
+        },
+      })
 
       const request = new Request('http://localhost/error')
       const response = await router.handle(request, env)
@@ -277,7 +251,11 @@ describe('Router - Page Loader Execution', () => {
         request: new Request('http://localhost/test'),
         params: {},
         env: {},
-        ctx: { waitUntil: () => {}, passThroughOnException: () => {}, props: {} } as ExecutionContext,
+        ctx: {
+          waitUntil: () => {},
+          passThroughOnException: () => {},
+          props: {},
+        } as ExecutionContext,
         query: new URLSearchParams(),
         url: new URL('http://localhost/test'),
         method: 'GET',
@@ -318,20 +296,16 @@ describe('Router - Page Loader Execution', () => {
 
   describe('AC4: Redirect from Loader', () => {
     it('should handle redirect when loader returns redirect()', async () => {
-      router.add(
-        '/protected',
-        async () => new Response('Protected Content'),
-        {
-          loader: async () => {
-            // Simulate auth check
-            const isAuthenticated = false
-            if (!isAuthenticated) {
-              return redirect('/login')
-            }
-            return { user: { id: '1' } }
-          },
-        }
-      )
+      router.add('/protected', async () => new Response('Protected Content'), {
+        loader: async () => {
+          // Simulate auth check
+          const isAuthenticated = false
+          if (!isAuthenticated) {
+            return redirect('/login')
+          }
+          return { user: { id: '1' } }
+        },
+      })
 
       const request = new Request('http://localhost/protected')
       const response = await router.handle(request, env)
@@ -341,20 +315,16 @@ describe('Router - Page Loader Execution', () => {
     })
 
     it('should handle redirect when loader throws redirect()', async () => {
-      router.add(
-        '/protected',
-        async () => new Response('Protected Content'),
-        {
-          loader: async () => {
-            // Simulate auth check in nested function
-            const checkAuth = () => {
-              throw redirect('/login', 307)
-            }
-            checkAuth()
-            return { user: { id: '1' } }
-          },
-        }
-      )
+      router.add('/protected', async () => new Response('Protected Content'), {
+        loader: async () => {
+          // Simulate auth check in nested function
+          const checkAuth = () => {
+            throw redirect('/login', 307)
+          }
+          checkAuth()
+          return { user: { id: '1' } }
+        },
+      })
 
       const request = new Request('http://localhost/protected')
       const response = await router.handle(request, env)
@@ -374,15 +344,11 @@ describe('Router - Page Loader Execution', () => {
 
       for (const { status } of testCases) {
         const testRouter = new Router()
-        testRouter.add(
-          '/test',
-          async () => new Response('OK'),
-          {
-            loader: async () => {
-              return redirect('/destination', status)
-            },
-          }
-        )
+        testRouter.add('/test', async () => new Response('OK'), {
+          loader: async () => {
+            return redirect('/destination', status)
+          },
+        })
 
         const request = new Request('http://localhost/test')
         const response = await testRouter.handle(request, env)
@@ -412,17 +378,13 @@ describe('Router - Page Loader Execution', () => {
     it('should execute loader for GET requests', async () => {
       let loaderCalled = false
 
-      router.add(
-        '/test',
-        async () => new Response('OK'),
-        {
-          methods: ['GET'],
-          loader: async () => {
-            loaderCalled = true
-            return { data: 'test' }
-          },
-        }
-      )
+      router.add('/test', async () => new Response('OK'), {
+        methods: ['GET'],
+        loader: async () => {
+          loaderCalled = true
+          return { data: 'test' }
+        },
+      })
 
       const request = new Request('http://localhost/test')
       await router.handle(request, env)
@@ -433,17 +395,13 @@ describe('Router - Page Loader Execution', () => {
     it('should execute loader for POST requests if loader is defined', async () => {
       let loaderCalled = false
 
-      router.add(
-        '/test',
-        async () => new Response('OK'),
-        {
-          methods: ['POST'],
-          loader: async () => {
-            loaderCalled = true
-            return { data: 'test' }
-          },
-        }
-      )
+      router.add('/test', async () => new Response('OK'), {
+        methods: ['POST'],
+        loader: async () => {
+          loaderCalled = true
+          return { data: 'test' }
+        },
+      })
 
       const request = new Request('http://localhost/test', { method: 'POST' })
       await router.handle(request, env)

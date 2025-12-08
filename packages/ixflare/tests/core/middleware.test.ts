@@ -63,7 +63,10 @@ describe('Middleware', () => {
         return response
       })
 
-      const handler = compose(middleware1, middleware2)(() => {
+      const handler = compose(
+        middleware1,
+        middleware2
+      )(() => {
         return new Response('OK')
       })
 
@@ -113,9 +116,7 @@ describe('Middleware', () => {
 
       const handler = compose(badMiddleware)(() => new Response('OK'))
 
-      await expect(handler(createMockContext())).rejects.toThrow(
-        'next() called multiple times'
-      )
+      await expect(handler(createMockContext())).rejects.toThrow('next() called multiple times')
     })
 
     it('should work with empty middleware array', async () => {
@@ -244,7 +245,7 @@ describe('Middleware', () => {
 
       const errorMiddleware = createMiddleware(async () => {
         throw new ValidationError('Validation failed', [
-          { field: 'email', message: 'Invalid email' }
+          { field: 'email', message: 'Invalid email' },
         ])
       })
 
@@ -253,9 +254,7 @@ describe('Middleware', () => {
 
       expect(response.status).toBe(422)
       const body = await response.json()
-      expect(body.error.errors).toEqual([
-        { field: 'email', message: 'Invalid email' }
-      ])
+      expect(body.error.errors).toEqual([{ field: 'email', message: 'Invalid email' }])
     })
 
     it('should handle unexpected errors with 500 status', async () => {

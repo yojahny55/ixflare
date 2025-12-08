@@ -46,7 +46,7 @@ describe('dev-server', () => {
       await writeFile(join(testDir, 'api.ts'), 'export function POST() {}')
 
       // Wait for watcher to detect files
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100))
 
       await watcher.close()
     })
@@ -59,7 +59,7 @@ describe('dev-server', () => {
       await writeFile(join(testDir, '.gitignore'), '')
 
       // Wait briefly
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100))
 
       await watcher.close()
     })

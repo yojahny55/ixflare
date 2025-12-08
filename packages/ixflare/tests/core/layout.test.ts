@@ -30,7 +30,11 @@ describe('Layout Context', () => {
       }
 
       const html = renderToString(
-        React.createElement(LayoutContextProvider, { value: layoutData }, React.createElement(TestComponent))
+        React.createElement(
+          LayoutContextProvider,
+          { value: layoutData },
+          React.createElement(TestComponent)
+        )
       )
 
       expect(html).toContain('Alice')

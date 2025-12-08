@@ -27,12 +27,16 @@ describe('Middleware Chain Integration', () => {
       return response
     })
 
-    router.add('/api/users', () => {
-      executionOrder.push('handler')
-      return new Response('users')
-    }, {
-      globalMiddleware: [globalLogging, globalCors],
-    })
+    router.add(
+      '/api/users',
+      () => {
+        executionOrder.push('handler')
+        return new Response('users')
+      },
+      {
+        globalMiddleware: [globalLogging, globalCors],
+      }
+    )
 
     const request = new Request('http://localhost/api/users')
     const response = await router.handle(request, {})
@@ -63,12 +67,16 @@ describe('Middleware Chain Integration', () => {
       return next()
     })
 
-    router.add('/api/admin/users', () => {
-      executionOrder.push('handler')
-      return new Response('admin users')
-    }, {
-      directoryMiddleware: [rootMiddleware, apiMiddleware, adminMiddleware],
-    })
+    router.add(
+      '/api/admin/users',
+      () => {
+        executionOrder.push('handler')
+        return new Response('admin users')
+      },
+      {
+        directoryMiddleware: [rootMiddleware, apiMiddleware, adminMiddleware],
+      }
+    )
 
     const request = new Request('http://localhost/api/admin/users')
     await router.handle(request, {})
@@ -113,14 +121,18 @@ describe('Middleware Chain Integration', () => {
       }),
     ]
 
-    router.add('/test', () => {
-      executionOrder.push('handler')
-      return new Response('OK')
-    }, {
-      globalMiddleware,
-      directoryMiddleware,
-      routeMiddleware,
-    })
+    router.add(
+      '/test',
+      () => {
+        executionOrder.push('handler')
+        return new Response('OK')
+      },
+      {
+        globalMiddleware,
+        directoryMiddleware,
+        routeMiddleware,
+      }
+    )
 
     const request = new Request('http://localhost/test')
     await router.handle(request, {})
@@ -151,12 +163,16 @@ describe('Middleware Chain Integration', () => {
       return next()
     })
 
-    router.add('/protected', () => {
-      executionOrder.push('handler')
-      return new Response('Protected resource')
-    }, {
-      directoryMiddleware: [authMiddleware],
-    })
+    router.add(
+      '/protected',
+      () => {
+        executionOrder.push('handler')
+        return new Response('Protected resource')
+      },
+      {
+        directoryMiddleware: [authMiddleware],
+      }
+    )
 
     // Request without token
     const requestNoAuth = new Request('http://localhost/protected')
@@ -170,7 +186,7 @@ describe('Middleware Chain Integration', () => {
 
     // Request with token
     const requestWithAuth = new Request('http://localhost/protected', {
-      headers: { 'Authorization': 'Bearer token123' },
+      headers: { Authorization: 'Bearer token123' },
     })
     const responseWithAuth = await router.handle(requestWithAuth, {})
 
@@ -196,11 +212,15 @@ describe('Middleware Chain Integration', () => {
       return response
     })
 
-    router.add('/api/data', () => {
-      return new Response('data')
-    }, {
-      globalMiddleware: [timingMiddleware, securityMiddleware],
-    })
+    router.add(
+      '/api/data',
+      () => {
+        return new Response('data')
+      },
+      {
+        globalMiddleware: [timingMiddleware, securityMiddleware],
+      }
+    )
 
     const request = new Request('http://localhost/api/data')
     const response = await router.handle(request, {})
@@ -222,11 +242,15 @@ describe('Middleware Chain Integration', () => {
       return next()
     })
 
-    router.add('/api/resource', () => {
-      return new Response('resource')
-    }, {
-      directoryMiddleware: [rateLimitMiddleware],
-    })
+    router.add(
+      '/api/resource',
+      () => {
+        return new Response('resource')
+      },
+      {
+        directoryMiddleware: [rateLimitMiddleware],
+      }
+    )
 
     // First 3 requests should succeed
     for (let i = 0; i < 3; i++) {
@@ -262,16 +286,20 @@ describe('Middleware Chain Integration', () => {
 
     let capturedContext: any = {}
 
-    router.add('/profile', (ctx: any) => {
-      capturedContext = {
-        requestId: ctx.requestId,
-        user: ctx.user,
+    router.add(
+      '/profile',
+      (ctx: any) => {
+        capturedContext = {
+          requestId: ctx.requestId,
+          user: ctx.user,
+        }
+        return new Response(`Hello ${ctx.user?.name}`)
+      },
+      {
+        globalMiddleware: [requestIdMiddleware],
+        directoryMiddleware: [authMiddleware],
       }
-      return new Response(`Hello ${ctx.user?.name}`)
-    }, {
-      globalMiddleware: [requestIdMiddleware],
-      directoryMiddleware: [authMiddleware],
-    })
+    )
 
     const request = new Request('http://localhost/profile')
     const response = await router.handle(request, {})
@@ -320,12 +348,16 @@ describe('Middleware Chain Integration', () => {
       return response
     })
 
-    router.add('/onion', () => {
-      executionOrder.push('handler')
-      return new Response('OK')
-    }, {
-      globalMiddleware: [middleware1, middleware2, middleware3],
-    })
+    router.add(
+      '/onion',
+      () => {
+        executionOrder.push('handler')
+        return new Response('OK')
+      },
+      {
+        globalMiddleware: [middleware1, middleware2, middleware3],
+      }
+    )
 
     const request = new Request('http://localhost/onion')
     await router.handle(request, {})

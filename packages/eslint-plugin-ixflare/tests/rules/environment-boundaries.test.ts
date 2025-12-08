@@ -42,34 +42,43 @@ describe('environment-boundaries rule', () => {
 
       // Create a @node-only file
       nodeOnlyFile = path.join(tempDir, 'node-utils.ts')
-      fs.writeFileSync(nodeOnlyFile, `/**
+      fs.writeFileSync(
+        nodeOnlyFile,
+        `/**
  * @node-only
  */
 export function readConfig() {
   return require('fs').readFileSync('config.json')
 }
-`)
+`
+      )
 
       // Create a @worker-only file
       workerOnlyFile = path.join(tempDir, 'worker-handler.ts')
-      fs.writeFileSync(workerOnlyFile, `/**
+      fs.writeFileSync(
+        workerOnlyFile,
+        `/**
  * @worker-only
  */
 export function handleRequest(request: Request): Response {
   return new Response('OK')
 }
-`)
+`
+      )
 
       // Create a @universal file
       universalFile = path.join(tempDir, 'shared-types.ts')
-      fs.writeFileSync(universalFile, `/**
+      fs.writeFileSync(
+        universalFile,
+        `/**
  * @universal
  */
 export interface User {
   id: string
   name: string
 }
-`)
+`
+      )
     })
 
     afterAll(() => {
@@ -87,12 +96,15 @@ export interface User {
 
       // Create a worker file that imports universal
       const testFile = path.join(tempDir, 'test-worker.ts')
-      fs.writeFileSync(testFile, `/**
+      fs.writeFileSync(
+        testFile,
+        `/**
  * @worker-only
  */
 import { User } from './shared-types'
 export const user: User = { id: '1', name: 'Test' }
-`)
+`
+      )
 
       ruleTester.run('environment-boundaries', environmentBoundaries, {
         valid: [
@@ -117,12 +129,15 @@ export const user: User = { id: '1', name: 'Test' }
 
       // Create a node file that imports universal
       const testFile = path.join(tempDir, 'test-node.ts')
-      fs.writeFileSync(testFile, `/**
+      fs.writeFileSync(
+        testFile,
+        `/**
  * @node-only
  */
 import { User } from './shared-types'
 export const user: User = { id: '1', name: 'Test' }
-`)
+`
+      )
 
       ruleTester.run('environment-boundaries', environmentBoundaries, {
         valid: [
@@ -147,11 +162,14 @@ export const user: User = { id: '1', name: 'Test' }
 
       // Create a worker file that tries to import node-only
       const testFile = path.join(tempDir, 'bad-worker.ts')
-      fs.writeFileSync(testFile, `/**
+      fs.writeFileSync(
+        testFile,
+        `/**
  * @worker-only
  */
 import { readConfig } from './node-utils'
-`)
+`
+      )
 
       ruleTester.run('environment-boundaries', environmentBoundaries, {
         valid: [],
@@ -177,11 +195,14 @@ import { readConfig } from './node-utils'
 
       // Create a node file that tries to import worker-only
       const testFile = path.join(tempDir, 'bad-node.ts')
-      fs.writeFileSync(testFile, `/**
+      fs.writeFileSync(
+        testFile,
+        `/**
  * @node-only
  */
 import { handleRequest } from './worker-handler'
-`)
+`
+      )
 
       ruleTester.run('environment-boundaries', environmentBoundaries, {
         valid: [],
@@ -237,11 +258,14 @@ import { handleRequest } from './worker-handler'
 
       // Worker file importing external package (should be allowed)
       const testFile = path.join(tempDir, 'external-import.ts')
-      fs.writeFileSync(testFile, `/**
+      fs.writeFileSync(
+        testFile,
+        `/**
  * @worker-only
  */
 import { z } from 'zod'
-`)
+`
+      )
 
       ruleTester.run('environment-boundaries', environmentBoundaries, {
         valid: [

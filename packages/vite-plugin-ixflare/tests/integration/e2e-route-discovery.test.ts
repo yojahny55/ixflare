@@ -11,7 +11,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdir, writeFile, rm, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { discoverRoutes, detectRouteConflicts, generateRouteManifest } from '../../src/router-codegen'
+import {
+  discoverRoutes,
+  detectRouteConflicts,
+  generateRouteManifest,
+} from '../../src/router-codegen'
 import { createDevServer } from '../../src/dev-server'
 
 describe('E2E: Route Discovery Workflow', () => {
@@ -56,7 +60,10 @@ describe('E2E: Route Discovery Workflow', () => {
       await writeFile(join(testDir, 'blog', '[slug].tsx'), 'export function GET() {}')
 
       await mkdir(join(testDir, 'api', 'v1'), { recursive: true })
-      await writeFile(join(testDir, 'api', 'v1', 'users.ts'), 'export function GET() {}\nexport function POST() {}')
+      await writeFile(
+        join(testDir, 'api', 'v1', 'users.ts'),
+        'export function GET() {}\nexport function POST() {}'
+      )
 
       // When: route discovery runs
       const routes = await discoverRoutes(testDir)
@@ -64,22 +71,16 @@ describe('E2E: Route Discovery Workflow', () => {
       // Then: all routes are discovered
       expect(routes).toHaveLength(5)
 
-      const paths = routes.map(r => r.path).sort()
-      expect(paths).toEqual([
-        '/',
-        '/about',
-        '/api/v1/users',
-        '/blog',
-        '/blog/:slug',
-      ])
+      const paths = routes.map((r) => r.path).sort()
+      expect(paths).toEqual(['/', '/about', '/api/v1/users', '/blog', '/blog/:slug'])
 
       // And: handlers are detected correctly
-      const usersRoute = routes.find(r => r.path === '/api/v1/users')
+      const usersRoute = routes.find((r) => r.path === '/api/v1/users')
       expect(usersRoute?.handlers).toContain('GET')
       expect(usersRoute?.handlers).toContain('POST')
 
       // And: dynamic params are extracted
-      const slugRoute = routes.find(r => r.path === '/blog/:slug')
+      const slugRoute = routes.find((r) => r.path === '/blog/:slug')
       expect(slugRoute?.params).toEqual([{ name: 'slug', type: 'dynamic' }])
     })
 
@@ -149,7 +150,7 @@ describe('E2E: Route Discovery Workflow', () => {
       })
 
       // Wait for watcher to be ready (chokidar needs time to initialize)
-      await new Promise(resolve => server.watcher.on('ready', resolve))
+      await new Promise((resolve) => server.watcher.on('ready', resolve))
 
       // Add a new file
       await writeFile(join(testDir, 'about.tsx'), 'export function GET() {}')
@@ -188,7 +189,7 @@ describe('E2E: Route Discovery Workflow', () => {
       })
 
       // Wait for watcher to be ready
-      await new Promise(resolve => server.watcher.on('ready', resolve))
+      await new Promise((resolve) => server.watcher.on('ready', resolve))
 
       // Delete a file
       await unlink(join(testDir, 'about.tsx'))
@@ -221,13 +222,13 @@ describe('E2E: Route Discovery Workflow', () => {
       })
 
       // Wait for watcher to be ready
-      await new Promise(resolve => server.watcher.on('ready', resolve))
+      await new Promise((resolve) => server.watcher.on('ready', resolve))
 
       // Add a layout file (should be ignored)
       await writeFile(join(testDir, '_layout.tsx'), 'export default function Layout() {}')
 
       // Wait a bit to make sure no event fires
-      await new Promise(resolve => setTimeout(resolve, 300))
+      await new Promise((resolve) => setTimeout(resolve, 300))
 
       // Should NOT trigger regeneration for _layout files
       expect(regenerateCount).toBe(0)
@@ -272,7 +273,7 @@ describe('E2E: Route Discovery Workflow', () => {
       const routes = await discoverRoutes(testDir)
 
       expect(routes).toHaveLength(4)
-      const paths = routes.map(r => r.path).sort()
+      const paths = routes.map((r) => r.path).sort()
       expect(paths).toEqual(['/page1', '/page2', '/page3', '/page4'])
     })
 

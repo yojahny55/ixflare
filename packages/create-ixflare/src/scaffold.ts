@@ -20,13 +20,13 @@ import { toKebabCase, toPascalCase, colors } from './utils'
 
 /** Files that start with _ should be renamed to start with . */
 const RENAME_PREFIX_MAP: Record<string, string> = {
-  '_gitignore': '.gitignore',
-  '_env': '.env',
+  _gitignore: '.gitignore',
+  _env: '.env',
   '_env.example': '.env.example',
   '_env.local': '.env.local',
   '_eslintrc.js': '.eslintrc.js',
-  '_prettierrc': '.prettierrc',
-  '_editorconfig': '.editorconfig',
+  _prettierrc: '.prettierrc',
+  _editorconfig: '.editorconfig',
 }
 
 /** Binary file extensions that should not have variable replacement */
@@ -119,10 +119,7 @@ export function getTemplateVars(projectName: string): Record<string, string> {
 /**
  * Replace template variables in content
  */
-export function replaceTemplateVars(
-  content: string,
-  vars: Record<string, string>
-): string {
+export function replaceTemplateVars(content: string, vars: Record<string, string>): string {
   return content.replace(/\{\{(\w+)\}\}/g, (match, key) => {
     return vars[key] ?? match
   })

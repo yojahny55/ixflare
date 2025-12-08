@@ -77,11 +77,7 @@ describe('Layout Renderer', () => {
       }
 
       function RootLayout({ children, data }: LayoutProps<RootData>) {
-        return React.createElement(
-          'div',
-          { 'data-theme': data?.theme },
-          children
-        )
+        return React.createElement('div', { 'data-theme': data?.theme }, children)
       }
 
       function DashboardLayout({ children, data }: LayoutProps<DashboardData>) {
@@ -107,11 +103,7 @@ describe('Layout Renderer', () => {
 
     it('should pass params to all layouts', () => {
       function Layout({ children, params }: LayoutProps) {
-        return React.createElement(
-          'div',
-          { 'data-user-id': params?.userId },
-          children
-        )
+        return React.createElement('div', { 'data-user-id': params?.userId }, children)
       }
 
       const layouts = [Layout]
@@ -126,11 +118,7 @@ describe('Layout Renderer', () => {
 
     it('should pass request to all layouts', () => {
       function Layout({ children, request }: LayoutProps) {
-        return React.createElement(
-          'div',
-          { 'data-url': request?.url },
-          children
-        )
+        return React.createElement('div', { 'data-url': request?.url }, children)
       }
 
       const layouts = [Layout]
@@ -200,12 +188,7 @@ describe('Layout Renderer', () => {
 
     it('should handle edge case: empty layout data array', () => {
       function Layout({ children, data }: LayoutProps) {
-        return React.createElement(
-          'div',
-          {},
-          data ? 'Has data' : 'No data',
-          children
-        )
+        return React.createElement('div', {}, data ? 'Has data' : 'No data', children)
       }
 
       const layouts = [Layout]
@@ -224,11 +207,7 @@ describe('Layout Renderer', () => {
 
       function RootLayout({ children }: LayoutProps) {
         const ctx = useLayoutData<{ root?: string }>()
-        return React.createElement(
-          'div',
-          { 'data-root-ctx': ctx.root || 'missing' },
-          children
-        )
+        return React.createElement('div', { 'data-root-ctx': ctx.root || 'missing' }, children)
       }
 
       function DashboardLayout({ children }: LayoutProps) {

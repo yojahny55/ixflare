@@ -67,13 +67,15 @@ export function POST() {
 
   it('✅ Create file src/routes/index.tsx → / works', async () => {
     const routes = await discoverRoutes(testDir)
-    const rootRoute = routes.find(r => r.path === '/')
+    const rootRoute = routes.find((r) => r.path === '/')
 
     expect(rootRoute).toBeDefined()
     expect(rootRoute?.file).toBe('index.tsx')
     expect(rootRoute?.handlers).toContain('GET')
 
-    console.log(`   Found: ${rootRoute?.path} → ${rootRoute?.file} [${rootRoute?.handlers.join(', ')}]`)
+    console.log(
+      `   Found: ${rootRoute?.path} → ${rootRoute?.file} [${rootRoute?.handlers.join(', ')}]`
+    )
   })
 
   it('✅ Create file src/routes/about.tsx → /about works', async () => {
@@ -83,13 +85,15 @@ export function POST() {
     )
 
     const routes = await discoverRoutes(testDir)
-    const aboutRoute = routes.find(r => r.path === '/about')
+    const aboutRoute = routes.find((r) => r.path === '/about')
 
     expect(aboutRoute).toBeDefined()
     expect(aboutRoute?.file).toBe('about.tsx')
     expect(aboutRoute?.handlers).toContain('GET')
 
-    console.log(`   Found: ${aboutRoute?.path} → ${aboutRoute?.file} [${aboutRoute?.handlers.join(', ')}]`)
+    console.log(
+      `   Found: ${aboutRoute?.path} → ${aboutRoute?.file} [${aboutRoute?.handlers.join(', ')}]`
+    )
   })
 
   it('✅ Create nested src/routes/blog/index.tsx → /blog works', async () => {
@@ -100,13 +104,15 @@ export function POST() {
     )
 
     const routes = await discoverRoutes(testDir)
-    const blogRoute = routes.find(r => r.path === '/blog')
+    const blogRoute = routes.find((r) => r.path === '/blog')
 
     expect(blogRoute).toBeDefined()
     expect(blogRoute?.file).toMatch(/blog[/\\]index\.tsx/)
     expect(blogRoute?.handlers).toContain('GET')
 
-    console.log(`   Found: ${blogRoute?.path} → ${blogRoute?.file} [${blogRoute?.handlers.join(', ')}]`)
+    console.log(
+      `   Found: ${blogRoute?.path} → ${blogRoute?.file} [${blogRoute?.handlers.join(', ')}]`
+    )
   })
 
   it('✅ Create conflicting files → Clear error message shown', async () => {
@@ -135,7 +141,7 @@ export function POST() {
       detectRouteConflicts(routes)
     } catch (error) {
       console.log('   Conflict error message:')
-      ;(error as Error).message.split('\n').forEach(line => console.log(`   ${line}`))
+      ;(error as Error).message.split('\n').forEach((line) => console.log(`   ${line}`))
     }
   })
 
@@ -157,7 +163,7 @@ export function POST() {
     })
 
     // Wait for watcher to be ready
-    await new Promise(resolve => server.watcher.on('ready', resolve))
+    await new Promise((resolve) => server.watcher.on('ready', resolve))
 
     // Add a new file
     await writeFile(
@@ -168,7 +174,7 @@ export function POST() {
     // Wait for event with timeout
     const startTime = Date.now()
     while (!eventReceived && Date.now() - startTime < 3000) {
-      await new Promise(resolve => setTimeout(resolve, 50))
+      await new Promise((resolve) => setTimeout(resolve, 50))
     }
 
     await server.stop()
@@ -187,7 +193,7 @@ export function POST() {
     )
 
     // Small delay to ensure file is written
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
 
     let eventReceived = false
     let eventType: string | null = null
@@ -205,7 +211,7 @@ export function POST() {
     })
 
     // Wait for watcher to be ready
-    await new Promise(resolve => server.watcher.on('ready', resolve))
+    await new Promise((resolve) => server.watcher.on('ready', resolve))
 
     // Delete the file
     await unlink(join(testDir, 'contact.tsx'))
@@ -213,7 +219,7 @@ export function POST() {
     // Wait for event with timeout
     const startTime = Date.now()
     while (!eventReceived && Date.now() - startTime < 3000) {
-      await new Promise(resolve => setTimeout(resolve, 50))
+      await new Promise((resolve) => setTimeout(resolve, 50))
     }
 
     await server.stop()
@@ -228,7 +234,10 @@ export function POST() {
     // Create a complex route structure
     await writeFile(join(testDir, 'about.tsx'), 'export function GET() {}')
     await mkdir(join(testDir, 'blog'), { recursive: true })
-    await writeFile(join(testDir, 'blog/[slug].tsx'), 'export function GET() {}\nexport function POST() {}')
+    await writeFile(
+      join(testDir, 'blog/[slug].tsx'),
+      'export function GET() {}\nexport function POST() {}'
+    )
 
     const routes = await discoverRoutes(testDir)
     const manifest = generateRouteManifest(routes)
@@ -238,14 +247,14 @@ export function POST() {
     expect(manifest.generatedAt).toBeGreaterThan(0)
 
     // Check dynamic route
-    const slugRoute = manifest.routes.find(r => r.path === '/blog/:slug')
+    const slugRoute = manifest.routes.find((r) => r.path === '/blog/:slug')
     expect(slugRoute).toBeDefined()
     expect(slugRoute?.params).toEqual([{ name: 'slug', type: 'dynamic' }])
     expect(slugRoute?.handlers).toContain('GET')
     expect(slugRoute?.handlers).toContain('POST')
 
     console.log('   Manifest generated with', manifest.routes.length, 'routes:')
-    manifest.routes.forEach(r => {
+    manifest.routes.forEach((r) => {
       console.log(`   - ${r.path} → ${r.file} [${r.handlers.join(', ')}]`)
     })
   })

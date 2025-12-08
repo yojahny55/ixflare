@@ -12,10 +12,7 @@ import type { ReactNode } from 'react'
  * @template TParams - Type of route parameters (inferred from Zod schema or Record<string, string>)
  * @template Env - Type of environment bindings
  */
-export interface LoaderArgs<
-  TParams = Record<string, string>,
-  Env = Record<string, unknown>
-> {
+export interface LoaderArgs<TParams = Record<string, string>, Env = Record<string, unknown>> {
   request: Request
   params: TParams
   env: Env
@@ -34,7 +31,7 @@ export interface LoaderArgs<
  */
 export type ActionArgs<
   TParams = Record<string, string>,
-  Env = Record<string, unknown>
+  Env = Record<string, unknown>,
 > = LoaderArgs<TParams, Env>
 
 /**
@@ -115,7 +112,7 @@ export type ErrorHandler<Env = Record<string, unknown>> = (
  */
 export type LayoutLoaderArgs<
   TParams = Record<string, string>,
-  Env = Record<string, unknown>
+  Env = Record<string, unknown>,
 > = LoaderArgs<TParams, Env>
 
 /**
@@ -164,10 +161,9 @@ export interface LayoutProps<TData = unknown> {
  * }
  * ```
  */
-export type PageLoaderFunction<
-  TData = unknown,
-  Env = Record<string, unknown>
-> = (args: LoaderArgs<Record<string, string>, Env>) => Promise<TData | Response> | TData | Response
+export type PageLoaderFunction<TData = unknown, Env = Record<string, unknown>> = (
+  args: LoaderArgs<Record<string, string>, Env>
+) => Promise<TData | Response> | TData | Response
 
 /**
  * Loader function signature for layout components
@@ -175,10 +171,9 @@ export type PageLoaderFunction<
  * @template TData - Type of data returned by the loader
  * @template Env - Type of environment bindings
  */
-export type LayoutLoaderFunction<
-  TData = unknown,
-  Env = Record<string, unknown>
-> = (args: LayoutLoaderArgs<Record<string, string>, Env>) => Promise<TData | Response> | TData | Response
+export type LayoutLoaderFunction<TData = unknown, Env = Record<string, unknown>> = (
+  args: LayoutLoaderArgs<Record<string, string>, Env>
+) => Promise<TData | Response> | TData | Response
 
 /**
  * Props passed to page components

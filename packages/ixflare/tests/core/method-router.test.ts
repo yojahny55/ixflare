@@ -184,9 +184,10 @@ describe('Method-based routing', () => {
 
   describe('Automatic HEAD handler', () => {
     it('should auto-generate HEAD handler for GET routes', async () => {
-      const getHandler = async () => new Response(JSON.stringify({ data: 'test' }), {
-        headers: { 'X-Custom': 'value' }
-      })
+      const getHandler = async () =>
+        new Response(JSON.stringify({ data: 'test' }), {
+          headers: { 'X-Custom': 'value' },
+        })
 
       router.add('/users', getHandler, { methods: ['GET'] })
 
@@ -203,10 +204,11 @@ describe('Method-based routing', () => {
 
     it('should use explicit HEAD handler if provided', async () => {
       const getHandler = async () => new Response(JSON.stringify({ method: 'GET' }))
-      const headHandler = async () => new Response(null, {
-        status: 200,
-        headers: { 'X-Explicit-HEAD': 'true' }
-      })
+      const headHandler = async () =>
+        new Response(null, {
+          status: 200,
+          headers: { 'X-Explicit-HEAD': 'true' },
+        })
 
       router.add('/users', getHandler, { methods: ['GET'] })
       router.add('/users', headHandler, { methods: ['HEAD'] })
@@ -218,13 +220,14 @@ describe('Method-based routing', () => {
     })
 
     it('should preserve all headers from GET response in HEAD', async () => {
-      const getHandler = async () => new Response('body', {
-        headers: {
-          'Content-Type': 'text/plain',
-          'X-Custom-1': 'value1',
-          'X-Custom-2': 'value2',
-        }
-      })
+      const getHandler = async () =>
+        new Response('body', {
+          headers: {
+            'Content-Type': 'text/plain',
+            'X-Custom-1': 'value1',
+            'X-Custom-2': 'value2',
+          },
+        })
 
       router.add('/users', getHandler, { methods: ['GET'] })
 
@@ -268,10 +271,11 @@ describe('Method-based routing', () => {
 
     it('should use explicit OPTIONS handler if provided', async () => {
       const getHandler = async () => new Response('OK')
-      const optionsHandler = async () => new Response(null, {
-        status: 200,
-        headers: { 'X-Explicit-OPTIONS': 'true' }
-      })
+      const optionsHandler = async () =>
+        new Response(null, {
+          status: 200,
+          headers: { 'X-Explicit-OPTIONS': 'true' },
+        })
 
       router.add('/users', getHandler, { methods: ['GET'] })
       router.add('/users', optionsHandler, { methods: ['OPTIONS'] })

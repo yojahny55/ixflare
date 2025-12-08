@@ -82,6 +82,7 @@ npm run deploy
 ```
 
 The deployment process:
+
 1. ✓ Checks prerequisites (wrangler, authentication)
 2. ✓ Validates bundle size (<3MB for free tier)
 3. ✓ Validates request limits (100MB max)
@@ -166,6 +167,7 @@ npm run deploy
 ### Setup
 
 1. Copy `.env.example` to `.env.local`:
+
    ```bash
    cp .env.example .env.local
    ```
@@ -232,6 +234,7 @@ export default defineConfig({
 ```
 
 **Hook phases:**
+
 - `pre-build`: Before build (e.g., generate OpenAPI spec)
 - `post-build`: After build (e.g., analyze bundle size)
 - `pre-deploy`: Before deployment (e.g., run migrations)

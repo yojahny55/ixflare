@@ -214,8 +214,8 @@ describe('parseJson', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(ValidationError)
       const validationError = error as ValidationError
-      expect(validationError.errors.some(e => e.field === 'user.email')).toBe(true)
-      expect(validationError.errors.some(e => e.field === 'user.profile.age')).toBe(true)
+      expect(validationError.errors.some((e) => e.field === 'user.email')).toBe(true)
+      expect(validationError.errors.some((e) => e.field === 'user.profile.age')).toBe(true)
     }
   })
 
@@ -505,7 +505,7 @@ describe('Integration Tests', () => {
       body: formData,
     })
 
-    const parsedFormData = await parseBody(request) as FormData
+    const parsedFormData = (await parseBody(request)) as FormData
     const uploadedFile = getFile(parsedFormData, 'avatar')
 
     expect(uploadedFile).not.toBeNull()

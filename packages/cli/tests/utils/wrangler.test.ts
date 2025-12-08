@@ -138,9 +138,7 @@ describe('wrangler utilities', () => {
 
   describe('isAuthenticated', () => {
     it('should return true when wrangler whoami succeeds', () => {
-      vi.mocked(execSync).mockReturnValue(
-        Buffer.from('You are logged in with an API Token')
-      )
+      vi.mocked(execSync).mockReturnValue(Buffer.from('You are logged in with an API Token'))
 
       const result = isAuthenticated()
 

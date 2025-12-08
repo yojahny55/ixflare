@@ -33,19 +33,13 @@ import { formatZodErrors } from '@/core/body-parser'
  * // query is typed: { page: number, limit: number, sort?: 'name' | 'createdAt' | 'email' }
  * ```
  */
-export function parseQuery<T>(
-  request: Request,
-  schema: ZodSchema<T>
-): T {
+export function parseQuery<T>(request: Request, schema: ZodSchema<T>): T {
   const url = new URL(request.url)
   const queryObject = searchParamsToObject(url.searchParams)
   const result = schema.safeParse(queryObject)
 
   if (!result.success) {
-    throw new ValidationError(
-      'Query parameter validation failed',
-      formatZodErrors(result.error)
-    )
+    throw new ValidationError('Query parameter validation failed', formatZodErrors(result.error))
   }
 
   return result.data

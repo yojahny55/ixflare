@@ -56,10 +56,9 @@ export async function parseBody(
   if (maxSize !== undefined) {
     const contentLength = targetRequest.headers.get('content-length')
     if (contentLength && parseInt(contentLength, 10) > maxSize) {
-      throw new ValidationError(
-        `Request body size exceeds limit of ${maxSize} bytes`,
-        [{ field: 'body', message: 'Request body too large' }]
-      )
+      throw new ValidationError(`Request body size exceeds limit of ${maxSize} bytes`, [
+        { field: 'body', message: 'Request body too large' },
+      ])
     }
   }
 
@@ -99,27 +98,20 @@ export async function parseBody(
  * // data is typed: { email: string, name: string }
  * ```
  */
-export async function parseJson<T>(
-  request: Request,
-  schema: ZodSchema<T>
-): Promise<T> {
+export async function parseJson<T>(request: Request, schema: ZodSchema<T>): Promise<T> {
   let body: unknown
   try {
     body = await request.json()
   } catch (error) {
-    throw new ValidationError(
-      'Invalid JSON in request body',
-      [{ field: 'body', message: error instanceof Error ? error.message : 'Failed to parse JSON' }]
-    )
+    throw new ValidationError('Invalid JSON in request body', [
+      { field: 'body', message: error instanceof Error ? error.message : 'Failed to parse JSON' },
+    ])
   }
 
   const result = schema.safeParse(body)
 
   if (!result.success) {
-    throw new ValidationError(
-      'Request body validation failed',
-      formatZodErrors(result.error)
-    )
+    throw new ValidationError('Request body validation failed', formatZodErrors(result.error))
   }
 
   return result.data
@@ -146,19 +138,13 @@ export async function parseJson<T>(
  * const data = await parseFormData(request, schema)
  * ```
  */
-export async function parseFormData<T>(
-  request: Request,
-  schema: ZodSchema<T>
-): Promise<T> {
+export async function parseFormData<T>(request: Request, schema: ZodSchema<T>): Promise<T> {
   const formData = await request.formData()
   const body = formDataToObject(formData)
   const result = schema.safeParse(body)
 
   if (!result.success) {
-    throw new ValidationError(
-      'Form data validation failed',
-      formatZodErrors(result.error)
-    )
+    throw new ValidationError('Form data validation failed', formatZodErrors(result.error))
   }
 
   return result.data
@@ -233,21 +219,16 @@ export interface FileValidationOptions {
  * }
  * ```
  */
-export function validateFile(
-  file: File,
-  options: FileValidationOptions
-): void {
+export function validateFile(file: File, options: FileValidationOptions): void {
   if (options.maxSize && file.size > options.maxSize) {
-    throw new ValidationError(
-      `File size exceeds limit of ${options.maxSize} bytes`,
-      [{ field: file.name, message: 'File too large' }]
-    )
+    throw new ValidationError(`File size exceeds limit of ${options.maxSize} bytes`, [
+      { field: file.name, message: 'File too large' },
+    ])
   }
   if (options.allowedTypes && !options.allowedTypes.includes(file.type)) {
-    throw new ValidationError(
-      `File type ${file.type} not allowed`,
-      [{ field: file.name, message: 'Invalid file type' }]
-    )
+    throw new ValidationError(`File type ${file.type} not allowed`, [
+      { field: file.name, message: 'Invalid file type' },
+    ])
   }
 }
 
@@ -289,7 +270,7 @@ export function formatZodErrors(error: ZodError): Array<{ field: string; message
     return [{ field: '_root', message: error?.message || 'Validation failed' }]
   }
 
-  return error.issues.map(e => ({
+  return error.issues.map((e) => ({
     // Use '_root' for root-level validation errors (empty path array)
     field: e.path.length > 0 ? e.path.join('.') : '_root',
     message: e.message,

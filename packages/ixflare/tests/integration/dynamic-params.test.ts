@@ -179,10 +179,7 @@ describe('Integration: Dynamic Route Parameters (Story 2.2)', () => {
         path: z.array(z.string().min(1)),
       })
 
-      const validated = validateParams(
-        { path: ['guides', 'routing', 'basics'] },
-        schema
-      )
+      const validated = validateParams({ path: ['guides', 'routing', 'basics'] }, schema)
 
       expect(validated.path).toEqual(['guides', 'routing', 'basics'])
     })
@@ -212,8 +209,8 @@ describe('Integration: Dynamic Route Parameters (Story 2.2)', () => {
 
     it('should handle boolean-like strings with custom transform', () => {
       const schema = z.object({
-        active: z.string().transform(v => v === 'true' || v === '1'),
-        verified: z.string().transform(v => v === 'true'),
+        active: z.string().transform((v) => v === 'true' || v === '1'),
+        verified: z.string().transform((v) => v === 'true'),
       })
 
       const result1 = validateParams({ active: 'true', verified: 'true' }, schema)
@@ -264,10 +261,7 @@ describe('Integration: Dynamic Route Parameters (Story 2.2)', () => {
         slug: z.string().regex(/^[a-z0-9-]+$/i),
       })
 
-      const validated = validateParams(
-        { year: '2025', month: '12', slug: 'hello-world' },
-        schema
-      )
+      const validated = validateParams({ year: '2025', month: '12', slug: 'hello-world' }, schema)
 
       expect(validated).toEqual({
         year: 2025,

@@ -86,10 +86,7 @@ export function redirect(url: string, status: number = 302): Response {
  * @returns 404 response
  */
 export function notFound(message: string = 'Not Found'): Response {
-  return json(
-    { error: { code: 'NOT_FOUND', message } },
-    { status: 404 }
-  )
+  return json({ error: { code: 'NOT_FOUND', message } }, { status: 404 })
 }
 
 /**
@@ -99,10 +96,7 @@ export function notFound(message: string = 'Not Found'): Response {
  * @returns 400 response
  */
 export function badRequest(message: string): Response {
-  return json(
-    { error: { code: 'BAD_REQUEST', message } },
-    { status: 400 }
-  )
+  return json({ error: { code: 'BAD_REQUEST', message } }, { status: 400 })
 }
 
 /**
@@ -112,10 +106,7 @@ export function badRequest(message: string): Response {
  * @returns 401 response
  */
 export function unauthorized(message: string = 'Unauthorized'): Response {
-  return json(
-    { error: { code: 'UNAUTHORIZED', message } },
-    { status: 401 }
-  )
+  return json({ error: { code: 'UNAUTHORIZED', message } }, { status: 401 })
 }
 
 /**
@@ -125,10 +116,7 @@ export function unauthorized(message: string = 'Unauthorized'): Response {
  * @returns 403 response
  */
 export function forbidden(message: string = 'Forbidden'): Response {
-  return json(
-    { error: { code: 'FORBIDDEN', message } },
-    { status: 403 }
-  )
+  return json({ error: { code: 'FORBIDDEN', message } }, { status: 403 })
 }
 
 /**
@@ -138,8 +126,5 @@ export function forbidden(message: string = 'Forbidden'): Response {
  * @returns 500 response
  */
 export function serverError(message: string = 'Internal Server Error'): Response {
-  return json(
-    { error: { code: 'INTERNAL_ERROR', message } },
-    { status: 500 }
-  )
+  return json({ error: { code: 'INTERNAL_ERROR', message } }, { status: 500 })
 }

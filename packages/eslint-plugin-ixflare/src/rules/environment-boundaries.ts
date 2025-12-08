@@ -83,7 +83,8 @@ export const environmentBoundaries: Rule.RuleModule = {
       recommended: true,
     },
     messages: {
-      nodeInWorker: 'Cannot import @node-only module "{{module}}" in @worker-only context. Node.js APIs are not available in Cloudflare Workers.',
+      nodeInWorker:
+        'Cannot import @node-only module "{{module}}" in @worker-only context. Node.js APIs are not available in Cloudflare Workers.',
       workerInNode: 'Cannot import @worker-only module "{{module}}" in @node-only context.',
     },
     schema: [],

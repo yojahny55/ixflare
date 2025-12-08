@@ -167,9 +167,7 @@ describe('validation', () => {
     })
 
     it('should handle parsing errors gracefully', async () => {
-      vi.mocked(wranglerExec.executeWranglerDryRun).mockRejectedValue(
-        new Error('Spawn error')
-      )
+      vi.mocked(wranglerExec.executeWranglerDryRun).mockRejectedValue(new Error('Spawn error'))
 
       const result = await validateBundleSize()
 

@@ -15,7 +15,9 @@ const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', 
 /**
  * Create a simple spinner for progress indication
  */
-function createSpinner(message: string): { stop: (success: boolean, finalMessage?: string) => void } {
+function createSpinner(message: string): {
+  stop: (success: boolean, finalMessage?: string) => void
+} {
   let frameIndex = 0
   const isTTY = process.stdout.isTTY
 

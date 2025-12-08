@@ -36,7 +36,7 @@ function escapeHtml(unsafe: string): string {
  * @returns Escaped HTML string
  */
 function buildHtmlContent(strings: TemplateStringsArray, values: unknown[]): string {
-  const escaped = values.map(v => escapeHtml(String(v)))
+  const escaped = values.map((v) => escapeHtml(String(v)))
   return strings.reduce((acc, str, i) => acc + str + (escaped[i] ?? ''), '')
 }
 
@@ -50,10 +50,7 @@ function buildHtmlContent(strings: TemplateStringsArray, values: unknown[]): str
  * return html`<h1>Hello ${name}</h1>` // Safely escapes the script tag
  * ```
  */
-export function html(
-  strings: TemplateStringsArray,
-  ...values: unknown[]
-): Response
+export function html(strings: TemplateStringsArray, ...values: unknown[]): Response
 
 /**
  * Creates an HTML response from a string (legacy)
@@ -116,13 +113,14 @@ export function htmlResponse(
   ...values: unknown[]
 ): (init?: ResponseInit) => Response {
   const content = buildHtmlContent(strings, values)
-  return (init?: ResponseInit) => new Response(content, {
-    ...init,
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-      ...init?.headers,
-    },
-  })
+  return (init?: ResponseInit) =>
+    new Response(content, {
+      ...init,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        ...init?.headers,
+      },
+    })
 }
 
 export function redirect(url: string, status: 301 | 302 | 303 | 307 | 308 = 302): Response {
@@ -191,8 +189,9 @@ export function stream(
   // TypeScript's lib.dom.d.ts doesn't include this static method yet, and @cloudflare/workers-types
   // also lacks it. Cast through unknown for type safety rather than any.
   // See: https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream/from_static
-  const readable = (ReadableStream as unknown as { from: <T>(iter: AsyncIterable<T>) => ReadableStream<T> })
-    .from(encodedGenerator())
+  const readable = (
+    ReadableStream as unknown as { from: <T>(iter: AsyncIterable<T>) => ReadableStream<T> }
+  ).from(encodedGenerator())
 
   return new Response(readable, {
     ...init,
@@ -249,8 +248,9 @@ export function eventStream(
   // TypeScript's lib.dom.d.ts doesn't include this static method yet, and @cloudflare/workers-types
   // also lacks it. Cast through unknown for type safety rather than any.
   // See: https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream/from_static
-  const readable = (ReadableStream as unknown as { from: <T>(iter: AsyncIterable<T>) => ReadableStream<T> })
-    .from(sseGenerator())
+  const readable = (
+    ReadableStream as unknown as { from: <T>(iter: AsyncIterable<T>) => ReadableStream<T> }
+  ).from(sseGenerator())
 
   return new Response(readable, {
     ...init,

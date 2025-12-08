@@ -35,10 +35,7 @@ export function setupHMR(server: ViteDevServer, config: HMRConfig = {}): void {
  * Handle route file HMR updates
  * Returns modules that need to be invalidated when a route changes
  */
-export function handleRouteHMR(
-  file: string,
-  server: ViteDevServer
-): ModuleNode[] {
+export function handleRouteHMR(file: string, server: ViteDevServer): ModuleNode[] {
   const module = server.moduleGraph.getModuleById(file)
   const invalidated: ModuleNode[] = []
 
@@ -71,10 +68,7 @@ export function handleRouteHMR(
  * Uses Vite's module graph invalidation instead of full-reload.
  * This allows for faster updates without losing client-side state.
  */
-export function invalidateRouteModule(
-  file: string,
-  server: ViteDevServer
-): void {
+export function invalidateRouteModule(file: string, server: ViteDevServer): void {
   const modules = handleRouteHMR(file, server)
 
   // Invalidate all affected modules in the graph
@@ -85,8 +79,8 @@ export function invalidateRouteModule(
   // If we have modules to update, send proper HMR update
   if (modules.length > 0) {
     const updates = modules
-      .filter(mod => mod.url) // Only modules with URLs
-      .map(mod => ({
+      .filter((mod) => mod.url) // Only modules with URLs
+      .map((mod) => ({
         type: 'js-update' as const,
         path: mod.url,
         acceptedPath: mod.url,
@@ -109,10 +103,7 @@ export function invalidateRouteModule(
 /**
  * Create HMR context for Vite plugin handleHotUpdate hook
  */
-export function createHMRContext(
-  file: string,
-  modules: ModuleNode[]
-): Partial<HmrContext> {
+export function createHMRContext(file: string, modules: ModuleNode[]): Partial<HmrContext> {
   return {
     file,
     modules,

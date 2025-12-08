@@ -5,7 +5,6 @@
  */
 
 import { z } from 'zod'
-import type { Middleware } from '@/core/middleware'
 
 /**
  * Database configuration schema
@@ -98,10 +97,7 @@ export const commandSchema = z.object({
  * Environment variables schema
  * Supports string, number, or boolean values
  */
-export const envConfigSchema = z.record(
-  z.string(),
-  z.union([z.string(), z.number(), z.boolean()])
-)
+export const envConfigSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
 
 /**
  * Main Ixflare configuration schema

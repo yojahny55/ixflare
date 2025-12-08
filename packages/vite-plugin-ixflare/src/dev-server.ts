@@ -102,10 +102,7 @@ export function createDevServer(config: DevServerConfig): DevServer {
 
   // Setup event handlers
   const handleChange = (relativePath: string, event: 'add' | 'change' | 'unlink') => {
-    const result = handleRouteChange(
-      { type: event, path: relativePath },
-      config.routesDir
-    )
+    const result = handleRouteChange({ type: event, path: relativePath }, config.routesDir)
 
     if (result.regenerateManifest && config.onRouteChange) {
       config.onRouteChange(result)

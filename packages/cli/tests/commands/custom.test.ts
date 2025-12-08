@@ -12,7 +12,10 @@ import { loadConfig } from 'ixflare/config'
 
 // Create a unique temp directory for each test run
 const createTempDir = async () => {
-  const tempDir = join(tmpdir(), `ixflare-cli-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const tempDir = join(
+    tmpdir(),
+    `ixflare-cli-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  )
   await mkdir(tempDir, { recursive: true })
   return tempDir
 }
@@ -35,10 +38,7 @@ describe('loadCustomCommands', () => {
   })
 
   it('should return empty map when no custom commands configured', async () => {
-    await writeFile(
-      join(tempDir, 'edge.config.ts'),
-      `export default { name: 'test-app' }`
-    )
+    await writeFile(join(tempDir, 'edge.config.ts'), `export default { name: 'test-app' }`)
 
     const result = await loadCustomCommands(tempDir)
     expect(result.commands.size).toBe(0)
@@ -110,14 +110,13 @@ describe('runCustomCommand', () => {
   })
 
   it('should throw CommandError when command not found', async () => {
-    await writeFile(
-      join(tempDir, 'edge.config.ts'),
-      `export default { name: 'test-app' }`
-    )
+    await writeFile(join(tempDir, 'edge.config.ts'), `export default { name: 'test-app' }`)
 
     const config = await loadConfig(tempDir)
     await expect(runCustomCommand('nonexistent', config)).rejects.toThrow(CommandError)
-    await expect(runCustomCommand('nonexistent', config)).rejects.toThrow('Unknown custom command: nonexistent')
+    await expect(runCustomCommand('nonexistent', config)).rejects.toThrow(
+      'Unknown custom command: nonexistent'
+    )
   })
 
   it('should execute custom command handler', async () => {
@@ -202,7 +201,9 @@ describe('runCustomCommand', () => {
 
     const config = await loadConfig(tempDir)
     await expect(runCustomCommand('failing:command', config)).rejects.toThrow(CommandError)
-    await expect(runCustomCommand('failing:command', config)).rejects.toThrow('Command execution failed')
+    await expect(runCustomCommand('failing:command', config)).rejects.toThrow(
+      'Command execution failed'
+    )
   })
 
   it('should support commands with colons in names', async () => {
@@ -236,10 +237,7 @@ describe('runCustomCommand', () => {
   })
 
   it('should include command name in CommandError', async () => {
-    await writeFile(
-      join(tempDir, 'edge.config.ts'),
-      `export default { name: 'test-app' }`
-    )
+    await writeFile(join(tempDir, 'edge.config.ts'), `export default { name: 'test-app' }`)
 
     const config = await loadConfig(tempDir)
     try {

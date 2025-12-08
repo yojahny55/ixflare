@@ -10,7 +10,11 @@ export class QueryBuilder<T> {
   private limitValue?: number
   private offsetValue?: number
 
-  where(field: keyof T, operator: '=' | '!=' | '>' | '<' | '>=' | '<=' | 'like', value: unknown): this {
+  where(
+    field: keyof T,
+    operator: '=' | '!=' | '>' | '<' | '>=' | '<=' | 'like',
+    value: unknown
+  ): this {
     this.conditions.push({ field: String(field), operator, value })
     return this
   }

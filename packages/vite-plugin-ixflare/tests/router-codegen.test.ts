@@ -35,16 +35,12 @@ describe('router-codegen', () => {
   describe('extractDynamicParams', () => {
     it('should extract single dynamic parameter', () => {
       const params = extractDynamicParams('[id].tsx')
-      expect(params).toEqual([
-        { name: 'id', type: 'dynamic' },
-      ])
+      expect(params).toEqual([{ name: 'id', type: 'dynamic' }])
     })
 
     it('should extract catch-all parameter', () => {
       const params = extractDynamicParams('[...slug].tsx')
-      expect(params).toEqual([
-        { name: 'slug', type: 'catch-all' },
-      ])
+      expect(params).toEqual([{ name: 'slug', type: 'catch-all' }])
     })
 
     it('should return empty array for static files', () => {
@@ -82,9 +78,7 @@ describe('router-codegen', () => {
       const route = await parseRouteFile(file, testDir)
 
       expect(route.path).toBe('/:id')
-      expect(route.params).toEqual([
-        { name: 'id', type: 'dynamic' },
-      ])
+      expect(route.params).toEqual([{ name: 'id', type: 'dynamic' }])
       expect(route.handlers).toContain('GET')
       expect(route.handlers).toContain('POST')
     })
@@ -97,9 +91,7 @@ describe('router-codegen', () => {
       const route = await parseRouteFile(file, testDir)
 
       expect(route.path).toBe('/blog/:slug')
-      expect(route.params).toEqual([
-        { name: 'slug', type: 'dynamic' },
-      ])
+      expect(route.params).toEqual([{ name: 'slug', type: 'dynamic' }])
     })
 
     it('should parse catch-all route', async () => {
@@ -110,9 +102,7 @@ describe('router-codegen', () => {
       const route = await parseRouteFile(file, testDir)
 
       expect(route.path).toBe('/docs/*')
-      expect(route.params).toEqual([
-        { name: 'path', type: 'catch-all' },
-      ])
+      expect(route.params).toEqual([{ name: 'path', type: 'catch-all' }])
     })
 
     it('should detect all HTTP method handlers', async () => {
@@ -332,9 +322,9 @@ export function GET() {}`
       const routes = await discoverRoutes(testDir)
 
       expect(routes).toHaveLength(3)
-      expect(routes.some(r => r.path === '/')).toBe(true)
-      expect(routes.some(r => r.path === '/about')).toBe(true)
-      expect(routes.some(r => r.path === '/blog/:slug')).toBe(true)
+      expect(routes.some((r) => r.path === '/')).toBe(true)
+      expect(routes.some((r) => r.path === '/about')).toBe(true)
+      expect(routes.some((r) => r.path === '/blog/:slug')).toBe(true)
     })
 
     it('should ignore underscore-prefixed files', async () => {

@@ -34,7 +34,9 @@ export interface Route<Env = unknown> {
   routeMiddleware?: Middleware<Env>[]
 }
 
-export type RouteHandler<Env = unknown> = (context: EdgeContext<Env>) => Response | Promise<Response>
+export type RouteHandler<Env = unknown> = (
+  context: EdgeContext<Env>
+) => Response | Promise<Response>
 
 /** Zod v4 error issue structure */
 interface ZodIssue {
@@ -141,7 +143,8 @@ export class Router<Env = unknown> {
     const method = request.method.toUpperCase() as HttpMethod
 
     // Find all routes that match the path
-    const matchingRoutes: Array<{ route: Route<Env>; params: Record<string, string | string[]> }> = []
+    const matchingRoutes: Array<{ route: Route<Env>; params: Record<string, string | string[]> }> =
+      []
 
     for (const route of this.routes) {
       const params = this.matchRoute(route.path, url.pathname, route.catchAllParam)
@@ -167,7 +170,15 @@ export class Router<Env = unknown> {
 
     for (const { route, params } of matchingRoutes) {
       // If route has no method restrictions, it supports all methods
-      const routeMethods = route.methods || ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
+      const routeMethods = route.methods || [
+        'GET',
+        'POST',
+        'PUT',
+        'DELETE',
+        'PATCH',
+        'HEAD',
+        'OPTIONS',
+      ]
 
       for (const m of routeMethods) {
         allMethods.add(m)
@@ -223,7 +234,7 @@ export class Router<Env = unknown> {
       return new Response(null, {
         status: 204,
         headers: {
-          'Allow': Array.from(allMethods).sort().join(', '),
+          Allow: Array.from(allMethods).sort().join(', '),
         },
       })
     }
@@ -249,7 +260,7 @@ export class Router<Env = unknown> {
           status: 405,
           headers: {
             'Content-Type': 'application/json',
-            'Allow': Array.from(allMethods).sort().join(', '),
+            Allow: Array.from(allMethods).sort().join(', '),
           },
         }
       )

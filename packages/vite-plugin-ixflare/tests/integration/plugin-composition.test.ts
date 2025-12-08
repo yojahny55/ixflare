@@ -180,9 +180,9 @@ describe('Plugin Composition', () => {
       ]
 
       expect(plugins).toHaveLength(3)
-      expect(plugins.find(p => p.name === 'vite-plugin-ixflare')).toBeDefined()
-      expect(plugins.find(p => p.name === 'vite-plugin-cloudflare')).toBeDefined()
-      expect(plugins.find(p => p.name === 'vite:react')).toBeDefined()
+      expect(plugins.find((p) => p.name === 'vite-plugin-ixflare')).toBeDefined()
+      expect(plugins.find((p) => p.name === 'vite-plugin-cloudflare')).toBeDefined()
+      expect(plugins.find((p) => p.name === 'vite:react')).toBeDefined()
     })
 
     it('does not conflict with cloudflare plugin virtual modules', () => {

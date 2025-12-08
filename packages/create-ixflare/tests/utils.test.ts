@@ -4,12 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import {
-  toKebabCase,
-  toPascalCase,
-  isValidProjectName,
-  getProjectNameError,
-} from '../src/utils'
+import { toKebabCase, toPascalCase, isValidProjectName, getProjectNameError } from '../src/utils'
 
 describe('toKebabCase', () => {
   it('should convert camelCase to kebab-case', () => {

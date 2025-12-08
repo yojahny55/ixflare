@@ -19,7 +19,7 @@ export default function App() {
     <div className="min-h-screen bg-gray-100 flex items-center justify-center">
       <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">
-          Welcome to {{projectNamePascal}}
+          Welcome to {{ projectNamePascal }}
         </h1>
         <p className="text-gray-600 mb-6">
           Your fullstack React app is running on Cloudflare Workers.

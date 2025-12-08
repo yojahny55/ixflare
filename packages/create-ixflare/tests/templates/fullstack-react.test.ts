@@ -176,11 +176,17 @@ describe('fullstack-react template', () => {
     it('should use kebab-case for source files', () => {
       const srcFiles = templateFiles.filter((f) => f.startsWith('src/') && f.endsWith('.ts'))
       for (const file of srcFiles) {
-        const fileName = file.split('/').pop()!.replace(/\.tsx?$/, '')
+        const fileName = file
+          .split('/')
+          .pop()!
+          .replace(/\.tsx?$/, '')
         // Allow index as a special case
         if (fileName === 'index') continue
         // Check for kebab-case (lowercase with hyphens) or single word
-        expect(fileName.match(/^[a-z]+(-[a-z]+)*$/), `File ${file} should be kebab-case`).toBeTruthy()
+        expect(
+          fileName.match(/^[a-z]+(-[a-z]+)*$/),
+          `File ${file} should be kebab-case`
+        ).toBeTruthy()
       }
     })
 

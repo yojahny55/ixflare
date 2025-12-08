@@ -11,7 +11,10 @@ import { HooksRunner, HookError } from '../../src/hooks/index'
 
 // Create a unique temp directory for each test run
 const createTempDir = async () => {
-  const tempDir = join(tmpdir(), `ixflare-cli-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const tempDir = join(
+    tmpdir(),
+    `ixflare-cli-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  )
   await mkdir(tempDir, { recursive: true })
   return tempDir
 }
@@ -32,10 +35,7 @@ describe('HooksRunner', () => {
   describe('loadConfig', () => {
     it('should load config successfully', async () => {
       // Create a minimal edge.config.ts
-      await writeFile(
-        join(tempDir, 'edge.config.ts'),
-        `export default { name: 'test-app' }`
-      )
+      await writeFile(join(tempDir, 'edge.config.ts'), `export default { name: 'test-app' }`)
 
       await expect(runner.loadConfig(tempDir)).resolves.not.toThrow()
     })
@@ -76,10 +76,7 @@ describe('HooksRunner', () => {
     })
 
     it('should skip gracefully when no pre-build hook configured', async () => {
-      await writeFile(
-        join(tempDir, 'edge.config.ts'),
-        `export default { name: 'test-app' }`
-      )
+      await writeFile(join(tempDir, 'edge.config.ts'), `export default { name: 'test-app' }`)
 
       await runner.loadConfig(tempDir)
       await expect(runner.runPreBuild()).resolves.not.toThrow()
@@ -137,10 +134,7 @@ describe('HooksRunner', () => {
     })
 
     it('should skip gracefully when no post-build hook configured', async () => {
-      await writeFile(
-        join(tempDir, 'edge.config.ts'),
-        `export default { name: 'test-app' }`
-      )
+      await writeFile(join(tempDir, 'edge.config.ts'), `export default { name: 'test-app' }`)
 
       await runner.loadConfig(tempDir)
       await expect(runner.runPostBuild({ outputPath: '/dist' })).resolves.not.toThrow()
@@ -163,7 +157,9 @@ describe('HooksRunner', () => {
 
       await runner.loadConfig(tempDir)
       await expect(runner.runPostBuild({ outputPath: '/dist' })).rejects.toThrow(HookError)
-      await expect(runner.runPostBuild({ outputPath: '/dist' })).rejects.toThrow('Hook "post-build" failed')
+      await expect(runner.runPostBuild({ outputPath: '/dist' })).rejects.toThrow(
+        'Hook "post-build" failed'
+      )
     })
   })
 
@@ -190,10 +186,7 @@ describe('HooksRunner', () => {
     })
 
     it('should skip gracefully when no pre-deploy hook configured', async () => {
-      await writeFile(
-        join(tempDir, 'edge.config.ts'),
-        `export default { name: 'test-app' }`
-      )
+      await writeFile(join(tempDir, 'edge.config.ts'), `export default { name: 'test-app' }`)
 
       await runner.loadConfig(tempDir)
       await expect(runner.runPreDeploy({ environment: 'production' })).resolves.not.toThrow()
@@ -216,7 +209,9 @@ describe('HooksRunner', () => {
 
       await runner.loadConfig(tempDir)
       await expect(runner.runPreDeploy({ environment: 'production' })).rejects.toThrow(HookError)
-      await expect(runner.runPreDeploy({ environment: 'production' })).rejects.toThrow('Hook "pre-deploy" failed')
+      await expect(runner.runPreDeploy({ environment: 'production' })).rejects.toThrow(
+        'Hook "pre-deploy" failed'
+      )
     })
   })
 
@@ -239,17 +234,18 @@ describe('HooksRunner', () => {
       )
 
       await runner.loadConfig(tempDir)
-      await expect(runner.runPostDeploy({ url: 'https://my-app.workers.dev' })).resolves.not.toThrow()
+      await expect(
+        runner.runPostDeploy({ url: 'https://my-app.workers.dev' })
+      ).resolves.not.toThrow()
     })
 
     it('should skip gracefully when no post-deploy hook configured', async () => {
-      await writeFile(
-        join(tempDir, 'edge.config.ts'),
-        `export default { name: 'test-app' }`
-      )
+      await writeFile(join(tempDir, 'edge.config.ts'), `export default { name: 'test-app' }`)
 
       await runner.loadConfig(tempDir)
-      await expect(runner.runPostDeploy({ url: 'https://my-app.workers.dev' })).resolves.not.toThrow()
+      await expect(
+        runner.runPostDeploy({ url: 'https://my-app.workers.dev' })
+      ).resolves.not.toThrow()
     })
 
     it('should throw HookError when post-deploy hook fails', async () => {
@@ -268,8 +264,12 @@ describe('HooksRunner', () => {
       )
 
       await runner.loadConfig(tempDir)
-      await expect(runner.runPostDeploy({ url: 'https://my-app.workers.dev' })).rejects.toThrow(HookError)
-      await expect(runner.runPostDeploy({ url: 'https://my-app.workers.dev' })).rejects.toThrow('Hook "post-deploy" failed')
+      await expect(runner.runPostDeploy({ url: 'https://my-app.workers.dev' })).rejects.toThrow(
+        HookError
+      )
+      await expect(runner.runPostDeploy({ url: 'https://my-app.workers.dev' })).rejects.toThrow(
+        'Hook "post-deploy" failed'
+      )
     })
   })
 

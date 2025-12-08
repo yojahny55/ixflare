@@ -9,8 +9,20 @@ export { createRouter, Router } from './core/router'
 export type { HttpMethod } from './core/router'
 export { createMiddleware, defineMiddleware, compose, withErrorBoundary } from './core/middleware'
 export type { Middleware, MiddlewareContext } from './core/middleware'
+export { createApp, App } from './core/app'
+export type { AppConfig, RouteConfig } from './core/app'
 export { createContext, type Context } from './core/context'
-export { json, html, htmlResponse, redirect, notFound, text, stream, eventStream, type SSEEvent } from './core/helpers'
+export {
+  json,
+  html,
+  htmlResponse,
+  redirect,
+  notFound,
+  text,
+  stream,
+  eventStream,
+  type SSEEvent,
+} from './core/helpers'
 export {
   extractParamsFromUrl,
   parseCatchAllParam,
@@ -28,6 +40,7 @@ export {
   getFile,
   getFiles,
   validateFile,
+  formatZodErrors,
   type ParseBodyOptions,
   type FileValidationOptions,
 } from './core/body-parser'
@@ -37,7 +50,12 @@ export { parseQuery } from './core/query-parser'
 
 // Layout exports moved to 'ixflare/ssr' to avoid React dependency in API-only apps
 // Use: import { useLayoutData, executeLoaders } from 'ixflare/ssr'
-export { executeLoaders, executeLayoutLoaders, getLoaderErrorResponse, LayoutLoaderError } from './core/layout-loader'
+export {
+  executeLoaders,
+  executeLayoutLoaders,
+  getLoaderErrorResponse,
+  LayoutLoaderError,
+} from './core/layout-loader'
 export type { LayoutLoaderFunction } from './core/layout-loader'
 
 // Config exports (primary API)
@@ -65,7 +83,16 @@ export type {
 } from './config/types'
 
 // Error exports
-export { AppError, AuthError, ValidationError, NotFoundError, ForbiddenError, ConflictError, InfraError, HttpError } from './errors'
+export {
+  AppError,
+  AuthError,
+  ValidationError,
+  NotFoundError,
+  ForbiddenError,
+  ConflictError,
+  InfraError,
+  HttpError,
+} from './errors'
 
 // Type exports (new EdgeContext-based types)
 export type {
@@ -91,7 +118,14 @@ export {
 
 // Handler type aliases (backward compatibility)
 // Note: ParseBodyOptions is exported from ./core/body-parser above
-export type { LoaderArgs, ActionArgs, LayoutLoaderArgs, LayoutProps, PageProps, PageLoaderFunction } from './types'
+export type {
+  LoaderArgs,
+  ActionArgs,
+  LayoutLoaderArgs,
+  LayoutProps,
+  PageProps,
+  PageLoaderFunction,
+} from './types'
 
 // Utility exports
 export { redactSecrets, redactString, isSensitiveKey } from './utils/redact'

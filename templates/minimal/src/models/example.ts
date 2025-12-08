@@ -68,7 +68,9 @@ export class Example {
   /**
    * Create a new example
    */
-  static async create(data: Omit<ExampleRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<Example> {
+  static async create(
+    data: Omit<ExampleRecord, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<Example> {
     const now = Date.now()
     const record: ExampleRecord = {
       id: crypto.randomUUID(),

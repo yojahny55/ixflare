@@ -61,6 +61,7 @@ For Node.js-only packages (CLI, build tools):
 ### base.json
 
 Core configuration for Cloudflare Workers projects. Includes:
+
 - ES2022 target and lib
 - Strict type checking
 - Workers types from `@cloudflare/workers-types`
@@ -68,6 +69,7 @@ Core configuration for Cloudflare Workers projects. Includes:
 ### react.json
 
 Extends base configuration with React support:
+
 - DOM and DOM.Iterable lib
 - react-jsx transform
 - React type definitions
@@ -75,6 +77,7 @@ Extends base configuration with React support:
 ### node.json
 
 Extends base configuration for Node.js:
+
 - Node.js type definitions
 - Appropriate lib settings
 

@@ -52,17 +52,14 @@ async function handleApiV1(request: Request, url: URL, env: Env): Promise<Respon
     }
 
     if (request.method === 'POST') {
-      const body = await request.json() as { name?: string }
+      const body = (await request.json()) as { name?: string }
       if (!body.name) {
         return Response.json(
           { error: { code: 'VALIDATION_ERROR', message: 'Name is required' } },
           { status: 422 }
         )
       }
-      return Response.json(
-        { id: 3, name: body.name, createdAt: Date.now() },
-        { status: 201 }
-      )
+      return Response.json({ id: 3, name: body.name, createdAt: Date.now() }, { status: 201 })
     }
   }
 

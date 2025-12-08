@@ -93,8 +93,7 @@ export async function validateBundleSize(): Promise<ValidationIssue | null> {
           type: sizeInMb > 10 ? 'error' : 'warning',
           code: 'BUNDLE_SIZE_WARNING',
           message: `Bundle size (${sizeInMb.toFixed(2)} MiB) exceeds free tier limit (3 MiB)`,
-          remediation:
-            'Move configs to KV/R2, use Workers Static Assets, or upgrade to paid plan',
+          remediation: 'Move configs to KV/R2, use Workers Static Assets, or upgrade to paid plan',
         }
       }
       return null

@@ -14,7 +14,11 @@ export function renderToStream(_element: unknown, _options?: RenderOptions): Rea
   // Placeholder - will be implemented in Epic 4
   return new ReadableStream({
     start(controller) {
-      controller.enqueue(new TextEncoder().encode('<!DOCTYPE html><html><body>SSR Streaming Placeholder</body></html>'))
+      controller.enqueue(
+        new TextEncoder().encode(
+          '<!DOCTYPE html><html><body>SSR Streaming Placeholder</body></html>'
+        )
+      )
       controller.close()
     },
   })

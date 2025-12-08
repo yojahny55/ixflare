@@ -11,7 +11,10 @@ import { generateEnvTypes } from '../../src/commands/generate-env-types'
 
 // Create a unique temp directory for each test run
 const createTempDir = async () => {
-  const tempDir = join(tmpdir(), `ixflare-cli-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const tempDir = join(
+    tmpdir(),
+    `ixflare-cli-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  )
   await mkdir(tempDir, { recursive: true })
   return tempDir
 }
@@ -38,10 +41,7 @@ describe('generateEnvTypes', () => {
   })
 
   it('should generate types from simple .env.example', async () => {
-    await writeFile(
-      join(tempDir, '.env.example'),
-      'API_KEY=\nDATABASE_URL=\nPORT=3000'
-    )
+    await writeFile(join(tempDir, '.env.example'), 'API_KEY=\nDATABASE_URL=\nPORT=3000')
 
     const outputFile = await generateEnvTypes(tempDir)
     const content = await readFile(outputFile, 'utf-8')
@@ -53,10 +53,7 @@ describe('generateEnvTypes', () => {
   })
 
   it('should parse both commented and uncommented variables', async () => {
-    await writeFile(
-      join(tempDir, '.env.example'),
-      'UNCOMMENTED_KEY=value\n#COMMENTED_KEY='
-    )
+    await writeFile(join(tempDir, '.env.example'), 'UNCOMMENTED_KEY=value\n#COMMENTED_KEY=')
 
     const outputFile = await generateEnvTypes(tempDir)
     const content = await readFile(outputFile, 'utf-8')

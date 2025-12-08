@@ -167,10 +167,7 @@ describe('parseQuery', () => {
 
   it('should coerce array of strings to numbers', () => {
     const schema = z.object({
-      ids: z.preprocess(
-        v => (Array.isArray(v) ? v : [v]),
-        z.array(z.coerce.number())
-      ),
+      ids: z.preprocess((v) => (Array.isArray(v) ? v : [v]), z.array(z.coerce.number())),
     })
 
     const request = new Request('https://example.com?ids=1&ids=2&ids=3')
@@ -181,10 +178,7 @@ describe('parseQuery', () => {
 
   it('should handle single value when schema expects array', () => {
     const schema = z.object({
-      tags: z.preprocess(
-        v => (Array.isArray(v) ? v : v ? [v] : []),
-        z.array(z.string())
-      ),
+      tags: z.preprocess((v) => (Array.isArray(v) ? v : v ? [v] : []), z.array(z.string())),
     })
 
     const request = new Request('https://example.com?tags=javascript')
@@ -289,13 +283,12 @@ describe('parseQuery', () => {
       limit: z.coerce.number().min(1).max(100).default(20),
       sort: z.enum(['name', 'createdAt', 'email']).optional(),
       filter: z.string().optional(),
-      active: z.preprocess(
-        v => v === 'true',
-        z.boolean()
-      ).optional(),
+      active: z.preprocess((v) => v === 'true', z.boolean()).optional(),
     })
 
-    const request = new Request('https://example.com?page=3&limit=50&sort=email&filter=verified&active=true')
+    const request = new Request(
+      'https://example.com?page=3&limit=50&sort=email&filter=verified&active=true'
+    )
     const query = parseQuery(request, schema)
 
     expect(query).toEqual({

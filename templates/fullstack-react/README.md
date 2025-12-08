@@ -26,14 +26,15 @@ import { ixflare } from 'vite-plugin-ixflare'
 
 export default defineConfig({
   plugins: [
-    cloudflare(),  // Workers runtime: D1, KV, R2, workerd
-    react(),       // React JSX/TSX support
-    ixflare(),     // File-based routing
+    cloudflare(), // Workers runtime: D1, KV, R2, workerd
+    react(), // React JSX/TSX support
+    ixflare(), // File-based routing
   ],
 })
 ```
 
 **Plugin Responsibilities:**
+
 - **@cloudflare/vite-plugin**: Runs actual `workerd` runtime for production parity. Provides D1, KV, R2, Durable Objects bindings. Reads configuration from `wrangler.toml`.
 - **vite-plugin-ixflare**: Discovers routes from `src/routes/`, generates route manifest, handles route-specific HMR.
 - **@vitejs/plugin-react**: React JSX/TSX compilation, Fast Refresh for component HMR.
@@ -124,6 +125,7 @@ npm run deploy
 ```
 
 Ixflare will:
+
 - ✓ Verify deployment prerequisites
 - ✓ Check bundle size (React SSR apps should stay under 3MB compressed)
 - ✓ Build your React application
@@ -193,6 +195,7 @@ wrangler secret put API_KEY
 ### Setup
 
 1. Copy `.env.example` to `.env.local`:
+
    ```bash
    cp .env.example .env.local
    ```
@@ -259,6 +262,7 @@ export default defineConfig({
 ```
 
 **Available hooks:**
+
 - `pre-build`: Before build starts
 - `post-build`: After build completes (receives `outputPath`)
 - `pre-deploy`: Before deployment (receives `environment`)

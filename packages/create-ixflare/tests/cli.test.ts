@@ -134,15 +134,7 @@ describe('parseArgs', () => {
     })
 
     it('should handle flags in any order', () => {
-      const result = parseArgs([
-        'node',
-        'create-ixflare',
-        '--pm',
-        'bun',
-        'my-app',
-        '-t',
-        'minimal',
-      ])
+      const result = parseArgs(['node', 'create-ixflare', '--pm', 'bun', 'my-app', '-t', 'minimal'])
       expect(result.projectName).toBe('my-app')
       expect(result.template).toBe('minimal')
       expect(result.packageManager).toBe('bun')

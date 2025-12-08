@@ -40,8 +40,8 @@ export default defineConfig({
 ```typescript
 interface IxflarePluginOptions {
   routesDir?: string // Default: 'src/routes'
-  hmr?: boolean      // Default: true
-  ssr?: boolean      // Default: false
+  hmr?: boolean // Default: true
+  ssr?: boolean // Default: false
 }
 ```
 
@@ -124,6 +124,7 @@ src/routes/
 ```
 
 **Layout Component:**
+
 ```typescript
 // src/routes/dashboard/_layout.tsx
 import type { LayoutProps } from 'ixflare'
@@ -139,6 +140,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
 ```
 
 **Layout with Loader (Data Fetching):**
+
 ```typescript
 // src/routes/dashboard/_layout.tsx
 import type { LayoutProps, LayoutLoaderArgs } from 'ixflare'
@@ -163,6 +165,7 @@ export default function DashboardLayout({
 ```
 
 **Accessing Layout Data in Child Components:**
+
 ```typescript
 // Any child page/component can access parent layout data
 // Note: Import from 'ixflare/ssr' to avoid React dependency in API-only apps
@@ -175,6 +178,7 @@ function ProfilePage() {
 ```
 
 **Key Features:**
+
 - Layouts nest from outermost (root) to innermost
 - Layout loaders execute in **parallel** with page loaders for performance
 - Layouts preserve state during navigation (no unnecessary re-renders)
@@ -256,6 +260,7 @@ An `OPTIONS` handler is also auto-generated for all routes, returning a 204 stat
 ### 405 Method Not Allowed
 
 If a request uses an unsupported method, the router automatically returns a 405 response with:
+
 - Proper error JSON body
 - `Allow` header listing supported methods
 - RFC 9110 compliant response format
@@ -341,13 +346,17 @@ export const params = z.object({
   price: z.coerce.number().min(0),
 
   // Booleans (use custom transform)
-  active: z.string().transform(v => v === 'true' || v === '1'),
+  active: z.string().transform((v) => v === 'true' || v === '1'),
 
   // Enums
   sort: z.enum(['asc', 'desc']).default('asc'),
 
   // String formats
-  slug: z.string().regex(/^[a-z0-9-]+$/i).min(1).max(100),
+  slug: z
+    .string()
+    .regex(/^[a-z0-9-]+$/i)
+    .min(1)
+    .max(100),
 })
 ```
 
@@ -392,12 +401,12 @@ interface RouteManifest {
 }
 
 interface Route {
-  path: string              // /blog/:slug
-  file: string              // blog/[slug].tsx
-  params: RouteParam[]      // [{ name: 'slug', type: 'dynamic' }]
-  handlers: HttpMethod[]    // ['GET', 'POST']
+  path: string // /blog/:slug
+  file: string // blog/[slug].tsx
+  params: RouteParam[] // [{ name: 'slug', type: 'dynamic' }]
+  handlers: HttpMethod[] // ['GET', 'POST']
   hasParamsSchema?: boolean // True if route exports 'params' Zod schema
-  layoutChain?: string[]    // Layout files from root to innermost (e.g., ['_layout.tsx', 'dashboard/_layout.tsx'])
+  layoutChain?: string[] // Layout files from root to innermost (e.g., ['_layout.tsx', 'dashboard/_layout.tsx'])
   layoutHasLoader?: boolean[] // True for each layout that exports a loader function
 }
 
@@ -424,6 +433,7 @@ Solution: Remove one of these files.
 ### Common Conflicts
 
 ❌ **Conflict:** Both resolve to `/about`
+
 ```
 src/routes/
 ├── about.tsx
@@ -432,6 +442,7 @@ src/routes/
 ```
 
 ✅ **No conflict:** Different routes
+
 ```
 src/routes/
 ├── about.tsx           → /about
@@ -440,6 +451,7 @@ src/routes/
 ```
 
 ❌ **Conflict:** Both resolve to `/blog/:param`
+
 ```
 src/routes/blog/
 ├── [id].tsx
@@ -449,6 +461,7 @@ src/routes/blog/
 ## File Extensions
 
 Supported extensions (in order of precedence):
+
 - `.tsx` - TypeScript + JSX (SSR pages)
 - `.ts` - TypeScript (API routes)
 - `.jsx` - JavaScript + JSX
@@ -459,6 +472,7 @@ Supported extensions (in order of precedence):
 ### File Watching
 
 The plugin automatically watches for route file changes:
+
 - **File added** → Route manifest regenerated
 - **File modified** → Manifest updated if handlers changed
 - **File deleted** → Route removed from manifest

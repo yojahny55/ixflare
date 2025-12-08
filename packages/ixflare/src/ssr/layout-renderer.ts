@@ -70,11 +70,7 @@ export function renderLayoutChain(
   let children: React.ReactNode = pageContent
 
   // Wrap page content with full accumulated context (all layout data)
-  children = React.createElement(
-    LayoutContextProvider,
-    { value: accumulated },
-    children
-  )
+  children = React.createElement(LayoutContextProvider, { value: accumulated }, children)
 
   // Process layouts in reverse (innermost first) so we build the tree bottom-up
   for (let i = layoutChain.length - 1; i >= 0; i--) {

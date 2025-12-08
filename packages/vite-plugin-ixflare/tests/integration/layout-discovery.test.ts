@@ -48,7 +48,10 @@ describe('Layout Discovery Integration', () => {
 
     await writeFile(join(testDir, '_layout.tsx'), 'export default function Layout({ children }) {}')
     await mkdir(join(testDir, 'dashboard'), { recursive: true })
-    await writeFile(join(testDir, 'dashboard/_layout.tsx'), 'export default function DashboardLayout({ children }) {}')
+    await writeFile(
+      join(testDir, 'dashboard/_layout.tsx'),
+      'export default function DashboardLayout({ children }) {}'
+    )
     await writeFile(join(testDir, 'dashboard/index.tsx'), 'export function GET() {}')
     await mkdir(join(testDir, 'dashboard/settings'), { recursive: true })
     await writeFile(
@@ -138,7 +141,10 @@ describe('Layout Discovery Integration', () => {
     // /blog/[id]/edit.tsx
 
     await mkdir(join(testDir, 'blog'), { recursive: true })
-    await writeFile(join(testDir, 'blog/_layout.tsx'), 'export default function BlogLayout({ children }) {}')
+    await writeFile(
+      join(testDir, 'blog/_layout.tsx'),
+      'export default function BlogLayout({ children }) {}'
+    )
     await writeFile(join(testDir, 'blog/[id].tsx'), 'export function GET() {}')
 
     const routes = await discoverRoutes(testDir)
@@ -174,6 +180,10 @@ describe('Layout Discovery Integration', () => {
 
     expect(analytics?.layoutChain).toEqual(['_layout.tsx', 'dashboard/_layout.tsx'])
 
-    expect(profile?.layoutChain).toEqual(['_layout.tsx', 'dashboard/_layout.tsx', 'dashboard/settings/_layout.tsx'])
+    expect(profile?.layoutChain).toEqual([
+      '_layout.tsx',
+      'dashboard/_layout.tsx',
+      'dashboard/settings/_layout.tsx',
+    ])
   })
 })

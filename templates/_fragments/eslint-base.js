@@ -39,14 +39,7 @@ module.exports = {
     'import/order': [
       'error',
       {
-        groups: [
-          'builtin',
-          'external',
-          'type',
-          'internal',
-          ['parent', 'sibling'],
-          'index',
-        ],
+        groups: ['builtin', 'external', 'type', 'internal', ['parent', 'sibling'], 'index'],
         pathGroups: [
           { pattern: '@/components/**', group: 'internal', position: 'after' },
           { pattern: '@/features/**', group: 'internal', position: 'after' },

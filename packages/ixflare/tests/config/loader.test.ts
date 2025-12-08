@@ -7,7 +7,10 @@ import { ConfigError } from '../../src/config/errors'
 
 // Create a unique temp directory for each test run
 const createTempDir = async () => {
-  const tempDir = join(tmpdir(), `ixflare-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const tempDir = join(
+    tmpdir(),
+    `ixflare-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  )
   await mkdir(tempDir, { recursive: true })
   return tempDir
 }
@@ -93,7 +96,10 @@ describe('loadEnv', () => {
   it('should parse wrangler.toml [vars] with highest precedence', async () => {
     await writeFile(join(tempDir, '.env'), 'SHARED=base')
     await writeFile(join(tempDir, '.env.local'), 'SHARED=local')
-    await writeFile(join(tempDir, 'wrangler.toml'), '[vars]\nSHARED = "wrangler"\nWRANGLER_ONLY = "value"')
+    await writeFile(
+      join(tempDir, 'wrangler.toml'),
+      '[vars]\nSHARED = "wrangler"\nWRANGLER_ONLY = "value"'
+    )
 
     const env = await loadEnv(tempDir)
 
@@ -248,19 +254,13 @@ describe('loadConfig', () => {
 
   it('should throw ConfigError for invalid config export', async () => {
     // Create config that exports non-object
-    await writeFile(
-      join(tempDir, 'edge.config.ts'),
-      'export default "not an object"'
-    )
+    await writeFile(join(tempDir, 'edge.config.ts'), 'export default "not an object"')
 
     await expect(loadConfig(tempDir)).rejects.toThrow(ConfigError)
   })
 
   it('should load and validate valid config', async () => {
-    await writeFile(
-      join(tempDir, 'edge.config.ts'),
-      `export default { name: 'test-app' }`
-    )
+    await writeFile(join(tempDir, 'edge.config.ts'), `export default { name: 'test-app' }`)
 
     const config = await loadConfig(tempDir)
 
@@ -271,10 +271,7 @@ describe('loadConfig', () => {
   })
 
   it('should merge env files into config.env', async () => {
-    await writeFile(
-      join(tempDir, 'edge.config.ts'),
-      `export default { name: 'test-app' }`
-    )
+    await writeFile(join(tempDir, 'edge.config.ts'), `export default { name: 'test-app' }`)
     await writeFile(join(tempDir, '.env'), 'API_KEY=secret')
 
     const config = await loadConfig(tempDir)
@@ -334,10 +331,7 @@ describe('loadConfig', () => {
   })
 
   it('should respect environment override option', async () => {
-    await writeFile(
-      join(tempDir, 'edge.config.ts'),
-      `export default { name: 'test-app' }`
-    )
+    await writeFile(join(tempDir, 'edge.config.ts'), `export default { name: 'test-app' }`)
     await writeFile(join(tempDir, '.env.production'), 'PROD_VAR=true')
 
     // Force production mode

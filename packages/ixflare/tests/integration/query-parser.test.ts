@@ -37,10 +37,7 @@ describe('Query Parser Integration', () => {
     it('should work with complex filtering scenarios', () => {
       const filterSchema = z.object({
         status: z.enum(['active', 'inactive', 'pending']).optional(),
-        tags: z.preprocess(
-          v => (Array.isArray(v) ? v : v ? [v] : []),
-          z.array(z.string())
-        ),
+        tags: z.preprocess((v) => (Array.isArray(v) ? v : v ? [v] : []), z.array(z.string())),
         minPrice: z.coerce.number().optional(),
         maxPrice: z.coerce.number().optional(),
       })
@@ -109,8 +106,8 @@ describe('Query Parser Integration', () => {
         const errors = json.error.errors as Array<{ field: string; message: string }>
         expect(errors.length).toBeGreaterThanOrEqual(2)
 
-        const emailError = errors.find(e => e.field === 'email')
-        const ageError = errors.find(e => e.field === 'age')
+        const emailError = errors.find((e) => e.field === 'email')
+        const ageError = errors.find((e) => e.field === 'age')
 
         expect(emailError).toBeDefined()
         expect(ageError).toBeDefined()
@@ -191,10 +188,7 @@ describe('Query Parser Integration', () => {
 
     it('should handle boolean-like flags', () => {
       const schema = z.object({
-        verbose: z.preprocess(
-          v => v === '' || v === 'true' || v === '1',
-          z.boolean()
-        ),
+        verbose: z.preprocess((v) => v === '' || v === 'true' || v === '1', z.boolean()),
       })
 
       // ?verbose with no value should be truthy
@@ -257,11 +251,11 @@ describe('Query Parser Integration', () => {
     it('should handle multi-select filters', () => {
       const multiSelectSchema = z.object({
         category: z.preprocess(
-          v => (Array.isArray(v) ? v : v ? [v] : []),
+          (v) => (Array.isArray(v) ? v : v ? [v] : []),
           z.array(z.enum(['electronics', 'clothing', 'books', 'home']))
         ),
         price_range: z.preprocess(
-          v => (Array.isArray(v) ? v : v ? [v] : []),
+          (v) => (Array.isArray(v) ? v : v ? [v] : []),
           z.array(z.enum(['budget', 'mid', 'premium']))
         ),
       })

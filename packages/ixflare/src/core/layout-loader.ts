@@ -76,13 +76,27 @@ export function getLoaderErrorResponse(error: Error): Response {
   }
   if (error instanceof AppError) {
     return Response.json(
-      { error: { code: error.code, message: error.message, status: error.status, timestamp: Date.now() } },
+      {
+        error: {
+          code: error.code,
+          message: error.message,
+          status: error.status,
+          timestamp: Date.now(),
+        },
+      },
       { status: error.status }
     )
   }
   // Unknown error - return 500
   return Response.json(
-    { error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred', status: 500, timestamp: Date.now() } },
+    {
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred',
+        status: 500,
+        timestamp: Date.now(),
+      },
+    },
     { status: 500 }
   )
 }

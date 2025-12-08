@@ -82,12 +82,10 @@ describe('Request helpers', () => {
   describe('getParam', () => {
     it('should get route parameter', () => {
       const request = new Request('https://example.com/users/123')
-      const context = createEdgeContext(
-        request,
-        {},
-        {} as ExecutionContext,
-        { id: '123', type: 'user' }
-      )
+      const context = createEdgeContext(request, {}, {} as ExecutionContext, {
+        id: '123',
+        type: 'user',
+      })
 
       expect(getParam(context, 'id')).toBe('123')
       expect(getParam(context, 'type')).toBe('user')

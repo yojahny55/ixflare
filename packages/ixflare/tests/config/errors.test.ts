@@ -1,10 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import {
-  formatConfigError,
-  createConfigError,
-  ConfigError,
-} from '../../src/config/errors'
+import { formatConfigError, createConfigError, ConfigError } from '../../src/config/errors'
 import { configSchema } from '../../src/config/schema'
 
 describe('ConfigError', () => {
@@ -17,9 +13,7 @@ describe('ConfigError', () => {
   })
 
   it('should create error with issues', () => {
-    const issues = [
-      { path: 'name', message: 'Required' },
-    ]
+    const issues = [{ path: 'name', message: 'Required' }]
     const error = new ConfigError('Test error', issues)
 
     expect(error.issues).toEqual(issues)
@@ -153,7 +147,7 @@ describe('createConfigError', () => {
     if (!result.success) {
       const error = createConfigError(result.error)
 
-      const ttlIssue = error.issues.find(i => i.path.includes('defaultTtl'))
+      const ttlIssue = error.issues.find((i) => i.path.includes('defaultTtl'))
       expect(ttlIssue).toBeDefined()
     }
   })
@@ -167,10 +161,13 @@ describe('createConfigError', () => {
     if (!result.success) {
       const error = createConfigError(result.error)
 
-      expect(error.issues.some(i =>
-        i.message.toLowerCase().includes('at least') ||
-        i.message.toLowerCase().includes('required')
-      )).toBe(true)
+      expect(
+        error.issues.some(
+          (i) =>
+            i.message.toLowerCase().includes('at least') ||
+            i.message.toLowerCase().includes('required')
+        )
+      ).toBe(true)
     }
   })
 
@@ -183,10 +180,12 @@ describe('createConfigError', () => {
     if (!result.success) {
       const error = createConfigError(result.error)
 
-      expect(error.issues.some(i =>
-        i.message.toLowerCase().includes('at most') ||
-        i.message.toLowerCase().includes('100')
-      )).toBe(true)
+      expect(
+        error.issues.some(
+          (i) =>
+            i.message.toLowerCase().includes('at most') || i.message.toLowerCase().includes('100')
+        )
+      ).toBe(true)
     }
   })
 })

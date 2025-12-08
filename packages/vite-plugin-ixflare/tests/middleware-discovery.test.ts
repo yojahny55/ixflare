@@ -2,7 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdir, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { discoverMiddleware, extractMiddlewareChain, type MiddlewareNode } from '../src/middleware-discovery'
+import {
+  discoverMiddleware,
+  extractMiddlewareChain,
+  type MiddlewareNode,
+} from '../src/middleware-discovery'
 
 describe('middleware-discovery', () => {
   let tempDir: string
@@ -21,10 +25,7 @@ describe('middleware-discovery', () => {
   describe('discoverMiddleware', () => {
     it('should discover root middleware file', async () => {
       // Create _middleware.ts at root
-      await writeFile(
-        join(tempDir, '_middleware.ts'),
-        'export const middleware = []'
-      )
+      await writeFile(join(tempDir, '_middleware.ts'), 'export const middleware = []')
 
       const middlewares = await discoverMiddleware(tempDir)
 
@@ -43,7 +44,10 @@ describe('middleware-discovery', () => {
       // Create middleware files
       await writeFile(join(tempDir, '_middleware.ts'), 'export const middleware = []')
       await writeFile(join(tempDir, 'api', '_middleware.ts'), 'export const middleware = []')
-      await writeFile(join(tempDir, 'api', 'admin', '_middleware.ts'), 'export const middleware = []')
+      await writeFile(
+        join(tempDir, 'api', 'admin', '_middleware.ts'),
+        'export const middleware = []'
+      )
 
       const middlewares = await discoverMiddleware(tempDir)
 
@@ -98,7 +102,7 @@ describe('middleware-discovery', () => {
       const middlewares = await discoverMiddleware(tempDir)
 
       expect(middlewares).toHaveLength(4)
-      expect(middlewares.map(m => m.file).sort()).toEqual([
+      expect(middlewares.map((m) => m.file).sort()).toEqual([
         '_middleware.ts',
         'admin/_middleware.jsx',
         'api/_middleware.tsx',
@@ -119,7 +123,10 @@ describe('middleware-discovery', () => {
       // Create middleware files
       await writeFile(join(tempDir, '_middleware.ts'), 'export const middleware = []')
       await writeFile(join(tempDir, 'api', '_middleware.ts'), 'export const middleware = []')
-      await writeFile(join(tempDir, 'api', 'admin', '_middleware.ts'), 'export const middleware = []')
+      await writeFile(
+        join(tempDir, 'api', 'admin', '_middleware.ts'),
+        'export const middleware = []'
+      )
       await writeFile(join(tempDir, 'blog', '_middleware.ts'), 'export const middleware = []')
 
       middlewares = await discoverMiddleware(tempDir)

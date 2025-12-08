@@ -59,7 +59,11 @@ describe('Middleware Composition Integration', () => {
       })
 
       let capturedUser: any = null
-      const handler = compose(logger, auth, timing)((ctx) => {
+      const handler = compose(
+        logger,
+        auth,
+        timing
+      )((ctx) => {
         executionLog.push('handler')
         capturedUser = (ctx as any).user
         return new Response('OK')
@@ -101,7 +105,10 @@ describe('Middleware Composition Integration', () => {
         return response
       })
 
-      const handler = compose(logging, authGuard)(() => {
+      const handler = compose(
+        logging,
+        authGuard
+      )(() => {
         executionLog.push('handler')
         return new Response('Success')
       })
@@ -110,11 +117,7 @@ describe('Middleware Composition Integration', () => {
 
       expect(response.status).toBe(401)
       expect(await response.text()).toBe('Unauthorized')
-      expect(executionLog).toEqual([
-        'logging:before',
-        'authGuard',
-        'logging:after',
-      ])
+      expect(executionLog).toEqual(['logging:before', 'authGuard', 'logging:after'])
       expect(executionLog).not.toContain('handler')
     })
   })
@@ -178,7 +181,7 @@ describe('Middleware Composition Integration', () => {
       expect(response.status).toBe(404)
       const body = await response.json()
       expect(body.error.code).toBe('NOT_FOUND')
-      expect(body.error.message).toContain('Resource with id \'123\' not found')
+      expect(body.error.message).toContain("Resource with id '123' not found")
     })
   })
 
@@ -204,7 +207,10 @@ describe('Middleware Composition Integration', () => {
         })
       })
 
-      const handler = compose(addCorsHeaders, addSecurityHeaders)(() => {
+      const handler = compose(
+        addCorsHeaders,
+        addSecurityHeaders
+      )(() => {
         return new Response('Hello', {
           headers: { 'Content-Type': 'text/plain' },
         })
@@ -272,7 +278,11 @@ describe('Middleware Composition Integration', () => {
         return new Response(response.body, { status: response.status, headers })
       })
 
-      const handler = compose(logger, auth, cors)((ctx) => {
+      const handler = compose(
+        logger,
+        auth,
+        cors
+      )((ctx) => {
         const user = (ctx as any).user
         return Response.json({ message: `Hello, ${user.name}!` })
       })

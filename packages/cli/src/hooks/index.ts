@@ -92,7 +92,9 @@ export class HooksRunner {
    * @throws {HookError} When hook execution fails
    */
   async runPostBuild(context: PostBuildContext): Promise<void> {
-    const hook = this.config?.hooks?.['post-build'] as ((ctx: PostBuildContext) => void | Promise<void>) | undefined
+    const hook = this.config?.hooks?.['post-build'] as
+      | ((ctx: PostBuildContext) => void | Promise<void>)
+      | undefined
     if (!hook) return
 
     try {
@@ -110,7 +112,9 @@ export class HooksRunner {
    * @throws {HookError} When hook execution fails
    */
   async runPreDeploy(context: PreDeployContext): Promise<void> {
-    const hook = this.config?.hooks?.['pre-deploy'] as ((ctx: PreDeployContext) => void | Promise<void>) | undefined
+    const hook = this.config?.hooks?.['pre-deploy'] as
+      | ((ctx: PreDeployContext) => void | Promise<void>)
+      | undefined
     if (!hook) return
 
     try {
@@ -128,7 +132,9 @@ export class HooksRunner {
    * @throws {HookError} When hook execution fails
    */
   async runPostDeploy(context: PostDeployContext): Promise<void> {
-    const hook = this.config?.hooks?.['post-deploy'] as ((ctx: PostDeployContext) => void | Promise<void>) | undefined
+    const hook = this.config?.hooks?.['post-deploy'] as
+      | ((ctx: PostDeployContext) => void | Promise<void>)
+      | undefined
     if (!hook) return
 
     try {

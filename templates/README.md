@@ -4,15 +4,16 @@ This directory contains starter templates for creating new Ixflare projects with
 
 ## Available Templates
 
-| Template | Description | Use Case |
-|----------|-------------|----------|
-| `minimal` | Bare minimum edge project | Learning, simple APIs, quick prototypes |
-| `api-backend` | API-only backend | REST APIs, microservices, webhooks |
-| `fullstack-react` | React + API + SSR | Full web applications with React UI |
+| Template          | Description               | Use Case                                |
+| ----------------- | ------------------------- | --------------------------------------- |
+| `minimal`         | Bare minimum edge project | Learning, simple APIs, quick prototypes |
+| `api-backend`     | API-only backend          | REST APIs, microservices, webhooks      |
+| `fullstack-react` | React + API + SSR         | Full web applications with React UI     |
 
 ## Template Structure
 
 ### minimal/
+
 ```
 minimal/
 ├── src/
@@ -35,6 +36,7 @@ minimal/
 ```
 
 ### api-backend/
+
 ```
 api-backend/
 ├── src/
@@ -69,6 +71,7 @@ api-backend/
 ```
 
 ### fullstack-react/
+
 ```
 fullstack-react/
 ├── src/
@@ -111,11 +114,11 @@ fullstack-react/
 
 The `_fragments/` directory contains reusable configuration files that are shared across templates:
 
-| Fragment | Purpose |
-|----------|---------|
-| `base-config.ts` | Common edge.config.ts settings |
-| `tsconfig-base.json` | TypeScript compiler options |
-| `eslint-base.js` | ESLint rules for edge runtime |
+| Fragment             | Purpose                        |
+| -------------------- | ------------------------------ |
+| `base-config.ts`     | Common edge.config.ts settings |
+| `tsconfig-base.json` | TypeScript compiler options    |
+| `eslint-base.js`     | ESLint rules for edge runtime  |
 
 Templates can reference these fragments for consistency. The scaffolding process handles incorporating these into final project configs.
 
@@ -123,11 +126,11 @@ Templates can reference these fragments for consistency. The scaffolding process
 
 Templates support the following placeholder variables that are replaced during scaffolding:
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `{{projectName}}` | Project name as provided by user | `my-app` |
-| `{{projectNameKebab}}` | Project name in kebab-case | `my-app` |
-| `{{projectNamePascal}}` | Project name in PascalCase | `MyApp` |
+| Variable                | Description                      | Example  |
+| ----------------------- | -------------------------------- | -------- |
+| `{{projectName}}`       | Project name as provided by user | `my-app` |
+| `{{projectNameKebab}}`  | Project name in kebab-case       | `my-app` |
+| `{{projectNamePascal}}` | Project name in PascalCase       | `MyApp`  |
 
 ## File Naming Conventions
 
@@ -154,6 +157,7 @@ Each template should have corresponding tests that verify:
 - No forbidden files included (e.g., React in api-backend)
 
 Run tests with:
+
 ```bash
 pnpm test --filter=create-ixflare
 ```

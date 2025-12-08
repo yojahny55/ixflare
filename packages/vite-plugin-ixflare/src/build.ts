@@ -4,7 +4,13 @@
  * @node-only
  */
 
-import { discoverRoutes, detectRouteConflicts, generateRouteManifest, type RouteManifest, type Route } from './router-codegen'
+import {
+  discoverRoutes,
+  detectRouteConflicts,
+  generateRouteManifest,
+  type RouteManifest,
+  type Route,
+} from './router-codegen'
 
 export interface BuildConfig {
   routesDir: string
@@ -70,8 +76,8 @@ export function optimizeRoutes(manifest: RouteManifest): RouteManifest {
   // Sort by specificity
   const sortedRoutes = Array.from(uniqueRoutes.values()).sort((a, b) => {
     // Split paths into segments
-    const aSegments = a.path.split('/').filter(s => s)
-    const bSegments = b.path.split('/').filter(s => s)
+    const aSegments = a.path.split('/').filter((s) => s)
+    const bSegments = b.path.split('/').filter((s) => s)
 
     // Longer paths (more segments) come first (more specific)
     if (aSegments.length !== bSegments.length) {

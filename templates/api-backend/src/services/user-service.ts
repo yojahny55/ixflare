@@ -44,8 +44,20 @@ export class UserService {
     // This demonstrates the expected API shape
 
     const mockUsers: UserRecord[] = [
-      { id: '1', email: 'alice@example.com', name: 'Alice', createdAt: Date.now(), updatedAt: Date.now() },
-      { id: '2', email: 'bob@example.com', name: 'Bob', createdAt: Date.now(), updatedAt: Date.now() },
+      {
+        id: '1',
+        email: 'alice@example.com',
+        name: 'Alice',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+      {
+        id: '2',
+        email: 'bob@example.com',
+        name: 'Bob',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
     ]
 
     // Filter by search term if provided
@@ -53,7 +65,8 @@ export class UserService {
     if (query.search) {
       const searchLower = query.search.toLowerCase()
       filtered = mockUsers.filter(
-        (u) => u.name.toLowerCase().includes(searchLower) || u.email.toLowerCase().includes(searchLower)
+        (u) =>
+          u.name.toLowerCase().includes(searchLower) || u.email.toLowerCase().includes(searchLower)
       )
     }
 

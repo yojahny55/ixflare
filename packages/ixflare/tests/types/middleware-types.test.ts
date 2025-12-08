@@ -5,7 +5,12 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { createMiddleware, defineMiddleware, type Middleware, type MiddlewareContext } from '../../src'
+import {
+  createMiddleware,
+  defineMiddleware,
+  type Middleware,
+  type MiddlewareContext,
+} from '../../src'
 import type { EdgeContext } from '../../src/types/context'
 
 // Module augmentation for type-safe context extensions

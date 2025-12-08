@@ -167,10 +167,7 @@ describe('wrangler-exec', () => {
 
       const dryRunPromise = executeWranglerDryRun()
 
-      mockProcess.stdout.emit(
-        'data',
-        Buffer.from('Total Upload: 1024 KiB (gzip: 256 KiB)\n')
-      )
+      mockProcess.stdout.emit('data', Buffer.from('Total Upload: 1024 KiB (gzip: 256 KiB)\n'))
       mockProcess.emit('close', 0)
 
       const result = await dryRunPromise

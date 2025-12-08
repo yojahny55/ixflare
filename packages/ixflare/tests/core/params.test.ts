@@ -45,7 +45,10 @@ describe('extractParamsFromUrl', () => {
   })
 
   it('should extract parameters from nested routes', () => {
-    const params = extractParamsFromUrl('/api/v1/users/:userId/posts/:postId', '/api/v1/users/123/posts/456')
+    const params = extractParamsFromUrl(
+      '/api/v1/users/:userId/posts/:postId',
+      '/api/v1/users/123/posts/456'
+    )
     expect(params).toEqual({
       userId: '123',
       postId: '456',
@@ -97,7 +100,7 @@ describe('validateParams', () => {
     // For proper URL param boolean handling, use custom transform:
     // z.string().transform(v => v === 'true')
     const schema = z.object({
-      active: z.string().transform(v => v === 'true'),
+      active: z.string().transform((v) => v === 'true'),
     })
 
     const result = validateParams({ active: 'true' }, schema)
@@ -114,10 +117,7 @@ describe('validateParams', () => {
       role: z.string().regex(/^[a-z]+$/),
     })
 
-    const result = validateParams(
-      { userId: '123', page: '2', role: 'admin' },
-      schema
-    )
+    const result = validateParams({ userId: '123', page: '2', role: 'admin' }, schema)
 
     expect(result).toEqual({
       userId: 123,
@@ -180,10 +180,7 @@ describe('validateParams', () => {
       path: z.array(z.string()),
     })
 
-    const result = validateParams(
-      { path: ['guides', 'routing', 'basics'] },
-      schema
-    )
+    const result = validateParams({ path: ['guides', 'routing', 'basics'] }, schema)
 
     expect(result).toEqual({
       path: ['guides', 'routing', 'basics'],
@@ -193,7 +190,7 @@ describe('validateParams', () => {
   it('should handle URL param boolean coercion correctly', () => {
     // Demonstrates proper way to handle boolean URL params
     const schema = z.object({
-      isActive: z.string().transform(v => v === 'true' || v === '1'),
+      isActive: z.string().transform((v) => v === 'true' || v === '1'),
     })
 
     expect(validateParams({ isActive: 'true' }, schema)).toEqual({ isActive: true })
@@ -239,11 +236,7 @@ describe('matchRouteWithParams', () => {
       id: z.coerce.number().int().positive(),
     })
 
-    const result = matchRouteWithParams(
-      '/:org/:repo/issues/:id',
-      '/acme/widgets/issues/42',
-      schema
-    )
+    const result = matchRouteWithParams('/:org/:repo/issues/:id', '/acme/widgets/issues/42', schema)
 
     expect(result).toEqual({
       org: 'acme',

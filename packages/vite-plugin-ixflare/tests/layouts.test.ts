@@ -19,7 +19,7 @@ describe('Layout Discovery', () => {
     it('should find single layout in same directory', () => {
       const route = 'dashboard/index.tsx'
       const layouts: LayoutNode[] = [
-        { file: 'dashboard/_layout.tsx', parentDir: 'dashboard', depth: 1 }
+        { file: 'dashboard/_layout.tsx', parentDir: 'dashboard', depth: 1 },
       ]
 
       const chain = extractLayoutChain(route, layouts)
@@ -29,9 +29,7 @@ describe('Layout Discovery', () => {
 
     it('should find root layout', () => {
       const route = 'index.tsx'
-      const layouts: LayoutNode[] = [
-        { file: '_layout.tsx', parentDir: '', depth: 0 }
-      ]
+      const layouts: LayoutNode[] = [{ file: '_layout.tsx', parentDir: '', depth: 0 }]
 
       const chain = extractLayoutChain(route, layouts)
 
@@ -43,7 +41,7 @@ describe('Layout Discovery', () => {
       const layouts: LayoutNode[] = [
         { file: '_layout.tsx', parentDir: '', depth: 0 },
         { file: 'dashboard/_layout.tsx', parentDir: 'dashboard', depth: 1 },
-        { file: 'dashboard/settings/_layout.tsx', parentDir: 'dashboard/settings', depth: 2 }
+        { file: 'dashboard/settings/_layout.tsx', parentDir: 'dashboard/settings', depth: 2 },
       ]
 
       const chain = extractLayoutChain(route, layouts)
@@ -51,7 +49,7 @@ describe('Layout Discovery', () => {
       expect(chain).toEqual([
         '_layout.tsx',
         'dashboard/_layout.tsx',
-        'dashboard/settings/_layout.tsx'
+        'dashboard/settings/_layout.tsx',
       ])
     })
 
@@ -60,15 +58,12 @@ describe('Layout Discovery', () => {
       const layouts: LayoutNode[] = [
         { file: '_layout.tsx', parentDir: '', depth: 0 },
         { file: 'dashboard/_layout.tsx', parentDir: 'dashboard', depth: 1 },
-        { file: 'dashboard/settings/_layout.tsx', parentDir: 'dashboard/settings', depth: 2 }
+        { file: 'dashboard/settings/_layout.tsx', parentDir: 'dashboard/settings', depth: 2 },
       ]
 
       const chain = extractLayoutChain(route, layouts)
 
-      expect(chain).toEqual([
-        '_layout.tsx',
-        'dashboard/_layout.tsx'
-      ])
+      expect(chain).toEqual(['_layout.tsx', 'dashboard/_layout.tsx'])
     })
 
     it('should handle deeply nested layouts (5+ levels)', () => {
@@ -79,7 +74,7 @@ describe('Layout Discovery', () => {
         { file: 'a/b/_layout.tsx', parentDir: 'a/b', depth: 2 },
         { file: 'a/b/c/_layout.tsx', parentDir: 'a/b/c', depth: 3 },
         { file: 'a/b/c/d/_layout.tsx', parentDir: 'a/b/c/d', depth: 4 },
-        { file: 'a/b/c/d/e/_layout.tsx', parentDir: 'a/b/c/d/e', depth: 5 }
+        { file: 'a/b/c/d/e/_layout.tsx', parentDir: 'a/b/c/d/e', depth: 5 },
       ]
 
       const chain = extractLayoutChain(route, layouts)
@@ -93,15 +88,12 @@ describe('Layout Discovery', () => {
       const route = 'blog/[id]/edit.tsx'
       const layouts: LayoutNode[] = [
         { file: '_layout.tsx', parentDir: '', depth: 0 },
-        { file: 'blog/_layout.tsx', parentDir: 'blog', depth: 1 }
+        { file: 'blog/_layout.tsx', parentDir: 'blog', depth: 1 },
       ]
 
       const chain = extractLayoutChain(route, layouts)
 
-      expect(chain).toEqual([
-        '_layout.tsx',
-        'blog/_layout.tsx'
-      ])
+      expect(chain).toEqual(['_layout.tsx', 'blog/_layout.tsx'])
     })
 
     it('should sort layouts by depth (outermost first)', () => {
@@ -110,7 +102,7 @@ describe('Layout Discovery', () => {
       const layouts: LayoutNode[] = [
         { file: 'dashboard/settings/_layout.tsx', parentDir: 'dashboard/settings', depth: 2 },
         { file: '_layout.tsx', parentDir: '', depth: 0 },
-        { file: 'dashboard/_layout.tsx', parentDir: 'dashboard', depth: 1 }
+        { file: 'dashboard/_layout.tsx', parentDir: 'dashboard', depth: 1 },
       ]
 
       const chain = extractLayoutChain(route, layouts)
@@ -118,7 +110,7 @@ describe('Layout Discovery', () => {
       expect(chain).toEqual([
         '_layout.tsx',
         'dashboard/_layout.tsx',
-        'dashboard/settings/_layout.tsx'
+        'dashboard/settings/_layout.tsx',
       ])
     })
   })
@@ -136,7 +128,7 @@ describe('Layout Discovery', () => {
       const node: LayoutNode = {
         file: 'dashboard/settings/_layout.tsx',
         parentDir: 'dashboard/settings',
-        depth: 2
+        depth: 2,
       }
 
       expect(node).toHaveProperty('file')

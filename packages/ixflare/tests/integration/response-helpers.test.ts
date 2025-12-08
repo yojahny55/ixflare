@@ -109,7 +109,7 @@ describe('Response Helpers Integration', () => {
 
         for (const record of records) {
           // Simulate async fetch delay
-          await new Promise(resolve => setTimeout(resolve, 1))
+          await new Promise((resolve) => setTimeout(resolve, 1))
           yield JSON.stringify(record) + '\n'
         }
       }
@@ -128,7 +128,11 @@ describe('Response Helpers Integration', () => {
       const response = eventStream(async function* () {
         yield { event: 'connected', data: JSON.stringify({ status: 'ok' }) }
         yield { event: 'notification', id: '1', data: JSON.stringify({ message: 'New message!' }) }
-        yield { event: 'notification', id: '2', data: JSON.stringify({ message: 'Another update' }) }
+        yield {
+          event: 'notification',
+          id: '2',
+          data: JSON.stringify({ message: 'Another update' }),
+        }
       })
 
       expect(response.headers.get('Content-Type')).toBe('text/event-stream')

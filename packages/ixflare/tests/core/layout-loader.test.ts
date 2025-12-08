@@ -135,7 +135,9 @@ describe('Layout Loader Execution', () => {
         throw new Error('Loader failed')
       })
 
-      await expect(executeLoaders([errorLoader], undefined, mockArgs)).rejects.toThrow('Loader failed')
+      await expect(executeLoaders([errorLoader], undefined, mockArgs)).rejects.toThrow(
+        'Loader failed'
+      )
     })
 
     it('should fail fast when any loader throws', async () => {
@@ -149,7 +151,9 @@ describe('Layout Loader Execution', () => {
       })
 
       const startTime = Date.now()
-      await expect(executeLoaders([slowLoader, errorLoader], undefined, mockArgs)).rejects.toThrow('Fast fail')
+      await expect(executeLoaders([slowLoader, errorLoader], undefined, mockArgs)).rejects.toThrow(
+        'Fast fail'
+      )
       const duration = Date.now() - startTime
 
       // Should fail immediately when errorLoader throws, not wait for slowLoader

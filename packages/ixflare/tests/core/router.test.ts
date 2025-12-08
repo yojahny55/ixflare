@@ -54,10 +54,14 @@ describe('Router', () => {
       const router = createRouter()
       let capturedParams: Record<string, string | string[]> = {}
 
-      router.add('/docs/*', ({ params }) => {
-        capturedParams = params
-        return new Response('docs')
-      }, { catchAllParam: 'path' })
+      router.add(
+        '/docs/*',
+        ({ params }) => {
+          capturedParams = params
+          return new Response('docs')
+        },
+        { catchAllParam: 'path' }
+      )
 
       const request = new Request('http://localhost/docs/guides/routing/basics')
       await router.handle(request, {})
@@ -71,10 +75,14 @@ describe('Router', () => {
       const router = createRouter()
       let capturedParams: Record<string, string | string[]> = {}
 
-      router.add('/docs/*', ({ params }) => {
-        capturedParams = params
-        return new Response('docs')
-      }, { catchAllParam: 'path' })
+      router.add(
+        '/docs/*',
+        ({ params }) => {
+          capturedParams = params
+          return new Response('docs')
+        },
+        { catchAllParam: 'path' }
+      )
 
       const request = new Request('http://localhost/docs/')
       await router.handle(request, {})
@@ -92,10 +100,14 @@ describe('Router', () => {
         userId: z.coerce.number().int().positive(),
       })
 
-      router.add('/users/:userId', ({ params }) => {
-        capturedParams = params
-        return new Response('user')
-      }, { paramsSchema: schema })
+      router.add(
+        '/users/:userId',
+        ({ params }) => {
+          capturedParams = params
+          return new Response('user')
+        },
+        { paramsSchema: schema }
+      )
 
       const request = new Request('http://localhost/users/123')
       const response = await router.handle(request, {})
@@ -111,9 +123,13 @@ describe('Router', () => {
         userId: z.coerce.number().int().positive(),
       })
 
-      router.add('/users/:userId', () => {
-        return new Response('user')
-      }, { paramsSchema: schema })
+      router.add(
+        '/users/:userId',
+        () => {
+          return new Response('user')
+        },
+        { paramsSchema: schema }
+      )
 
       const request = new Request('http://localhost/users/invalid')
       const response = await router.handle(request, {})
@@ -133,9 +149,13 @@ describe('Router', () => {
         userId: z.coerce.number().int().positive(),
       })
 
-      router.add('/users/:userId', () => {
-        return new Response('user')
-      }, { paramsSchema: schema })
+      router.add(
+        '/users/:userId',
+        () => {
+          return new Response('user')
+        },
+        { paramsSchema: schema }
+      )
 
       const request = new Request('http://localhost/users/-5')
       const response = await router.handle(request, {})
@@ -153,10 +173,14 @@ describe('Router', () => {
         id: z.coerce.number().int().positive(),
       })
 
-      router.add('/:org/:repo/issues/:id', ({ params }) => {
-        capturedParams = params
-        return new Response('issue')
-      }, { paramsSchema: schema })
+      router.add(
+        '/:org/:repo/issues/:id',
+        ({ params }) => {
+          capturedParams = params
+          return new Response('issue')
+        },
+        { paramsSchema: schema }
+      )
 
       const request = new Request('http://localhost/acme/widgets/issues/42')
       const response = await router.handle(request, {})
@@ -177,10 +201,14 @@ describe('Router', () => {
         path: z.array(z.string().min(1)),
       })
 
-      router.add('/docs/*', ({ params }) => {
-        capturedParams = params
-        return new Response('docs')
-      }, { catchAllParam: 'path', paramsSchema: schema })
+      router.add(
+        '/docs/*',
+        ({ params }) => {
+          capturedParams = params
+          return new Response('docs')
+        },
+        { catchAllParam: 'path', paramsSchema: schema }
+      )
 
       const request = new Request('http://localhost/docs/guides/routing')
       const response = await router.handle(request, {})
@@ -231,9 +259,14 @@ describe('Router', () => {
     it('should auto-generate HEAD handler from GET handler', async () => {
       const router = createRouter()
 
-      router.add('/users', () => new Response('User list', {
-        headers: { 'Content-Type': 'text/plain', 'X-Custom': 'value' }
-      }), { methods: ['GET'] })
+      router.add(
+        '/users',
+        () =>
+          new Response('User list', {
+            headers: { 'Content-Type': 'text/plain', 'X-Custom': 'value' },
+          }),
+        { methods: ['GET'] }
+      )
 
       const request = new Request('http://localhost/users', { method: 'HEAD' })
       const response = await router.handle(request, {})
@@ -284,10 +317,14 @@ describe('Router', () => {
         },
       ]
 
-      router.add('/test', () => {
-        calls.push('handler')
-        return new Response('OK')
-      }, { globalMiddleware })
+      router.add(
+        '/test',
+        () => {
+          calls.push('handler')
+          return new Response('OK')
+        },
+        { globalMiddleware }
+      )
 
       const request = new Request('http://localhost/test')
       await router.handle(request, {})
@@ -326,14 +363,18 @@ describe('Router', () => {
         },
       ]
 
-      router.add('/test', () => {
-        calls.push('handler')
-        return new Response('OK')
-      }, {
-        globalMiddleware,
-        directoryMiddleware,
-        routeMiddleware,
-      })
+      router.add(
+        '/test',
+        () => {
+          calls.push('handler')
+          return new Response('OK')
+        },
+        {
+          globalMiddleware,
+          directoryMiddleware,
+          routeMiddleware,
+        }
+      )
 
       const request = new Request('http://localhost/test')
       await router.handle(request, {})
@@ -368,21 +409,19 @@ describe('Router', () => {
         },
       ]
 
-      router.add('/api/admin/users', () => {
-        calls.push('handler')
-        return new Response('OK')
-      }, { globalMiddleware, directoryMiddleware })
+      router.add(
+        '/api/admin/users',
+        () => {
+          calls.push('handler')
+          return new Response('OK')
+        },
+        { globalMiddleware, directoryMiddleware }
+      )
 
       const request = new Request('http://localhost/api/admin/users')
       await router.handle(request, {})
 
-      expect(calls).toEqual([
-        'global',
-        'dir-root',
-        'dir-api',
-        'dir-api-admin',
-        'handler',
-      ])
+      expect(calls).toEqual(['global', 'dir-root', 'dir-api', 'dir-api-admin', 'handler'])
     })
 
     it('should allow middleware to short-circuit the chain', async () => {
@@ -405,10 +444,14 @@ describe('Router', () => {
         },
       ]
 
-      router.add('/test', () => {
-        calls.push('handler-should-not-run')
-        return new Response('OK')
-      }, { globalMiddleware })
+      router.add(
+        '/test',
+        () => {
+          calls.push('handler-should-not-run')
+          return new Response('OK')
+        },
+        { globalMiddleware }
+      )
 
       const request = new Request('http://localhost/test')
       const response = await router.handle(request, {})
@@ -421,13 +464,17 @@ describe('Router', () => {
     it('should apply middleware chain with empty arrays', async () => {
       const router = createRouter()
 
-      router.add('/test', () => {
-        return new Response('OK')
-      }, {
-        globalMiddleware: [],
-        directoryMiddleware: [],
-        routeMiddleware: [],
-      })
+      router.add(
+        '/test',
+        () => {
+          return new Response('OK')
+        },
+        {
+          globalMiddleware: [],
+          directoryMiddleware: [],
+          routeMiddleware: [],
+        }
+      )
 
       const request = new Request('http://localhost/test')
       const response = await router.handle(request, {})

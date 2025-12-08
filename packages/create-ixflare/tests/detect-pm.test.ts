@@ -96,9 +96,7 @@ describe('detectFromPackageJson', () => {
 
   it('should detect pnpm from packageManager field', () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(readFileSync).mockReturnValue(
-      JSON.stringify({ packageManager: 'pnpm@8.0.0' })
-    )
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ packageManager: 'pnpm@8.0.0' }))
 
     const result = detectFromPackageJson('/test')
     expect(result).toBe('pnpm')
@@ -106,9 +104,7 @@ describe('detectFromPackageJson', () => {
 
   it('should detect npm from packageManager field', () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(readFileSync).mockReturnValue(
-      JSON.stringify({ packageManager: 'npm@10.0.0' })
-    )
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ packageManager: 'npm@10.0.0' }))
 
     const result = detectFromPackageJson('/test')
     expect(result).toBe('npm')
@@ -116,9 +112,7 @@ describe('detectFromPackageJson', () => {
 
   it('should detect bun from packageManager field', () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(readFileSync).mockReturnValue(
-      JSON.stringify({ packageManager: 'bun@1.0.0' })
-    )
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ packageManager: 'bun@1.0.0' }))
 
     const result = detectFromPackageJson('/test')
     expect(result).toBe('bun')
@@ -133,9 +127,7 @@ describe('detectFromPackageJson', () => {
 
   it('should return null when packageManager field is missing', () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(readFileSync).mockReturnValue(
-      JSON.stringify({ name: 'test' })
-    )
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ name: 'test' }))
 
     const result = detectFromPackageJson('/test')
     expect(result).toBeNull()

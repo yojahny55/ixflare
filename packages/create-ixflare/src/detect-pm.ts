@@ -18,13 +18,7 @@ const LOCKFILE_MAP: Record<string, PackageManager> = {
 }
 
 /** Order of lockfile checking (pnpm preferred, then npm, then bun) */
-const LOCKFILE_ORDER = [
-  'pnpm-lock.yaml',
-  'package-lock.json',
-  'yarn.lock',
-  'bun.lockb',
-  'bun.lock',
-]
+const LOCKFILE_ORDER = ['pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'bun.lockb', 'bun.lock']
 
 /**
  * Detect package manager from lockfiles in directory

@@ -7,12 +7,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdir, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import {
-  buildRoutes,
-  bundleManifest,
-  optimizeRoutes,
-  type BuildConfig,
-} from '../src/build'
+import { buildRoutes, bundleManifest, optimizeRoutes, type BuildConfig } from '../src/build'
 import type { RouteManifest } from '../src/router-codegen'
 
 describe('build', () => {
@@ -183,7 +178,7 @@ describe('build', () => {
 
       expect(optimized.routes).toHaveLength(3)
       // More specific routes (more segments) come first: /api/users (2 segments), /blog/:slug (2 segments), / (0 segments)
-      const paths = optimized.routes.map(r => r.path)
+      const paths = optimized.routes.map((r) => r.path)
       expect(paths).toContain('/')
       expect(paths).toContain('/blog/:slug')
       expect(paths).toContain('/api/users')

@@ -249,7 +249,7 @@ export function detectRouteConflicts(routes: Route[]): void {
   for (const [, routesForPath] of pathMap) {
     if (routesForPath.length > 1) {
       const path = routesForPath[0].path
-      const fileList = routesForPath.map(r => `  • ${r.file}`).join('\n')
+      const fileList = routesForPath.map((r) => `  • ${r.file}`).join('\n')
       throw new Error(
         `Route conflict detected!\nBoth files resolve to ${path}:\n${fileList}\nSolution: Remove one of these files.`
       )

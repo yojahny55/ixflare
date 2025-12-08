@@ -75,7 +75,4 @@ export type RouteHandler = (ctx: RouteContext) => Promise<Response>
 /**
  * Middleware function type
  */
-export type Middleware = (
-  ctx: RouteContext,
-  next: () => Promise<Response>
-) => Promise<Response>
+export type Middleware = (ctx: RouteContext, next: () => Promise<Response>) => Promise<Response>

@@ -109,7 +109,10 @@ export function createMiddleware<Env = unknown>(fn: Middleware<Env>): Middleware
  * })
  * ```
  */
-export type MiddlewareContext<Env = unknown, Extensions = Record<string, unknown>> = EdgeContext<Env> & Extensions
+export type MiddlewareContext<
+  Env = unknown,
+  Extensions = Record<string, unknown>,
+> = EdgeContext<Env> & Extensions
 
 /**
  * Define a middleware with enhanced type inference
@@ -157,9 +160,7 @@ export const defineMiddleware = createMiddleware
  * )
  * ```
  */
-export function withErrorBoundary<Env = unknown>(
-  middleware: Middleware<Env>
-): Middleware<Env> {
+export function withErrorBoundary<Env = unknown>(middleware: Middleware<Env>): Middleware<Env> {
   return async (ctx, next) => {
     try {
       return await middleware(ctx, next)
@@ -175,14 +176,17 @@ export function withErrorBoundary<Env = unknown>(
         console.error('[Middleware Error]', error)
       }
 
-      return Response.json({
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'An unexpected error occurred',
-          status: 500,
-          timestamp: Date.now(),
-        }
-      }, { status: 500 })
+      return Response.json(
+        {
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'An unexpected error occurred',
+            status: 500,
+            timestamp: Date.now(),
+          },
+        },
+        { status: 500 }
+      )
     }
   }
 }
@@ -228,7 +232,9 @@ export function withErrorBoundary<Env = unknown>(
  *
  * @throws {Error} If `next()` is called multiple times within a single middleware
  */
-export function compose<Env = unknown>(...middlewares: Middleware<Env>[]): (handler: RouteHandler<Env>) => RouteHandler<Env> {
+export function compose<Env = unknown>(
+  ...middlewares: Middleware<Env>[]
+): (handler: RouteHandler<Env>) => RouteHandler<Env> {
   return (handler: RouteHandler<Env>): RouteHandler<Env> => {
     return async (context: EdgeContext<Env>): Promise<Response> => {
       let index = -1

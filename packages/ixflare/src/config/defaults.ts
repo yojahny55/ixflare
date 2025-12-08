@@ -48,10 +48,7 @@ export const defaults: Partial<IxflareConfig> = {
  * @param source - Object with user-provided values to merge in
  * @returns Merged object with source values overriding target
  */
-export function deepMerge<T extends Record<string, unknown>>(
-  target: T,
-  source: Partial<T>
-): T {
+export function deepMerge<T extends Record<string, unknown>>(target: T, source: Partial<T>): T {
   const result = { ...target }
 
   for (const key in source) {

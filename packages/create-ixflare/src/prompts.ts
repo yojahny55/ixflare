@@ -46,9 +46,7 @@ const PM_CHOICES = [
 /**
  * Prompt for project name with validation
  */
-export async function promptProjectName(
-  defaultName?: string
-): Promise<string | null> {
+export async function promptProjectName(defaultName?: string): Promise<string | null> {
   const response = await prompts(
     {
       type: 'text',
@@ -74,12 +72,8 @@ export async function promptProjectName(
 /**
  * Prompt for template selection
  */
-export async function promptTemplate(
-  defaultTemplate?: Template
-): Promise<Template | null> {
-  const initialIndex = defaultTemplate
-    ? TEMPLATES.indexOf(defaultTemplate)
-    : 0
+export async function promptTemplate(defaultTemplate?: Template): Promise<Template | null> {
+  const initialIndex = defaultTemplate ? TEMPLATES.indexOf(defaultTemplate) : 0
 
   const response = await prompts(
     {
@@ -106,9 +100,7 @@ export async function promptTemplate(
 export async function promptPackageManager(
   defaultPm?: PackageManager
 ): Promise<PackageManager | null> {
-  const initialIndex = defaultPm
-    ? PACKAGE_MANAGERS.indexOf(defaultPm)
-    : 0
+  const initialIndex = defaultPm ? PACKAGE_MANAGERS.indexOf(defaultPm) : 0
 
   const response = await prompts(
     {

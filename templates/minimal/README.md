@@ -73,6 +73,7 @@ npm run deploy
 ```
 
 The CLI will:
+
 - ✓ Check deployment prerequisites
 - ✓ Validate bundle size (must be under 3MB for free tier)
 - ✓ Build your application
@@ -113,6 +114,7 @@ Ixflare uses a layered approach to environment configuration:
 ### Setup
 
 1. Copy `.env.example` to `.env.local`:
+
    ```bash
    cp .env.example .env.local
    ```

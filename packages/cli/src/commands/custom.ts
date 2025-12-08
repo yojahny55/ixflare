@@ -60,10 +60,7 @@ export async function loadCustomCommands(projectRoot: string): Promise<LoadCusto
  * @param config - Pre-loaded config (avoids re-loading)
  * @throws {CommandError} When command is not found or execution fails
  */
-export async function runCustomCommand(
-  commandName: string,
-  config: IxflareConfig
-): Promise<void> {
+export async function runCustomCommand(commandName: string, config: IxflareConfig): Promise<void> {
   const command = config.commands?.[commandName]
 
   if (!command) {

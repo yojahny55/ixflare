@@ -257,9 +257,7 @@ export async function loadConfig(
 
   // 3. Environment-specific files (staging or production only)
   const stagingEnv =
-    environment === 'staging'
-      ? await loadEnvFile(join(resolvedRoot, '.env.staging'))
-      : { vars: {} }
+    environment === 'staging' ? await loadEnvFile(join(resolvedRoot, '.env.staging')) : { vars: {} }
 
   const prodEnv =
     environment === 'production'
@@ -347,17 +345,11 @@ export async function loadEnv(
   const baseEnv = await loadEnvFile(join(resolvedRoot, '.env'))
   const localEnv = await loadEnvFile(join(resolvedRoot, '.env.local'))
   const stagingEnv =
-    env === 'staging'
-      ? await loadEnvFile(join(resolvedRoot, '.env.staging'))
-      : { vars: {} }
+    env === 'staging' ? await loadEnvFile(join(resolvedRoot, '.env.staging')) : { vars: {} }
   const prodEnv =
-    env === 'production'
-      ? await loadEnvFile(join(resolvedRoot, '.env.production'))
-      : { vars: {} }
+    env === 'production' ? await loadEnvFile(join(resolvedRoot, '.env.production')) : { vars: {} }
   const devVars =
-    env === 'development'
-      ? await loadEnvFile(join(resolvedRoot, '.dev.vars'))
-      : { vars: {} }
+    env === 'development' ? await loadEnvFile(join(resolvedRoot, '.dev.vars')) : { vars: {} }
   const wranglerVars = await loadWranglerVars(join(resolvedRoot, 'wrangler.toml'))
 
   return {
