@@ -5,6 +5,7 @@
  */
 
 import { z } from 'zod'
+import type { Middleware } from '@/core/middleware'
 
 /**
  * Database configuration schema
@@ -129,6 +130,33 @@ export const configSchema = z.object({
 
   /** Custom CLI commands */
   commands: z.record(z.string(), commandSchema).optional(),
+
+  /**
+   * Global middleware that runs on every request
+   *
+   * Middleware are executed in array order before any directory or route-specific middleware.
+   *
+   * @example
+   * ```typescript
+   * import { defineConfig, createMiddleware } from 'ixflare'
+   *
+   * export default defineConfig({
+   *   name: 'my-app',
+   *   middleware: [
+   *     createMiddleware(async (ctx, next) => {
+   *       console.log(`${ctx.method} ${ctx.url.pathname}`)
+   *       return next()
+   *     }),
+   *     createMiddleware(async (ctx, next) => {
+   *       const response = await next()
+   *       response.headers.set('X-Powered-By', 'Ixflare')
+   *       return response
+   *     }),
+   *   ],
+   * })
+   * ```
+   */
+  middleware: z.array(z.any()).optional(),
 })
 
 /**

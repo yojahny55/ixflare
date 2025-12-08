@@ -7,9 +7,11 @@
 import type { ZodSchema } from 'zod'
 import type { EdgeContext } from '@/types/context'
 import type { PageLoaderFunction } from '@/types/handlers'
+import type { Middleware } from './middleware'
 import { createEdgeContext } from '@/types/context'
 import { extractParamsFromUrl, parseCatchAllParam, validateParams } from './params'
 import { getLoaderErrorResponse } from './layout-loader'
+import { compose } from './middleware'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS'
 
@@ -24,6 +26,12 @@ export interface Route<Env = unknown> {
   paramsSchema?: ZodSchema
   /** Optional page loader function that runs before handler */
   loader?: PageLoaderFunction<unknown, Env>
+  /** Global middleware (from edge.config.ts) */
+  globalMiddleware?: Middleware<Env>[]
+  /** Directory middleware chain (from _middleware.ts files) */
+  directoryMiddleware?: Middleware<Env>[]
+  /** Route-specific middleware (from route file) */
+  routeMiddleware?: Middleware<Env>[]
 }
 
 export type RouteHandler<Env = unknown> = (context: EdgeContext<Env>) => Response | Promise<Response>
@@ -90,6 +98,9 @@ export class Router<Env = unknown> {
    * @param options.catchAllParam - Name of catch-all parameter (e.g., 'path' from [...path].tsx)
    * @param options.paramsSchema - Zod schema for automatic parameter validation
    * @param options.loader - Optional page loader function that runs before handler
+   * @param options.globalMiddleware - Global middleware from config
+   * @param options.directoryMiddleware - Directory-level middleware chain
+   * @param options.routeMiddleware - Route-specific middleware
    */
   add(
     path: string,
@@ -99,6 +110,9 @@ export class Router<Env = unknown> {
       catchAllParam?: string
       paramsSchema?: ZodSchema
       loader?: PageLoaderFunction<unknown, Env>
+      globalMiddleware?: Middleware<Env>[]
+      directoryMiddleware?: Middleware<Env>[]
+      routeMiddleware?: Middleware<Env>[]
     }
   ): this {
     this.routes.push({
@@ -108,6 +122,9 @@ export class Router<Env = unknown> {
       catchAllParam: options?.catchAllParam,
       paramsSchema: options?.paramsSchema,
       loader: options?.loader,
+      globalMiddleware: options?.globalMiddleware,
+      directoryMiddleware: options?.directoryMiddleware,
+      routeMiddleware: options?.routeMiddleware,
     })
     return this
   }
@@ -144,6 +161,9 @@ export class Router<Env = unknown> {
     let matchedParams: Record<string, string | string[]> | null = null
     let matchedSchema: ZodSchema | undefined
     let matchedLoader: PageLoaderFunction<unknown, Env> | undefined
+    let matchedGlobalMiddleware: Middleware<Env>[] | undefined
+    let matchedDirectoryMiddleware: Middleware<Env>[] | undefined
+    let matchedRouteMiddleware: Middleware<Env>[] | undefined
 
     for (const { route, params } of matchingRoutes) {
       // If route has no method restrictions, it supports all methods
@@ -159,6 +179,9 @@ export class Router<Env = unknown> {
         matchedParams = params
         matchedSchema = route.paramsSchema
         matchedLoader = route.loader
+        matchedGlobalMiddleware = route.globalMiddleware
+        matchedDirectoryMiddleware = route.directoryMiddleware
+        matchedRouteMiddleware = route.routeMiddleware
       }
     }
 
@@ -171,6 +194,9 @@ export class Router<Env = unknown> {
           matchedParams = params
           matchedSchema = route.paramsSchema
           matchedLoader = route.loader
+          matchedGlobalMiddleware = route.globalMiddleware
+          matchedDirectoryMiddleware = route.directoryMiddleware
+          matchedRouteMiddleware = route.routeMiddleware
 
           // Create HEAD handler that calls GET and removes body
           matchedHandler = async (context: EdgeContext<Env>) => {
@@ -286,6 +312,20 @@ export class Router<Env = unknown> {
       }
     }
 
+    // Build and apply middleware chain: global → directory → route → handler
+    const middlewareChain: Middleware<Env>[] = [
+      ...(matchedGlobalMiddleware || []),
+      ...(matchedDirectoryMiddleware || []),
+      ...(matchedRouteMiddleware || []),
+    ]
+
+    // If there's middleware, compose it with the handler
+    if (middlewareChain.length > 0) {
+      const wrappedHandler = compose(...middlewareChain)(matchedHandler)
+      return await wrappedHandler(edgeContext)
+    }
+
+    // No middleware, call handler directly
     return await matchedHandler(edgeContext)
   }
 

@@ -263,4 +263,191 @@ describe('Router', () => {
       expect(allowHeader).not.toContain('DELETE')
     })
   })
+
+  describe('Middleware Chains', () => {
+    it('should apply global middleware before handler', async () => {
+      const router = createRouter()
+      const calls: string[] = []
+
+      const globalMiddleware = [
+        async (ctx: any, next: () => Promise<Response>) => {
+          calls.push('global1-before')
+          const response = await next()
+          calls.push('global1-after')
+          return response
+        },
+        async (ctx: any, next: () => Promise<Response>) => {
+          calls.push('global2-before')
+          const response = await next()
+          calls.push('global2-after')
+          return response
+        },
+      ]
+
+      router.add('/test', () => {
+        calls.push('handler')
+        return new Response('OK')
+      }, { globalMiddleware })
+
+      const request = new Request('http://localhost/test')
+      await router.handle(request, {})
+
+      expect(calls).toEqual([
+        'global1-before',
+        'global2-before',
+        'handler',
+        'global2-after',
+        'global1-after',
+      ])
+    })
+
+    it('should apply middleware in order: global → directory → route', async () => {
+      const router = createRouter()
+      const calls: string[] = []
+
+      const globalMiddleware = [
+        async (_: any, next: () => Promise<Response>) => {
+          calls.push('global')
+          return next()
+        },
+      ]
+
+      const directoryMiddleware = [
+        async (_: any, next: () => Promise<Response>) => {
+          calls.push('directory')
+          return next()
+        },
+      ]
+
+      const routeMiddleware = [
+        async (_: any, next: () => Promise<Response>) => {
+          calls.push('route')
+          return next()
+        },
+      ]
+
+      router.add('/test', () => {
+        calls.push('handler')
+        return new Response('OK')
+      }, {
+        globalMiddleware,
+        directoryMiddleware,
+        routeMiddleware,
+      })
+
+      const request = new Request('http://localhost/test')
+      await router.handle(request, {})
+
+      expect(calls).toEqual(['global', 'directory', 'route', 'handler'])
+    })
+
+    it('should handle nested directory middleware chain', async () => {
+      const router = createRouter()
+      const calls: string[] = []
+
+      const globalMiddleware = [
+        async (_: any, next: () => Promise<Response>) => {
+          calls.push('global')
+          return next()
+        },
+      ]
+
+      // Simulating: / → /api → /api/admin
+      const directoryMiddleware = [
+        async (_: any, next: () => Promise<Response>) => {
+          calls.push('dir-root')
+          return next()
+        },
+        async (_: any, next: () => Promise<Response>) => {
+          calls.push('dir-api')
+          return next()
+        },
+        async (_: any, next: () => Promise<Response>) => {
+          calls.push('dir-api-admin')
+          return next()
+        },
+      ]
+
+      router.add('/api/admin/users', () => {
+        calls.push('handler')
+        return new Response('OK')
+      }, { globalMiddleware, directoryMiddleware })
+
+      const request = new Request('http://localhost/api/admin/users')
+      await router.handle(request, {})
+
+      expect(calls).toEqual([
+        'global',
+        'dir-root',
+        'dir-api',
+        'dir-api-admin',
+        'handler',
+      ])
+    })
+
+    it('should allow middleware to short-circuit the chain', async () => {
+      const router = createRouter()
+      const calls: string[] = []
+
+      const globalMiddleware = [
+        async (_: any, next: () => Promise<Response>) => {
+          calls.push('global')
+          return next()
+        },
+        async (_: any, next: () => Promise<Response>) => {
+          calls.push('auth')
+          // Short-circuit - don't call next()
+          return new Response('Unauthorized', { status: 401 })
+        },
+        async (_: any, next: () => Promise<Response>) => {
+          calls.push('should-not-run')
+          return next()
+        },
+      ]
+
+      router.add('/test', () => {
+        calls.push('handler-should-not-run')
+        return new Response('OK')
+      }, { globalMiddleware })
+
+      const request = new Request('http://localhost/test')
+      const response = await router.handle(request, {})
+
+      expect(calls).toEqual(['global', 'auth'])
+      expect(response.status).toBe(401)
+      expect(await response.text()).toBe('Unauthorized')
+    })
+
+    it('should apply middleware chain with empty arrays', async () => {
+      const router = createRouter()
+
+      router.add('/test', () => {
+        return new Response('OK')
+      }, {
+        globalMiddleware: [],
+        directoryMiddleware: [],
+        routeMiddleware: [],
+      })
+
+      const request = new Request('http://localhost/test')
+      const response = await router.handle(request, {})
+
+      expect(response.status).toBe(200)
+      expect(await response.text()).toBe('OK')
+    })
+
+    it('should handle undefined middleware arrays', async () => {
+      const router = createRouter()
+
+      router.add('/test', () => {
+        return new Response('OK')
+      })
+
+      const request = new Request('http://localhost/test')
+      const response = await router.handle(request, {})
+
+      expect(response.status).toBe(200)
+      expect(await response.text()).toBe('OK')
+    })
+  })
 })

@@ -9,6 +9,7 @@ import {
   envConfigSchema,
   type IxflareConfig,
 } from '../../src/config/schema'
+import { createMiddleware } from '../../src/core/middleware'
 
 describe('configSchema', () => {
   describe('valid configurations', () => {
@@ -245,6 +246,64 @@ describe('commandSchema', () => {
       handler: () => {},
     }
     const result = commandSchema.safeParse(command)
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('middleware configuration', () => {
+  it('should accept config with middleware array', () => {
+    const loggingMiddleware = createMiddleware(async (ctx, next) => {
+      console.log(`${ctx.method} ${ctx.url.pathname}`)
+      return next()
+    })
+
+    const corsMiddleware = createMiddleware(async (ctx, next) => {
+      const response = await next()
+      response.headers.set('Access-Control-Allow-Origin', '*')
+      return response
+    })
+
+    const config = {
+      name: 'my-app',
+      middleware: [loggingMiddleware, corsMiddleware],
+    }
+
+    const result = configSchema.safeParse(config)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.middleware).toHaveLength(2)
+    }
+  })
+
+  it('should accept config with empty middleware array', () => {
+    const config = {
+      name: 'my-app',
+      middleware: [],
+    }
+
+    const result = configSchema.safeParse(config)
+    expect(result.success).toBe(true)
+  })
+
+  it('should accept config without middleware field', () => {
+    const config = {
+      name: 'my-app',
+    }
+
+    const result = configSchema.safeParse(config)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.middleware).toBeUndefined()
+    }
+  })
+
+  it('should reject config with non-array middleware', () => {
+    const config = {
+      name: 'my-app',
+      middleware: 'not-an-array',
+    }
+
+    const result = configSchema.safeParse(config)
     expect(result.success).toBe(false)
   })
 })

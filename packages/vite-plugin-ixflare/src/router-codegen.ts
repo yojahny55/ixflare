@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises'
 import { relative, basename } from 'node:path'
 import fg from 'fast-glob'
 import { discoverLayouts, extractLayoutChain } from './layout-discovery'
+import { discoverMiddleware, extractMiddlewareChain } from './middleware-discovery'
 
 export interface RouteParam {
   name: string
@@ -25,7 +26,8 @@ export interface Route {
   hasLoader?: boolean // True if route exports a loader function
   layoutChain?: string[] // Array of layout paths from root to innermost
   layoutHasLoader?: boolean[] // True for each layout that exports a loader function
-  middleware?: string[]
+  middleware?: string[] // Route-specific middleware (if route exports middleware array)
+  middlewareChain?: string[] // Full middleware chain: directory middlewares from root to innermost
 }
 
 export interface RouteManifest {
@@ -162,8 +164,9 @@ export async function parseRouteFile(filePath: string, routesDir: string): Promi
  * Discover all route files in a directory using fast-glob
  */
 export async function discoverRoutes(routesDir: string): Promise<Route[]> {
-  // First, discover all layouts to build hierarchy
+  // First, discover all layouts and middlewares to build hierarchies
   const layouts = await discoverLayouts(routesDir)
+  const middlewares = await discoverMiddleware(routesDir)
 
   // Find all .ts, .tsx, .js, .jsx files, excluding:
   // - Files starting with underscore (_layout, _middleware)
@@ -193,6 +196,12 @@ export async function discoverRoutes(routesDir: string): Promise<Route[]> {
           return layout?.hasLoader ?? false
         })
         route.layoutHasLoader = layoutHasLoader
+      }
+
+      // Compute directory middleware chain for this route
+      const middlewareChain = extractMiddlewareChain(route.file, middlewares)
+      if (middlewareChain.length > 0) {
+        route.middlewareChain = middlewareChain
       }
 
       routes.push(route)
