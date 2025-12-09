@@ -3,7 +3,7 @@
  * @description Main transaction function using D1 batch API
  */
 
-import type { TransactionContext, TransactionOptions } from './types'
+import type { TransactionContext, TransactionOptions, ModifiedRecord } from './types'
 import { TransactionContextImpl } from './context'
 import {
   TransactionError,
@@ -17,7 +17,7 @@ import {
   rollbackToSavepointSQL,
 } from './savepoint'
 import { isD1Database } from '@/edge-record/storage/types'
-import { ModelInstance } from '@/edge-record/crud/model-instance'
+import type { ModelInstance } from '@/edge-record/crud/model-instance'
 import type { SchemaDefinition } from '@/edge-record/schema/types'
 
 /**
@@ -203,9 +203,9 @@ export async function transaction<T>(
 
               // Update corresponding modified record with actual ID
               // Find by matching instance (modifiedRecords order matches statement order for creates)
-              const modifiedRecord = ctx.getModifiedRecords().find(
-                (r) => r.operation === 'create' && r.id === 0
-              )
+              const modifiedRecord = ctx
+                .getModifiedRecords()
+                .find((r) => r.operation === 'create' && r.id === 0)
               if (modifiedRecord) {
                 modifiedRecord.id = id
               }
@@ -253,9 +253,7 @@ export async function transaction<T>(
  * Groups records by KV namespace to minimize network calls
  * @internal
  */
-async function invalidateCache(
-  modifiedRecords: Array<{ model: any; id: string | number }>
-): Promise<void> {
+async function invalidateCache(modifiedRecords: ModifiedRecord[]): Promise<void> {
   // Group records by KV namespace to batch invalidations
   const kvGroups = new Map<KVNamespace, string[]>()
 

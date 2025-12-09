@@ -53,6 +53,8 @@ export interface CacheOptions {
   ttl?: number
   /** Cache strategy preset */
   strategy?: 'read-heavy' | 'write-heavy' | 'balanced'
+  /** KV namespace for caching (used for cache invalidation in transactions) */
+  kv?: KVNamespace
 }
 
 export interface ExtendedModelOptions extends StorageOptions {

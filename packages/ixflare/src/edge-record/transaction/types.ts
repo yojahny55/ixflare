@@ -3,7 +3,7 @@
  * @description Type definitions for transaction operations
  */
 
-import type { SchemaDefinition, InferSchema, Model } from '@/edge-record/schema/types'
+import type { SchemaDefinition, Model } from '@/edge-record/schema/types'
 import type { CreateInput, UpdateInput } from '@/edge-record/crud/crud-operations'
 import type { ModelInstance } from '@/edge-record/crud/model-instance'
 

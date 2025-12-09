@@ -3,7 +3,7 @@
  * @description TransactionContext implementation that buffers operations for batch execution
  */
 
-import type { SchemaDefinition, Model } from '@/edge-record/schema/types'
+import type { SchemaDefinition, Model, InferSchema } from '@/edge-record/schema/types'
 import type { CreateInput } from '@/edge-record/crud/crud-operations'
 import { ModelInstance } from '@/edge-record/crud/model-instance'
 import type {
@@ -192,7 +192,7 @@ export class TransactionContextImpl implements TransactionContext {
     this.addStatement(stmt)
 
     // Create a placeholder instance (ID will be assigned after batch)
-    const instance = new ModelInstance(model, fullData as Partial<any>, false)
+    const instance = new ModelInstance(model, fullData as Partial<InferSchema<T>>, false)
 
     // Track this create with its statement index for correct ID assignment
     this.addPendingCreate(instance as ModelInstance<SchemaDefinition>, statementIndex)
