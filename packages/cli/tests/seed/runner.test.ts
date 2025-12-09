@@ -1,11 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, mkdirSync, rmSync } from 'fs'
 import { join } from 'path'
-import {
-  executeSeedFile,
-  executeSeedFiles,
-  formatSeedResults,
-} from '../../src/seed/runner'
+import { executeSeedFile, executeSeedFiles, formatSeedResults } from '../../src/seed/runner'
 import type { SeedFileInfo } from '../../src/seed/discovery'
 import type { SeedResult } from 'ixflare'
 
@@ -210,9 +206,7 @@ describe('runner', () => {
       `
       writeFileSync(join(SEEDS_DIR, 'progress.ts'), seedContent)
 
-      const seedFiles: SeedFileInfo[] = [
-        { path: join(SEEDS_DIR, 'progress.ts'), name: 'progress' },
-      ]
+      const seedFiles: SeedFileInfo[] = [{ path: join(SEEDS_DIR, 'progress.ts'), name: 'progress' }]
 
       const progressCalls: Array<{ current: number; total: number; name: string }> = []
 

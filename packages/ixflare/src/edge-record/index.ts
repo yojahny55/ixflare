@@ -97,7 +97,7 @@ export type {
 export { TransactionError, TransactionTimeoutError, TransactionRollbackError } from './crud/errors'
 
 // Seed exports (Story 3.9)
-export { seed, isSeedFunction } from './seed'
+export { seed, isSeedFunction, fixture } from './seed'
 export {
   SeedContext,
   getSeedContext,
@@ -106,7 +106,12 @@ export {
   trackSkipped,
   idempotentCreate,
 } from './seed'
-export type { SeedDefinitionOptions } from './seed'
+export type {
+  SeedDefinitionOptions,
+  FixtureModel,
+  FixtureModelRegistry,
+  FixtureOptions,
+} from './seed'
 export type {
   SeedFunction,
   SeedEnvironment,

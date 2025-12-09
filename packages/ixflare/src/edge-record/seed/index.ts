@@ -3,8 +3,13 @@
  * @description Public API for database seeding
  */
 
-export { seed, isSeedFunction } from './seed'
-export type { SeedDefinitionOptions } from './seed'
+export { seed, isSeedFunction, fixture } from './seed'
+export type {
+  SeedDefinitionOptions,
+  FixtureModel,
+  FixtureModelRegistry,
+  FixtureOptions,
+} from './seed'
 export type {
   SeedFunction,
   SeedEnvironment,

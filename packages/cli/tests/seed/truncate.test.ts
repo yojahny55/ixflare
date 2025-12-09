@@ -196,10 +196,7 @@ describe('truncate', () => {
         calls.push(command)
 
         if (command.includes('SELECT name FROM sqlite_master')) {
-          return createMockProcess(
-            0,
-            JSON.stringify([{ results: [{ name: 'user"data' }] }])
-          )
+          return createMockProcess(0, JSON.stringify([{ results: [{ name: 'user"data' }] }]))
         }
         if (command.includes('SELECT COUNT')) {
           return createMockProcess(0, JSON.stringify([{ results: [{ count: 0 }] }]))

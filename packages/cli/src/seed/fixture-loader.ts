@@ -85,8 +85,8 @@ export function fixtureTableToModelName(tableName: string): string {
     return pascalCase.slice(0, -3) + 'y'
   }
   if (pascalCase.endsWith('ves')) {
-    // leaves → Leaf (limited support)
-    return pascalCase.slice(0, -3) + 'f'
+    // lives → Life, wives → Wife, leaves → Leaf
+    return pascalCase.slice(0, -3) + 'fe'
   }
   // Standard plural (users → User, posts → Post)
   if (pascalCase.endsWith('s') && !pascalCase.endsWith('ss')) {
@@ -226,9 +226,7 @@ export async function executeFixture(
           await model.create(record)
         }
       } else {
-        throw new Error(
-          `Model "${modelName}" must have either createMany or create method`
-        )
+        throw new Error(`Model "${modelName}" must have either createMany or create method`)
       }
 
       result.inserted[tableName] = records.length

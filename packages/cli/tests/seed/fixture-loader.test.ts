@@ -169,6 +169,11 @@ describe('fixture-loader', () => {
       expect(fixtureTableToModelName('companies')).toBe('Company')
     })
 
+    it('should handle "ves" plurals correctly', () => {
+      expect(fixtureTableToModelName('lives')).toBe('Life')
+      expect(fixtureTableToModelName('wives')).toBe('Wife')
+    })
+
     it('should not remove trailing "s" from words ending in "ss"', () => {
       expect(fixtureTableToModelName('boss')).toBe('Boss')
       expect(fixtureTableToModelName('lass')).toBe('Lass')
