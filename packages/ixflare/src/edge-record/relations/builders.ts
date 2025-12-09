@@ -163,6 +163,14 @@ export function manyToMany<T extends SchemaDefinition>(
   foreignKey?: string,
   relatedKey?: string
 ): RelationConfig<T> {
+  // Validate pivot table name format (should be snake_case with underscore)
+  if (!pivotTable || !/^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)+$/.test(pivotTable)) {
+    console.warn(
+      `[EdgeRecord] Pivot table name "${pivotTable}" may not follow the recommended ` +
+        `convention. Expected format: {table1}_{table2} in snake_case (e.g., "post_tags", "user_roles").`
+    )
+  }
+
   return {
     type: 'manyToMany',
     relatedModel: model,

@@ -3,7 +3,7 @@
  * @description Tests for relationship builder functions
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { defineModel } from '@/edge-record/schema/define-model'
 import { field } from '@/edge-record/schema'
 import { hasMany, hasOne, belongsTo, manyToMany } from '@/edge-record/relations/builders'
@@ -121,6 +121,31 @@ describe('manyToMany()', () => {
     expect(relation.pivotTable).toBe('post_tags')
     expect(relation.pivotForeignKey).toBe('post_id')
     expect(relation.pivotRelatedKey).toBe('tag_id')
+  })
+
+  it('should warn for pivot tables not following naming convention', () => {
+    const Tag = defineModel('tags_m2m_test3', {
+      id: field.id(),
+      name: field.string(),
+    })
+
+    // Capture console.warn
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    // Invalid names that don't follow {table1}_{table2} pattern
+    manyToMany(() => Tag, 'PostTags') // PascalCase
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('may not follow the recommended'))
+
+    warnSpy.mockClear()
+    manyToMany(() => Tag, 'posttags') // No underscore
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('may not follow the recommended'))
+
+    warnSpy.mockClear()
+    // Valid name should not warn
+    manyToMany(() => Tag, 'post_tags')
+    expect(warnSpy).not.toHaveBeenCalled()
+
+    warnSpy.mockRestore()
   })
 })
 

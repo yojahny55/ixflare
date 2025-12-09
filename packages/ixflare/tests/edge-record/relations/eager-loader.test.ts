@@ -252,6 +252,147 @@ describe('EagerLoader', () => {
     })
   })
 
+  describe('manyToMany relationship', () => {
+    it('should load manyToMany relation through pivot table', async () => {
+      const Tag = defineModel('tags_m2m', {
+        id: field.id(),
+        name: field.string(),
+      })
+
+      const Post = defineModel(
+        'posts_m2m',
+        {
+          id: field.id(),
+          title: field.string(),
+        },
+        {
+          relations: {
+            tags: manyToMany(() => Tag, 'post_tags', 'post_id', 'tag_id'),
+          },
+        }
+      )
+
+      // Insert test data
+      await db.prepare('INSERT INTO posts_m2m (id, title) VALUES (?, ?)').bind(1, 'Post 1').run()
+      await db.prepare('INSERT INTO tags_m2m (id, name) VALUES (?, ?)').bind(1, 'TypeScript').run()
+      await db.prepare('INSERT INTO tags_m2m (id, name) VALUES (?, ?)').bind(2, 'JavaScript').run()
+      await db.prepare('INSERT INTO tags_m2m (id, name) VALUES (?, ?)').bind(3, 'Rust').run()
+
+      // Insert pivot table entries
+      await db.prepare('INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)').bind(1, 1).run()
+      await db.prepare('INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)').bind(1, 2).run()
+
+      const posts = [new ModelInstance(Post, { id: 1, title: 'Post 1' })]
+
+      const loader = new EagerLoader(Post, ['tags'])
+      await loader.load(posts, db)
+
+      expect((posts[0] as Record<string, unknown>).tags).toBeDefined()
+      const tags = (posts[0] as Record<string, unknown>).tags as ModelInstance<typeof Tag.$schema>[]
+      expect(Array.isArray(tags)).toBe(true)
+      expect(tags.length).toBe(2)
+      expect(tags.map((t) => t.get('name')).sort()).toEqual(['JavaScript', 'TypeScript'])
+    })
+
+    it('should handle empty manyToMany results', async () => {
+      const Tag = defineModel('tags_m2m_empty', {
+        id: field.id(),
+        name: field.string(),
+      })
+
+      const Post = defineModel(
+        'posts_m2m_empty',
+        {
+          id: field.id(),
+          title: field.string(),
+        },
+        {
+          relations: {
+            tags: manyToMany(() => Tag, 'post_tags_empty', 'post_id', 'tag_id'),
+          },
+        }
+      )
+
+      // Post with no tags
+      const posts = [new ModelInstance(Post, { id: 1, title: 'Post 1' })]
+
+      const loader = new EagerLoader(Post, ['tags'])
+      await loader.load(posts, db)
+
+      expect((posts[0] as Record<string, unknown>).tags).toBeDefined()
+      const tags = (posts[0] as Record<string, unknown>).tags
+      expect(Array.isArray(tags)).toBe(true)
+      expect((tags as unknown[]).length).toBe(0)
+    })
+
+    it('should load manyToMany with multiple parent records', async () => {
+      const Tag = defineModel('tags_m2m_multi', {
+        id: field.id(),
+        name: field.string(),
+      })
+
+      const Post = defineModel(
+        'posts_m2m_multi',
+        {
+          id: field.id(),
+          title: field.string(),
+        },
+        {
+          relations: {
+            tags: manyToMany(() => Tag, 'post_tags_multi', 'post_id', 'tag_id'),
+          },
+        }
+      )
+
+      // Insert test data
+      await db
+        .prepare('INSERT INTO posts_m2m_multi (id, title) VALUES (?, ?)')
+        .bind(1, 'Post 1')
+        .run()
+      await db
+        .prepare('INSERT INTO posts_m2m_multi (id, title) VALUES (?, ?)')
+        .bind(2, 'Post 2')
+        .run()
+      await db.prepare('INSERT INTO tags_m2m_multi (id, name) VALUES (?, ?)').bind(1, 'Tag A').run()
+      await db.prepare('INSERT INTO tags_m2m_multi (id, name) VALUES (?, ?)').bind(2, 'Tag B').run()
+
+      // Post 1 has Tag A, Post 2 has Tag A and Tag B
+      await db
+        .prepare('INSERT INTO post_tags_multi (post_id, tag_id) VALUES (?, ?)')
+        .bind(1, 1)
+        .run()
+      await db
+        .prepare('INSERT INTO post_tags_multi (post_id, tag_id) VALUES (?, ?)')
+        .bind(2, 1)
+        .run()
+      await db
+        .prepare('INSERT INTO post_tags_multi (post_id, tag_id) VALUES (?, ?)')
+        .bind(2, 2)
+        .run()
+
+      const posts = [
+        new ModelInstance(Post, { id: 1, title: 'Post 1' }),
+        new ModelInstance(Post, { id: 2, title: 'Post 2' }),
+      ]
+
+      const loader = new EagerLoader(Post, ['tags'])
+      await loader.load(posts, db)
+
+      const post1Tags = (posts[0] as Record<string, unknown>).tags as ModelInstance<
+        typeof Tag.$schema
+      >[]
+      const post2Tags = (posts[1] as Record<string, unknown>).tags as ModelInstance<
+        typeof Tag.$schema
+      >[]
+
+      expect(post1Tags.length).toBe(1)
+      expect(post1Tags[0].get('name')).toBe('Tag A')
+
+      expect(post2Tags.length).toBe(2)
+      expect(post2Tags.map((t) => t.get('name')).sort()).toEqual(['Tag A', 'Tag B'])
+    })
+  })
+
   describe('nested eager loading', () => {
     it('should parse nested relations correctly', () => {
       const User = defineModel('users_nested', {
@@ -267,6 +408,192 @@ describe('EagerLoader', () => {
       expect(grouped.topLevel).toContain('profile')
       expect(grouped.topLevel.length).toBe(2)
       expect(grouped.nested.posts).toContain('author')
+    })
+
+    it('should load nested relations from database', async () => {
+      // Define models with nested relationships
+      const User = defineModel('users_nested_load', {
+        id: field.id(),
+        name: field.string(),
+      })
+
+      const Post = defineModel(
+        'posts_nested_load',
+        {
+          id: field.id(),
+          authorId: field.integer(),
+          title: field.string(),
+        },
+        {
+          relations: {
+            author: belongsTo(() => User, 'authorId'),
+          },
+        }
+      )
+
+      const Comment = defineModel(
+        'comments_nested_load',
+        {
+          id: field.id(),
+          postId: field.integer(),
+          content: field.string(),
+        },
+        {
+          relations: {
+            post: belongsTo(() => Post, 'postId'),
+          },
+        }
+      )
+
+      // Insert test data
+      await db
+        .prepare('INSERT INTO users_nested_load (id, name) VALUES (?, ?)')
+        .bind(1, 'Alice')
+        .run()
+      await db
+        .prepare('INSERT INTO posts_nested_load (id, author_id, title) VALUES (?, ?, ?)')
+        .bind(1, 1, 'Post 1')
+        .run()
+      await db
+        .prepare('INSERT INTO comments_nested_load (id, post_id, content) VALUES (?, ?, ?)')
+        .bind(1, 1, 'Great post!')
+        .run()
+
+      const comments = [new ModelInstance(Comment, { id: 1, postId: 1, content: 'Great post!' })]
+
+      // Load comment -> post -> author (nested)
+      const loader = new EagerLoader(Comment, ['post', 'post.author'])
+      await loader.load(comments, db)
+
+      // Verify post is loaded
+      const post = (comments[0] as Record<string, unknown>).post as ModelInstance<
+        typeof Post.$schema
+      >
+      expect(post).not.toBeNull()
+      expect(post.get('title')).toBe('Post 1')
+
+      // Verify nested author is loaded
+      const author = (post as Record<string, unknown>).author as ModelInstance<typeof User.$schema>
+      expect(author).not.toBeNull()
+      expect(author.get('name')).toBe('Alice')
+    })
+  })
+
+  describe('pivot key computation', () => {
+    it('should correctly singularize table names for pivot keys', async () => {
+      // Test with a table name ending in -ies (categories -> category)
+      // The model table name is 'categories' which should singularize to 'category'
+      const Item = defineModel('items', {
+        id: field.id(),
+        name: field.string(),
+      })
+
+      const Category = defineModel(
+        'categories',
+        {
+          id: field.id(),
+          name: field.string(),
+        },
+        {
+          relations: {
+            // Use default pivot key computation - should use category_id and item_id
+            items: manyToMany(() => Item, 'category_items'),
+          },
+        }
+      )
+
+      // Insert test data
+      await db
+        .prepare('INSERT INTO categories (id, name) VALUES (?, ?)')
+        .bind(1, 'Electronics')
+        .run()
+      await db.prepare('INSERT INTO items (id, name) VALUES (?, ?)').bind(1, 'Phone').run()
+      // Pivot table uses properly singularized keys: category_id (not categorie_id) and item_id
+      await db
+        .prepare('INSERT INTO category_items (category_id, item_id) VALUES (?, ?)')
+        .bind(1, 1)
+        .run()
+
+      const categories = [new ModelInstance(Category, { id: 1, name: 'Electronics' })]
+
+      const loader = new EagerLoader(Category, ['items'])
+      await loader.load(categories, db)
+
+      const items = (categories[0] as Record<string, unknown>).items as ModelInstance<
+        typeof Item.$schema
+      >[]
+      expect(Array.isArray(items)).toBe(true)
+      expect(items.length).toBe(1)
+      expect(items[0].get('name')).toBe('Phone')
+    })
+  })
+
+  describe('security', () => {
+    it('should use parameterized queries for all relation loading', async () => {
+      // This test verifies that queries use prepare().bind() pattern
+      // by checking that special characters in data don't cause SQL injection
+      const Profile = defineModel('profiles_sec', {
+        id: field.id(),
+        userId: field.integer(),
+        bio: field.text().nullable(),
+      })
+
+      const User = defineModel(
+        'users_sec',
+        {
+          id: field.id(),
+          name: field.string(),
+        },
+        {
+          relations: {
+            profile: hasOne(() => Profile, 'userId'),
+          },
+        }
+      )
+
+      // Insert data with SQL injection attempt in the name
+      await db
+        .prepare('INSERT INTO users_sec (id, name) VALUES (?, ?)')
+        .bind(1, "Robert'); DROP TABLE users;--")
+        .run()
+      await db
+        .prepare('INSERT INTO profiles_sec (id, user_id, bio) VALUES (?, ?, ?)')
+        .bind(1, 1, "Bio with special chars: '; DELETE FROM profiles;")
+        .run()
+
+      const users = [new ModelInstance(User, { id: 1, name: "Robert'); DROP TABLE users;--" })]
+
+      const loader = new EagerLoader(User, ['profile'])
+      // Should not throw - parameterized queries prevent injection
+      await loader.load(users, db)
+
+      const profile = (users[0] as Record<string, unknown>).profile as ModelInstance<
+        typeof Profile.$schema
+      >
+      expect(profile).not.toBeNull()
+      expect(profile.get('bio')).toBe("Bio with special chars: '; DELETE FROM profiles;")
+    })
+
+    it('should validate relation names against model relations', async () => {
+      const User = defineModel(
+        'users_rel_valid',
+        {
+          id: field.id(),
+          name: field.string(),
+        },
+        {
+          relations: {
+            posts: hasMany(() => User, 'authorId'), // Self-reference for simplicity
+          },
+        }
+      )
+
+      const users = [new ModelInstance(User, { id: 1, name: 'Alice' })]
+
+      // Attempt to load non-existent relation (potential injection vector)
+      const loader = new EagerLoader(User, ['posts; DROP TABLE users'])
+
+      await expect(loader.load(users, db)).rejects.toThrow(/Relation.*not found/)
     })
   })
 })

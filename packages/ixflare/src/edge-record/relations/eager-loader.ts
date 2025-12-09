@@ -20,6 +20,124 @@ const D1_PARAM_LIMIT = 100
 const MAX_NESTING_DEPTH = 3
 
 /**
+ * Common irregular plural to singular mappings for pivot key computation
+ */
+const IRREGULAR_PLURALS: Record<string, string> = {
+  people: 'person',
+  children: 'child',
+  men: 'man',
+  women: 'woman',
+  teeth: 'tooth',
+  feet: 'foot',
+  mice: 'mouse',
+  geese: 'goose',
+  data: 'datum',
+  media: 'medium',
+  analyses: 'analysis',
+  criteria: 'criterion',
+  phenomena: 'phenomenon',
+}
+
+/**
+ * Words ending in 's' that are NOT plurals (should not be singularized)
+ * These are common table names that would be incorrectly transformed
+ */
+const UNCOUNTABLE_OR_SINGULAR_S: Set<string> = new Set([
+  'status',
+  'news',
+  'series',
+  'species',
+  'address',
+  'business',
+  'process',
+  'progress',
+  'access',
+  'success',
+  'mattress',
+  'express',
+  'canvas',
+  'analysis',
+  'basis',
+  'crisis',
+  'thesis',
+  'synopsis',
+  'diagnosis',
+  'atlas',
+  'bus',
+  'gas',
+  'lens',
+  'alias',
+  'campus',
+  'corpus',
+  'focus',
+  'radius',
+  'status',
+  'virus',
+  'bonus',
+  'cactus',
+  'census',
+  'citrus',
+  'exodus',
+  'nexus',
+  'surplus',
+])
+
+/**
+ * Singularize a table name for pivot key computation
+ * Handles common English pluralization rules
+ *
+ * @param tableName The plural table name (e.g., 'users', 'categories', 'people')
+ * @returns The singular form (e.g., 'user', 'category', 'person')
+ */
+function singularize(tableName: string): string {
+  const lower = tableName.toLowerCase()
+
+  // Check irregular plurals first
+  if (IRREGULAR_PLURALS[lower]) {
+    return IRREGULAR_PLURALS[lower]
+  }
+
+  // Check if this is an uncountable noun or already singular (ends in 's' but not plural)
+  if (UNCOUNTABLE_OR_SINGULAR_S.has(lower)) {
+    return lower
+  }
+
+  // Common English plural rules (in order of specificity)
+  // -ies → -y (categories → category)
+  if (lower.endsWith('ies')) {
+    return lower.slice(0, -3) + 'y'
+  }
+
+  // -es for words ending in s, x, z, ch, sh (boxes → box, watches → watch)
+  if (lower.endsWith('xes') || lower.endsWith('zes')) {
+    return lower.slice(0, -2)
+  }
+  if (lower.endsWith('ches') || lower.endsWith('shes') || lower.endsWith('sses')) {
+    return lower.slice(0, -2)
+  }
+
+  // -ves → -f (wolves → wolf, leaves → leaf)
+  if (lower.endsWith('ves')) {
+    return lower.slice(0, -3) + 'f'
+  }
+
+  // Simple -s (users → user) - but not words ending in 'ss', 'us', 'is', 'os'
+  // These are often Latin/Greek singulars or already singular
+  if (
+    lower.endsWith('s') &&
+    !lower.endsWith('ss') &&
+    !lower.endsWith('us') &&
+    !lower.endsWith('is') &&
+    !lower.endsWith('os')
+  ) {
+    return lower.slice(0, -1)
+  }
+
+  // No change (might already be singular or uncountable)
+  return lower
+}
+
+/**
  * Type for model instance with dynamic related data
  */
 export type ModelInstanceWithRelations<T extends SchemaDefinition> = ModelInstance<T> & {
@@ -320,11 +438,11 @@ export class EagerLoader<T extends SchemaDefinition> {
     const relatedModel = config.relatedModel()
     const pivotTable = config.pivotTable!
 
-    // Compute pivot keys if not provided
+    // Compute pivot keys if not provided using proper singularization
     const pivotForeignKey =
-      config.pivotForeignKey || `${toSnakeCase(this.model.$tableName.replace(/s$/, ''))}_id`
+      config.pivotForeignKey || `${toSnakeCase(singularize(this.model.$tableName))}_id`
     const pivotRelatedKey =
-      config.pivotRelatedKey || `${toSnakeCase(relatedModel.$tableName.replace(/s$/, ''))}_id`
+      config.pivotRelatedKey || `${toSnakeCase(singularize(relatedModel.$tableName))}_id`
 
     // Collect all parent IDs
     const parentIds = records
