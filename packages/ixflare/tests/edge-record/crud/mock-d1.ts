@@ -176,12 +176,42 @@ export function createMockD1Database(): D1Database {
               // Parse SET clause fields
               const setClause = query.match(/SET\s+(.*?)\s+WHERE/i)?.[1]
               if (setClause) {
-                const fields = setClause
-                  .split(',')
-                  .map((f) => f.trim().split('=')[0].trim().replace(/^"|"$/g, '')) // Strip quotes
-                fields.forEach((field, index) => {
-                  record[field] = boundValues[index]
-                })
+                const setParts = setClause.split(',')
+                let valueIndex = 0
+
+                for (const part of setParts) {
+                  const trimmed = part.trim()
+
+                  // Check for increment: field = field + ?
+                  const incrementMatch = trimmed.match(/"?(\w+)"?\s*=\s*"?(\w+)"?\s*\+\s*\?/)
+                  if (incrementMatch) {
+                    const fieldName = incrementMatch[1]
+                    const currentValue = Number(record[fieldName]) || 0
+                    const incrementValue = Number(boundValues[valueIndex])
+                    record[fieldName] = currentValue + incrementValue
+                    valueIndex++
+                    continue
+                  }
+
+                  // Check for decrement: field = field - ?
+                  const decrementMatch = trimmed.match(/"?(\w+)"?\s*=\s*"?(\w+)"?\s*-\s*\?/)
+                  if (decrementMatch) {
+                    const fieldName = decrementMatch[1]
+                    const currentValue = Number(record[fieldName]) || 0
+                    const decrementValue = Number(boundValues[valueIndex])
+                    record[fieldName] = currentValue - decrementValue
+                    valueIndex++
+                    continue
+                  }
+
+                  // Regular assignment: field = ?
+                  const assignMatch = trimmed.match(/"?(\w+)"?\s*=\s*\?/)
+                  if (assignMatch) {
+                    const fieldName = assignMatch[1]
+                    record[fieldName] = boundValues[valueIndex]
+                    valueIndex++
+                  }
+                }
               }
 
               return {
@@ -213,6 +243,25 @@ export function createMockD1Database(): D1Database {
                 last_row_id: 0,
                 rows_read: existed ? 1 : 0,
                 rows_written: existed ? 1 : 0,
+              },
+            }
+          }
+
+          // Handle SAVEPOINT commands
+          if (
+            query.toUpperCase().includes('SAVEPOINT') ||
+            query.toUpperCase().includes('RELEASE SAVEPOINT') ||
+            query.toUpperCase().includes('ROLLBACK TO SAVEPOINT')
+          ) {
+            return {
+              results: [] as T[],
+              success: true,
+              meta: {
+                duration: 0,
+                changes: 0,
+                last_row_id: 0,
+                rows_read: 0,
+                rows_written: 0,
               },
             }
           }

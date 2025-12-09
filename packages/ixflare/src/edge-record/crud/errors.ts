@@ -50,3 +50,40 @@ export class ConflictError extends EdgeRecordError {
     this.name = 'ConflictError'
   }
 }
+
+/**
+ * Base error class for transaction operations
+ */
+export class TransactionError extends EdgeRecordError {
+  constructor(code: string, message: string, public readonly cause?: Error) {
+    super(`TRANSACTION.${code}`, message, 500)
+    this.name = 'TransactionError'
+  }
+}
+
+/**
+ * Error thrown when a transaction times out
+ */
+export class TransactionTimeoutError extends TransactionError {
+  constructor(
+    public readonly timeoutMs: number,
+    public readonly elapsedMs: number,
+    public readonly operationCount: number
+  ) {
+    super(
+      'TIMEOUT',
+      `Transaction timed out after ${elapsedMs}ms (limit: ${timeoutMs}ms) with ${operationCount} pending operations`
+    )
+    this.name = 'TransactionTimeoutError'
+  }
+}
+
+/**
+ * Error thrown when a transaction rollback fails
+ */
+export class TransactionRollbackError extends TransactionError {
+  constructor(message: string, cause?: Error) {
+    super('ROLLBACK_FAILED', message, cause)
+    this.name = 'TransactionRollbackError'
+  }
+}

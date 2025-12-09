@@ -85,6 +85,21 @@ export type {
   StorageBinding,
 } from './storage'
 
+// Transaction exports (Story 3.8)
+export { transaction } from './transaction'
+export type {
+  TransactionContext,
+  TransactionOptions,
+  TransactionUpdateInput,
+  IsolationLevel,
+  UpdateOperators,
+} from './transaction'
+export {
+  TransactionError,
+  TransactionTimeoutError,
+  TransactionRollbackError,
+} from './crud/errors'
+
 // Legacy exports (will be refactored in later stories)
 export { Model as LegacyModel } from './model'
 export type { ModelDefinition, ModelSchema, QueryOptions } from './types'
