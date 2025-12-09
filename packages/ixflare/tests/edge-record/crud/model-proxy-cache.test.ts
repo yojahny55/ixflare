@@ -546,9 +546,7 @@ describe('Model.warmCache() - AC8', () => {
 
     await Product.warmCache([1], db as unknown as D1Database, kv)
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('warmCache called on model')
-    )
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('warmCache called on model'))
 
     consoleSpy.mockRestore()
   })

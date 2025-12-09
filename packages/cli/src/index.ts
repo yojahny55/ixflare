@@ -21,6 +21,10 @@ const commands: Record<string, () => Promise<void>> = {
     }
   },
   migrate: () => import('./commands/migrate').then((m) => m.migrate()),
+  'migrate:generate': () =>
+    import('./commands/migrate').then((m) => m.migrate('generate', process.argv[3])),
+  'migrate:rollback': () => import('./commands/migrate').then((m) => m.migrate('rollback')),
+  'migrate:status': () => import('./commands/migrate').then((m) => m.migrate('status')),
   generate: () => import('./commands/generate').then((m) => m.generate()),
   'generate:env': () =>
     import('./commands/generate-env-types').then((m) => m.generateEnvCommand({})),
@@ -46,12 +50,15 @@ async function main(): Promise<void> {
   Usage: ix <command>
 
   Commands:
-    dev            Start development server
-    build          Build for production
-    deploy         Deploy to Cloudflare Workers
-    migrate        Run database migrations
-    generate       Generate code (model, migration, component)
-    generate:env   Generate TypeScript types from .env.example
+    dev                 Start development server
+    build               Build for production
+    deploy              Deploy to Cloudflare Workers
+    migrate             Apply pending database migrations
+    migrate:generate    Generate a new migration file
+    migrate:rollback    Rollback the last migration
+    migrate:status      Show migration status
+    generate            Generate code (model, migration, component)
+    generate:env        Generate TypeScript types from .env.example
 ${customCommandsList ? '\n  Custom Commands:\n' + customCommandsList : ''}
 
   Options:
