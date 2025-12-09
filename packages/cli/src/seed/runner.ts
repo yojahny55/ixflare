@@ -4,7 +4,7 @@
  */
 
 import type { SeedFunction, SeedResult, SeedEnvironment } from 'ixflare'
-import { isSeedFunction } from 'ixflare'
+import { isSeedFunction, SeedContext, setSeedContext } from 'ixflare'
 import type { SeedFileInfo } from './discovery'
 
 /**
@@ -17,13 +17,9 @@ export async function executeSeedFile(
   seedFile: SeedFileInfo,
   environment: SeedEnvironment
 ): Promise<SeedResult> {
-  const startTime = Date.now()
-  const result: SeedResult = {
-    name: seedFile.name,
-    created: {},
-    skipped: {},
-    duration: 0,
-  }
+  // Create seed context for tracking results
+  const context = new SeedContext(seedFile.name)
+  setSeedContext(context)
 
   try {
     // Dynamic import of the seed file
@@ -55,12 +51,15 @@ export async function executeSeedFile(
     // Execute the seed function
     await typedSeedFn()
 
-    result.duration = Date.now() - startTime
-    return result
+    // Get result from context (includes tracked created/skipped counts)
+    return context.getResult()
   } catch (error) {
-    result.duration = Date.now() - startTime
+    const result = context.getResult()
     result.error = error instanceof Error ? error : new Error(String(error))
     return result
+  } finally {
+    // Clear the context
+    setSeedContext(null)
   }
 }
 

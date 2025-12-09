@@ -98,6 +98,14 @@ export { TransactionError, TransactionTimeoutError, TransactionRollbackError } f
 
 // Seed exports (Story 3.9)
 export { seed, isSeedFunction } from './seed'
+export {
+  SeedContext,
+  getSeedContext,
+  setSeedContext,
+  trackCreated,
+  trackSkipped,
+  idempotentCreate,
+} from './seed'
 export type { SeedDefinitionOptions } from './seed'
 export type {
   SeedFunction,

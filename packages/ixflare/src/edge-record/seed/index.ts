@@ -13,3 +13,13 @@ export type {
   SeedOptions,
   SeedResult,
 } from './types'
+
+// Seed context for tracking results and idempotent operations
+export {
+  SeedContext,
+  getSeedContext,
+  setSeedContext,
+  trackCreated,
+  trackSkipped,
+  idempotentCreate,
+} from './context'

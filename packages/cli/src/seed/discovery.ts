@@ -80,6 +80,34 @@ export function discoverSeedFiles(cwd?: string): SeedFileInfo[] {
 }
 
 /**
+ * Discover JSON fixture files from the seeds/fixtures directory
+ * @param cwd Current working directory
+ * @returns Array of fixture file paths
+ */
+export function discoverFixtureFiles(cwd?: string): string[] {
+  const seedsDir = getSeedsDir(cwd)
+  const fixturesDir = join(seedsDir, 'fixtures')
+
+  if (!existsSync(fixturesDir)) {
+    return []
+  }
+
+  return readdirSync(fixturesDir)
+    .filter((f) => f.endsWith('.json'))
+    .sort()
+    .map((filename) => join(fixturesDir, filename))
+}
+
+/**
+ * Check if a path is a JSON fixture file
+ * @param path File path to check
+ * @returns True if path is a JSON file
+ */
+export function isFixturePath(path: string): boolean {
+  return path.endsWith('.json')
+}
+
+/**
  * Load seed configuration from seeds/index.ts (if exists)
  * @param cwd Current working directory
  * @returns Seed configuration or null if not found
@@ -142,15 +170,24 @@ export function filterSeedsByEnvironment(
  * Resolve seed dependencies to determine execution order
  * @param seeds Seed files with dependency metadata
  * @returns Ordered array of seeds (dependencies first)
+ * @throws Error if circular dependency detected or dependency not found
  */
 export function resolveSeedOrder(seeds: SeedFileInfo[]): SeedFileInfo[] {
   const seedMap = new Map(seeds.map((s) => [s.name, s]))
   const visited = new Set<string>()
+  const inStack = new Set<string>() // Track current traversal path for cycle detection
   const ordered: SeedFileInfo[] = []
 
-  function visit(seedName: string) {
+  function visit(seedName: string, path: string[] = []) {
+    // Already processed - skip
     if (visited.has(seedName)) {
       return
+    }
+
+    // Circular dependency detected
+    if (inStack.has(seedName)) {
+      const cycle = [...path, seedName].join(' → ')
+      throw new Error(`Circular dependency detected: ${cycle}`)
     }
 
     const seed = seedMap.get(seedName)
@@ -158,15 +195,19 @@ export function resolveSeedOrder(seeds: SeedFileInfo[]): SeedFileInfo[] {
       throw new Error(`Seed dependency not found: ${seedName}`)
     }
 
-    visited.add(seedName)
+    // Mark as in current traversal
+    inStack.add(seedName)
 
     // Visit dependencies first
     if (seed.dependencies) {
       for (const dep of seed.dependencies) {
-        visit(dep)
+        visit(dep, [...path, seedName])
       }
     }
 
+    // Done with this node
+    inStack.delete(seedName)
+    visited.add(seedName)
     ordered.push(seed)
   }
 

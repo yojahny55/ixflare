@@ -223,5 +223,40 @@ describe('discovery', () => {
 
       expect(() => resolveSeedOrder(seeds)).toThrow('Seed dependency not found: users')
     })
+
+    it('should throw on circular dependency (direct)', () => {
+      const seeds: SeedFileInfo[] = [
+        { path: '/a.ts', name: 'a', dependencies: ['b'] },
+        { path: '/b.ts', name: 'b', dependencies: ['a'] },
+      ]
+
+      expect(() => resolveSeedOrder(seeds)).toThrow('Circular dependency detected')
+    })
+
+    it('should throw on circular dependency (indirect)', () => {
+      const seeds: SeedFileInfo[] = [
+        { path: '/a.ts', name: 'a', dependencies: ['b'] },
+        { path: '/b.ts', name: 'b', dependencies: ['c'] },
+        { path: '/c.ts', name: 'c', dependencies: ['a'] },
+      ]
+
+      expect(() => resolveSeedOrder(seeds)).toThrow('Circular dependency detected')
+    })
+
+    it('should throw on self-referencing dependency', () => {
+      const seeds: SeedFileInfo[] = [{ path: '/a.ts', name: 'a', dependencies: ['a'] }]
+
+      expect(() => resolveSeedOrder(seeds)).toThrow('Circular dependency detected')
+    })
+
+    it('should include cycle path in error message', () => {
+      const seeds: SeedFileInfo[] = [
+        { path: '/a.ts', name: 'a', dependencies: ['b'] },
+        { path: '/b.ts', name: 'b', dependencies: ['c'] },
+        { path: '/c.ts', name: 'c', dependencies: ['a'] },
+      ]
+
+      expect(() => resolveSeedOrder(seeds)).toThrow(/a → b → c → a/)
+    })
   })
 })

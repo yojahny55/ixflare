@@ -70,7 +70,25 @@ export function fixtureTableToModelName(tableName: string): string {
   // Convert to PascalCase and make singular if plural
   const pascalCase = camelCase.charAt(0).toUpperCase() + camelCase.slice(1)
 
-  // Simple pluralization removal (users → User, posts → Post)
+  // Simple pluralization removal with common irregular handling
+  // Handle "es" suffix for words ending in consonant+es (addresses → Address)
+  if (pascalCase.endsWith('sses')) {
+    // classes → Class (remove 'es')
+    return pascalCase.slice(0, -2)
+  }
+  if (pascalCase.endsWith('xes') || pascalCase.endsWith('ches') || pascalCase.endsWith('shes')) {
+    // boxes → Box, matches → Match, dishes → Dish
+    return pascalCase.slice(0, -2)
+  }
+  if (pascalCase.endsWith('ies')) {
+    // categories → Category
+    return pascalCase.slice(0, -3) + 'y'
+  }
+  if (pascalCase.endsWith('ves')) {
+    // leaves → Leaf (limited support)
+    return pascalCase.slice(0, -3) + 'f'
+  }
+  // Standard plural (users → User, posts → Post)
   if (pascalCase.endsWith('s') && !pascalCase.endsWith('ss')) {
     return pascalCase.slice(0, -1)
   }
@@ -102,5 +120,125 @@ export function validateFixture(fixture: FixtureData): void {
         throw new Error(`All records in "${tableName}" must be objects`)
       }
     }
+  }
+}
+
+/**
+ * Result of executing a fixture
+ */
+export interface FixtureExecutionResult {
+  /**
+   * Fixture file path
+   */
+  path: string
+
+  /**
+   * Records inserted per table
+   */
+  inserted: Record<string, number>
+
+  /**
+   * Execution time in milliseconds
+   */
+  duration: number
+
+  /**
+   * Error if execution failed
+   */
+  error?: Error
+}
+
+/**
+ * Model registry interface for fixture execution
+ * Maps model names to their create functions
+ */
+export type ModelRegistry = Record<
+  string,
+  {
+    createMany?: (records: Record<string, unknown>[]) => Promise<unknown[]>
+    create?: (record: Record<string, unknown>) => Promise<unknown>
+  }
+>
+
+/**
+ * Execute a fixture file, inserting all records into the database
+ * Records are inserted in the order tables are defined in the JSON file
+ *
+ * @example
+ * ```typescript
+ * import { executeFixture } from '@ixflare/cli/seed'
+ * import { User, Post } from '@/models'
+ *
+ * const result = await executeFixture(
+ *   '/path/to/fixture.json',
+ *   { User, Post }
+ * )
+ * console.log(result.inserted) // { users: 10, posts: 25 }
+ * ```
+ *
+ * @param fixturePath Path to the JSON fixture file
+ * @param models Registry of model classes with create/createMany methods
+ * @returns Execution result with inserted counts per table
+ */
+export async function executeFixture(
+  fixturePath: string,
+  models: ModelRegistry
+): Promise<FixtureExecutionResult> {
+  const startTime = Date.now()
+  const result: FixtureExecutionResult = {
+    path: fixturePath,
+    inserted: {},
+    duration: 0,
+  }
+
+  try {
+    // Load and validate fixture
+    const fixture = loadFixture(fixturePath)
+    validateFixture(fixture)
+
+    // Get tables in definition order (respects FK dependencies)
+    const tables = getFixtureTables(fixture)
+
+    // Insert records for each table
+    for (const tableName of tables) {
+      const modelName = fixtureTableToModelName(tableName)
+      const model = models[modelName]
+
+      if (!model) {
+        throw new Error(
+          `Model "${modelName}" not found in registry for fixture table "${tableName}". ` +
+            `Available models: ${Object.keys(models).join(', ')}`
+        )
+      }
+
+      const records = getFixtureRecords(fixture, tableName)
+
+      if (records.length === 0) {
+        result.inserted[tableName] = 0
+        continue
+      }
+
+      // Use createMany if available (more efficient), otherwise create one by one
+      if (model.createMany) {
+        await model.createMany(records)
+      } else if (model.create) {
+        for (const record of records) {
+          await model.create(record)
+        }
+      } else {
+        throw new Error(
+          `Model "${modelName}" must have either createMany or create method`
+        )
+      }
+
+      result.inserted[tableName] = records.length
+    }
+
+    result.duration = Date.now() - startTime
+    return result
+  } catch (error) {
+    result.duration = Date.now() - startTime
+    result.error = error instanceof Error ? error : new Error(String(error))
+    return result
   }
 }

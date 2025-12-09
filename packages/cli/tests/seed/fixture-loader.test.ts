@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { writeFileSync, mkdirSync, rmSync } from 'fs'
 import { join } from 'path'
 import {
@@ -7,6 +7,8 @@ import {
   getFixtureRecords,
   fixtureTableToModelName,
   validateFixture,
+  executeFixture,
+  type ModelRegistry,
 } from '../../src/seed/fixture-loader'
 
 const TEST_DIR = join(__dirname, 'fixture-test-temp')
@@ -154,8 +156,22 @@ describe('fixture-loader', () => {
       expect(fixtureTableToModelName('user_profiles')).toBe('UserProfile')
     })
 
+    it('should handle "es" plurals correctly', () => {
+      expect(fixtureTableToModelName('addresses')).toBe('Address')
+      expect(fixtureTableToModelName('classes')).toBe('Class')
+      expect(fixtureTableToModelName('boxes')).toBe('Box')
+      expect(fixtureTableToModelName('matches')).toBe('Match')
+      expect(fixtureTableToModelName('dishes')).toBe('Dish')
+    })
+
+    it('should handle "ies" plurals correctly', () => {
+      expect(fixtureTableToModelName('categories')).toBe('Category')
+      expect(fixtureTableToModelName('companies')).toBe('Company')
+    })
+
     it('should not remove trailing "s" from words ending in "ss"', () => {
-      expect(fixtureTableToModelName('addresses')).toBe('Addresse')
+      expect(fixtureTableToModelName('boss')).toBe('Boss')
+      expect(fixtureTableToModelName('lass')).toBe('Lass')
     })
 
     it('should handle already singular names', () => {
@@ -203,6 +219,134 @@ describe('fixture-loader', () => {
       }
 
       expect(() => validateFixture(fixture)).not.toThrow()
+    })
+  })
+
+  describe('executeFixture()', () => {
+    it('should execute fixture with createMany', async () => {
+      const fixtureData = {
+        users: [
+          { id: 1, name: 'User 1' },
+          { id: 2, name: 'User 2' },
+        ],
+      }
+      writeFileSync(FIXTURE_PATH, JSON.stringify(fixtureData))
+
+      const mockCreateMany = vi.fn().mockResolvedValue([{}, {}])
+      const models: ModelRegistry = {
+        User: { createMany: mockCreateMany },
+      }
+
+      const result = await executeFixture(FIXTURE_PATH, models)
+
+      expect(result.error).toBeUndefined()
+      expect(result.inserted).toEqual({ users: 2 })
+      expect(mockCreateMany).toHaveBeenCalledWith([
+        { id: 1, name: 'User 1' },
+        { id: 2, name: 'User 2' },
+      ])
+    })
+
+    it('should fall back to create when createMany not available', async () => {
+      const fixtureData = {
+        users: [{ id: 1, name: 'User 1' }],
+      }
+      writeFileSync(FIXTURE_PATH, JSON.stringify(fixtureData))
+
+      const mockCreate = vi.fn().mockResolvedValue({})
+      const models: ModelRegistry = {
+        User: { create: mockCreate },
+      }
+
+      const result = await executeFixture(FIXTURE_PATH, models)
+
+      expect(result.error).toBeUndefined()
+      expect(result.inserted).toEqual({ users: 1 })
+      expect(mockCreate).toHaveBeenCalledWith({ id: 1, name: 'User 1' })
+    })
+
+    it('should insert tables in defined order (respects FK)', async () => {
+      const fixtureData = {
+        users: [{ id: 1, name: 'User' }],
+        posts: [{ id: 1, userId: 1, title: 'Post' }],
+      }
+      writeFileSync(FIXTURE_PATH, JSON.stringify(fixtureData))
+
+      const insertOrder: string[] = []
+      const models: ModelRegistry = {
+        User: {
+          createMany: vi.fn().mockImplementation(async () => {
+            insertOrder.push('User')
+            return []
+          }),
+        },
+        Post: {
+          createMany: vi.fn().mockImplementation(async () => {
+            insertOrder.push('Post')
+            return []
+          }),
+        },
+      }
+
+      await executeFixture(FIXTURE_PATH, models)
+
+      expect(insertOrder).toEqual(['User', 'Post'])
+    })
+
+    it('should return error for missing model', async () => {
+      const fixtureData = {
+        users: [{ id: 1 }],
+      }
+      writeFileSync(FIXTURE_PATH, JSON.stringify(fixtureData))
+
+      const models: ModelRegistry = {}
+
+      const result = await executeFixture(FIXTURE_PATH, models)
+
+      expect(result.error).toBeDefined()
+      expect(result.error?.message).toContain('Model "User" not found')
+    })
+
+    it('should return error for model without create methods', async () => {
+      const fixtureData = {
+        users: [{ id: 1 }],
+      }
+      writeFileSync(FIXTURE_PATH, JSON.stringify(fixtureData))
+
+      const models: ModelRegistry = {
+        User: {},
+      }
+
+      const result = await executeFixture(FIXTURE_PATH, models)
+
+      expect(result.error).toBeDefined()
+      expect(result.error?.message).toContain('must have either createMany or create')
+    })
+
+    it('should track duration', async () => {
+      const fixtureData = { users: [] }
+      writeFileSync(FIXTURE_PATH, JSON.stringify(fixtureData))
+
+      const result = await executeFixture(FIXTURE_PATH, {})
+
+      expect(result.duration).toBeGreaterThanOrEqual(0)
+    })
+
+    it('should handle empty tables', async () => {
+      const fixtureData = {
+        users: [],
+      }
+      writeFileSync(FIXTURE_PATH, JSON.stringify(fixtureData))
+
+      const mockCreateMany = vi.fn()
+      const models: ModelRegistry = {
+        User: { createMany: mockCreateMany },
+      }
+
+      const result = await executeFixture(FIXTURE_PATH, models)
+
+      expect(result.inserted).toEqual({ users: 0 })
+      expect(mockCreateMany).not.toHaveBeenCalled()
     })
   })
 })

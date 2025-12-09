@@ -129,6 +129,20 @@ export async function seed(options: SeedOptions = {}): Promise<void> {
     console.log('')
   }
 
+  // SECURITY: Require explicit --force for production seeding
+  if (environment === 'production' && !options.force) {
+    console.log('')
+    console.log('🚨 PRODUCTION SEEDING BLOCKED')
+    console.log('')
+    console.log('Seeding production databases requires explicit confirmation.')
+    console.log('This is a safety measure to prevent accidental data modification.')
+    console.log('')
+    console.log('To seed production, use:')
+    console.log('  ix db:seed --env production --force')
+    console.log('')
+    return
+  }
+
   // Discover seed files
   const allSeeds = discoverSeedFiles(cwd)
 
