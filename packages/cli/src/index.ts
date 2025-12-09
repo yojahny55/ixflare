@@ -49,6 +49,18 @@ const commands: Record<string, () => Promise<void>> = {
     })
   },
   'migrate:status': () => import('./commands/migrate').then((m) => m.migrate('status')),
+  'db:seed': async () => {
+    const args = process.argv.slice(3)
+    const envIndex = args.indexOf('--env')
+    const env = envIndex !== -1 ? args[envIndex + 1] : undefined
+    const m = await import('./commands/db/seed')
+    await m.seed({
+      fresh: args.includes('--fresh'),
+      force: args.includes('--force'),
+      remote: args.includes('--remote'),
+      env: env as 'development' | 'test' | 'production' | undefined,
+    })
+  },
   generate: () => import('./commands/generate').then((m) => m.generate()),
   'generate:env': () =>
     import('./commands/generate-env-types').then((m) => m.generateEnvCommand({})),
@@ -81,6 +93,7 @@ async function main(): Promise<void> {
     migrate:generate    Generate a new migration file
     migrate:rollback    Rollback the last migration
     migrate:status      Show migration status
+    db:seed             Seed the database with test/development data
     generate            Generate code (model, migration, component)
     generate:env        Generate TypeScript types from .env.example
 
@@ -90,6 +103,12 @@ async function main(): Promise<void> {
     --remote            Target remote database (default: local)
     --schema <path>     Schema file for change detection (generate only)
     --empty             Create empty migration (generate only)
+
+  Seed Options:
+    --fresh             Truncate all tables before seeding
+    --force             Skip confirmation prompts
+    --env <env>         Environment (development, test, production)
+    --remote            Target remote database (default: local)
 ${customCommandsList ? '\n  Custom Commands:\n' + customCommandsList : ''}
 
   Options:

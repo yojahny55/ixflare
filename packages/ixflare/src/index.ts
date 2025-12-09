@@ -163,3 +163,6 @@ export type {
 
 // Utility exports
 export { redactSecrets, redactString, isSensitiveKey } from './utils/redact'
+
+// EdgeRecord ORM exports
+export * from './edge-record'

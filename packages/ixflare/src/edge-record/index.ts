@@ -96,6 +96,18 @@ export type {
 } from './transaction'
 export { TransactionError, TransactionTimeoutError, TransactionRollbackError } from './crud/errors'
 
+// Seed exports (Story 3.9)
+export { seed, isSeedFunction } from './seed'
+export type { SeedDefinitionOptions } from './seed'
+export type {
+  SeedFunction,
+  SeedEnvironment,
+  SeedConfig,
+  FixtureData,
+  SeedOptions,
+  SeedResult,
+} from './seed'
+
 // Legacy exports (will be refactored in later stories)
 export { Model as LegacyModel } from './model'
 export type { ModelDefinition, ModelSchema, QueryOptions } from './types'
