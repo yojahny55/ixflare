@@ -20,10 +20,34 @@ const commands: Record<string, () => Promise<void>> = {
       process.exit(result.exitCode)
     }
   },
-  migrate: () => import('./commands/migrate').then((m) => m.migrate()),
-  'migrate:generate': () =>
-    import('./commands/migrate').then((m) => m.migrate('generate', process.argv[3])),
-  'migrate:rollback': () => import('./commands/migrate').then((m) => m.migrate('rollback')),
+  migrate: async () => {
+    const args = process.argv.slice(3)
+    const m = await import('./commands/migrate')
+    await m.migrate(undefined, undefined, {
+      yes: args.includes('--yes'),
+      force: args.includes('--force'),
+      env: args.includes('--remote') ? 'remote' : 'local',
+    })
+  },
+  'migrate:generate': async () => {
+    const args = process.argv.slice(3)
+    const schemaIndex = args.indexOf('--schema')
+    const schemaPath = schemaIndex !== -1 ? args[schemaIndex + 1] : undefined
+    const m = await import('./commands/migrate')
+    await m.migrate('generate', args[0], {
+      schema: schemaPath,
+      empty: args.includes('--empty'),
+    } as never)
+  },
+  'migrate:rollback': async () => {
+    const args = process.argv.slice(3)
+    const m = await import('./commands/migrate')
+    await m.migrate('rollback', undefined, {
+      yes: args.includes('--yes'),
+      force: args.includes('--force'),
+      env: args.includes('--remote') ? 'remote' : 'local',
+    })
+  },
   'migrate:status': () => import('./commands/migrate').then((m) => m.migrate('status')),
   generate: () => import('./commands/generate').then((m) => m.generate()),
   'generate:env': () =>
@@ -59,6 +83,13 @@ async function main(): Promise<void> {
     migrate:status      Show migration status
     generate            Generate code (model, migration, component)
     generate:env        Generate TypeScript types from .env.example
+
+  Migration Options:
+    --yes               Skip confirmation prompts
+    --force             Allow destructive operations (DROP, TRUNCATE, etc.)
+    --remote            Target remote database (default: local)
+    --schema <path>     Schema file for change detection (generate only)
+    --empty             Create empty migration (generate only)
 ${customCommandsList ? '\n  Custom Commands:\n' + customCommandsList : ''}
 
   Options:

@@ -38,6 +38,9 @@ export interface MigrateOptions {
 
   /** Database name (from wrangler.toml) */
   database?: string
+
+  /** Force execution of destructive operations (DROP, TRUNCATE, etc.) */
+  force?: boolean
 }
 
 /**

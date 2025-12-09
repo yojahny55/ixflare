@@ -5,9 +5,52 @@
 
 import { spawn } from 'child_process'
 import { readFileSync } from 'fs'
-import { getMigrationsDir, getAllMigrations } from './utils'
-import type { MigrateOptions, MigrationRecord } from './types'
+import {
+  getMigrationsDir,
+  getAllMigrations,
+  getDatabaseNameFromWrangler,
+  escapeSqlString,
+} from './utils'
+import type { MigrateOptions, MigrationRecord, MigrationFile } from './types'
 import prompts from 'prompts'
+
+/**
+ * Destructive SQL patterns that require --force flag
+ */
+const DESTRUCTIVE_PATTERNS = [
+  /\bDROP\s+TABLE\b/i,
+  /\bDROP\s+INDEX\b/i,
+  /\bDROP\s+COLUMN\b/i,
+  /\bTRUNCATE\b/i,
+  /\bDELETE\s+FROM\b/i,
+  /\bALTER\s+TABLE\s+\w+\s+DROP\b/i,
+]
+
+/**
+ * Check if SQL content contains destructive operations
+ */
+function containsDestructiveOperations(sql: string): string[] {
+  const found: string[] = []
+  for (const pattern of DESTRUCTIVE_PATTERNS) {
+    const match = sql.match(pattern)
+    if (match) {
+      found.push(match[0])
+    }
+  }
+  return found
+}
+
+/**
+ * Check migration file for destructive operations
+ */
+function checkMigrationForDestructiveOps(migration: MigrationFile): string[] {
+  try {
+    const content = readFileSync(migration.upPath, 'utf-8')
+    return containsDestructiveOperations(content)
+  } catch {
+    return []
+  }
+}
 
 /**
  * Apply all pending migrations
@@ -32,6 +75,7 @@ export async function applyMigrations(options: MigrateOptions = {}): Promise<voi
     console.error('database_id = "..."')
     console.error('')
     process.exit(1)
+    return // Unreachable in prod, but needed for tests where process.exit is mocked
   }
 
   // Ensure _migrations table exists
@@ -66,13 +110,47 @@ export async function applyMigrations(options: MigrateOptions = {}): Promise<voi
     return
   }
 
+  // Check for destructive operations
+  const destructiveMigrations: Array<{ migration: (typeof pendingMigrations)[0]; ops: string[] }> =
+    []
+  for (const migration of pendingMigrations) {
+    const destructiveOps = checkMigrationForDestructiveOps(migration)
+    if (destructiveOps.length > 0) {
+      destructiveMigrations.push({ migration, ops: destructiveOps })
+    }
+  }
+
   // Display pending migrations
   console.log('')
   console.log('Pending migrations:')
   pendingMigrations.forEach((m) => {
-    console.log(`  ${m.filename}`)
+    const hasDestructive = destructiveMigrations.some((d) => d.migration.filename === m.filename)
+    const warning = hasDestructive ? ' [DESTRUCTIVE]' : ''
+    console.log(`  ${m.filename}${warning}`)
   })
   console.log('')
+
+  // Warn about destructive operations
+  if (destructiveMigrations.length > 0) {
+    console.log('\x1b[33m⚠ Warning: Destructive operations detected:\x1b[0m')
+    for (const { migration, ops } of destructiveMigrations) {
+      console.log(`  ${migration.filename}:`)
+      for (const op of ops) {
+        console.log(`    - ${op}`)
+      }
+    }
+    console.log('')
+
+    if (!options.force) {
+      console.error('\x1b[31mError: Destructive operations require --force flag\x1b[0m')
+      console.error('')
+      console.error('Use: ix migrate --force')
+      console.error('')
+      console.error('This is a safety measure to prevent accidental data loss.')
+      process.exit(1)
+      return
+    }
+  }
 
   // Prompt for confirmation unless --yes flag
   if (!options.yes) {
@@ -116,22 +194,6 @@ export async function applyMigrations(options: MigrateOptions = {}): Promise<voi
   console.log('')
   console.log(`✓ ${appliedCount} migration(s) applied successfully!`)
   console.log('')
-}
-
-/**
- * Get database name from wrangler.toml
- */
-function getDatabaseNameFromWrangler(): string | null {
-  try {
-    const wranglerContent = readFileSync('wrangler.toml', 'utf-8')
-
-    // Simple regex to find database_name in d1_databases section
-    const match = wranglerContent.match(/database_name\s*=\s*["']([^"']+)["']/)
-
-    return match ? match[1] : null
-  } catch {
-    return null
-  }
 }
 
 /**
@@ -179,7 +241,9 @@ async function recordMigration(
   env?: 'local' | 'remote'
 ): Promise<void> {
   const timestamp = Date.now()
-  const sql = `INSERT INTO _migrations (name, applied_at) VALUES ('${filename}', ${timestamp})`
+  // Use escapeSqlString to prevent SQL injection
+  const safeFilename = escapeSqlString(filename)
+  const sql = `INSERT INTO _migrations (name, applied_at) VALUES ('${safeFilename}', ${timestamp})`
 
   await executeSql(databaseName, sql, env)
 }

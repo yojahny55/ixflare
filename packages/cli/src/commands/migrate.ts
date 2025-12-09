@@ -10,19 +10,30 @@ import { migrationStatus } from './migrate/status'
 import type { MigrateOptions } from './migrate/types'
 
 /**
+ * Generate options interface
+ */
+interface GenerateOptions {
+  schema?: string
+  empty?: boolean
+}
+
+/**
  * Main migrate command handler
  * Routes to appropriate subcommand
  *
  * Usage:
  *  - ix migrate                      -> Apply pending migrations
+ *  - ix migrate --force              -> Apply migrations including destructive ones
  *  - ix migrate:generate <name>      -> Generate new migration
+ *  - ix migrate:generate <name> --schema <path> -> Generate from schema diff
  *  - ix migrate:rollback             -> Rollback last migration
+ *  - ix migrate:rollback --force     -> Rollback even with destructive operations
  *  - ix migrate:status               -> Show migration status
  */
 export async function migrate(
   subcommand?: string,
   name?: string,
-  _options: MigrateOptions = {}
+  options: MigrateOptions | GenerateOptions = {}
 ): Promise<void> {
   // Parse arguments to extract subcommand and options
   const args = process.argv.slice(3) // Skip node, script, and command
@@ -30,15 +41,21 @@ export async function migrate(
   // Check for subcommands
   if (subcommand === 'generate' || args[0] === 'generate') {
     const migrationName = name || args[1]
-    await generateMigration(migrationName)
+    const genOptions = options as GenerateOptions
+    await generateMigration(migrationName, {
+      schema: genOptions.schema,
+      empty: genOptions.empty,
+    })
     return
   }
 
   if (subcommand === 'rollback' || args[0] === 'rollback') {
-    // Parse options
+    // Parse options - merge passed options with args
+    const migrateOpts = options as MigrateOptions
     const rollbackOptions: MigrateOptions = {
-      yes: args.includes('--yes'),
-      env: args.includes('--remote') ? 'remote' : 'local',
+      yes: migrateOpts.yes ?? args.includes('--yes'),
+      force: migrateOpts.force ?? args.includes('--force'),
+      env: migrateOpts.env ?? (args.includes('--remote') ? 'remote' : 'local'),
     }
     await rollbackMigration(rollbackOptions)
     return
@@ -50,9 +67,11 @@ export async function migrate(
   }
 
   // No subcommand = apply migrations
+  const migrateOpts = options as MigrateOptions
   const applyOptions: MigrateOptions = {
-    yes: args.includes('--yes'),
-    env: args.includes('--remote') ? 'remote' : 'local',
+    yes: migrateOpts.yes ?? args.includes('--yes'),
+    force: migrateOpts.force ?? args.includes('--force'),
+    env: migrateOpts.env ?? (args.includes('--remote') ? 'remote' : 'local'),
   }
   await applyMigrations(applyOptions)
 }

@@ -15,6 +15,8 @@ import {
   isValidMigrationName,
   toSnakeCase,
   formatTimestamp,
+  getDatabaseNameFromWrangler,
+  escapeSqlString,
 } from '../../../src/commands/migrate/utils'
 
 describe('Migration Utils', () => {
@@ -254,6 +256,69 @@ describe('Migration Utils', () => {
       const formatted = formatTimestamp(now)
 
       expect(formatted).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    })
+  })
+
+  describe('getDatabaseNameFromWrangler', () => {
+    it('should return database name from wrangler.toml', () => {
+      mkdirSync(testDir, { recursive: true })
+      writeFileSync(
+        join(testDir, 'wrangler.toml'),
+        `[[d1_databases]]\nbinding = "DB"\ndatabase_name = "my-test-db"\ndatabase_id = "abc123"`
+      )
+
+      const dbName = getDatabaseNameFromWrangler(testDir)
+      expect(dbName).toBe('my-test-db')
+    })
+
+    it('should return null when wrangler.toml does not exist', () => {
+      const dbName = getDatabaseNameFromWrangler(join(testDir, 'nonexistent'))
+      expect(dbName).toBeNull()
+    })
+
+    it('should return null when no database_name in wrangler.toml', () => {
+      mkdirSync(testDir, { recursive: true })
+      writeFileSync(join(testDir, 'wrangler.toml'), `name = "my-worker"\n`)
+
+      const dbName = getDatabaseNameFromWrangler(testDir)
+      expect(dbName).toBeNull()
+    })
+
+    it('should handle database_name with single quotes', () => {
+      mkdirSync(testDir, { recursive: true })
+      writeFileSync(
+        join(testDir, 'wrangler.toml'),
+        `[[d1_databases]]\ndatabase_name = 'single-quoted-db'`
+      )
+
+      const dbName = getDatabaseNameFromWrangler(testDir)
+      expect(dbName).toBe('single-quoted-db')
+    })
+  })
+
+  describe('escapeSqlString', () => {
+    it('should escape single quotes by doubling them', () => {
+      expect(escapeSqlString("O'Brien")).toBe("O''Brien")
+    })
+
+    it('should handle multiple single quotes', () => {
+      expect(escapeSqlString("It's John's book")).toBe("It''s John''s book")
+    })
+
+    it('should return unchanged string without quotes', () => {
+      expect(escapeSqlString('normal_string')).toBe('normal_string')
+    })
+
+    it('should handle empty string', () => {
+      expect(escapeSqlString('')).toBe('')
+    })
+
+    it('should handle SQL injection attempt', () => {
+      const malicious = "'; DROP TABLE users; --"
+      const escaped = escapeSqlString(malicious)
+      expect(escaped).toBe("''; DROP TABLE users; --")
+      // When used in SQL: WHERE name = '''; DROP TABLE users; --'
+      // The doubled quote treats it as a literal quote, not string terminator
     })
   })
 })

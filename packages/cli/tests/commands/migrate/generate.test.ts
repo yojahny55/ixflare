@@ -6,24 +6,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { existsSync, rmSync, mkdirSync, writeFileSync, readFileSync } from 'fs'
 import { join } from 'path'
-import { generateMigration, fieldTypeToSql } from '../../../src/commands/migrate/generate'
-
-// Simplified field config for testing
-interface FieldConfig {
-  type: 'id' | 'string' | 'text' | 'integer' | 'decimal' | 'boolean' | 'datetime' | 'json' | 'enum'
-  nullable: boolean
-  unique?: boolean
-  default?: unknown | (() => unknown)
-  values?: readonly string[]
-  autoIncrement?: boolean
-  primaryKey?: boolean
-}
+import { generateMigration } from '../../../src/commands/migrate/generate'
 
 describe('generateMigration', () => {
   const testDir = join(process.cwd(), '.test-migrations-generate')
   const originalExit = process.exit
   const originalConsoleError = console.error
   const originalConsoleLog = console.log
+  const originalConsoleWarn = console.warn
 
   beforeEach(() => {
     // Clean up before each test
@@ -38,6 +28,7 @@ describe('generateMigration', () => {
     // Mock console methods
     console.error = vi.fn()
     console.log = vi.fn()
+    console.warn = vi.fn()
   })
 
   afterEach(() => {
@@ -52,10 +43,11 @@ describe('generateMigration', () => {
     // Restore console methods
     console.error = originalConsoleError
     console.log = originalConsoleLog
+    console.warn = originalConsoleWarn
   })
 
   it('should create up and down migration files', async () => {
-    await generateMigration('add_bio_to_users', { cwd: testDir })
+    await generateMigration('add_bio_to_users', { cwd: testDir, empty: true })
 
     const migrationsDir = join(testDir, 'migrations')
     expect(existsSync(join(migrationsDir, '001_add_bio_to_users.sql'))).toBe(true)
@@ -69,20 +61,20 @@ describe('generateMigration', () => {
     // Create first migration manually
     writeFileSync(join(migrationsDir, '001_initial.sql'), '')
 
-    await generateMigration('add_users', { cwd: testDir })
+    await generateMigration('add_users', { cwd: testDir, empty: true })
 
     expect(existsSync(join(migrationsDir, '002_add_users.sql'))).toBe(true)
   })
 
   it('should convert migration name to snake_case', async () => {
-    await generateMigration('AddBioToUsers', { cwd: testDir })
+    await generateMigration('AddBioToUsers', { cwd: testDir, empty: true })
 
     const migrationsDir = join(testDir, 'migrations')
     expect(existsSync(join(migrationsDir, '001_add_bio_to_users.sql'))).toBe(true)
   })
 
   it('should create placeholder content in migration files', async () => {
-    await generateMigration('test_migration', { cwd: testDir })
+    await generateMigration('test_migration', { cwd: testDir, empty: true })
 
     const migrationsDir = join(testDir, 'migrations')
     const upContent = readFileSync(join(migrationsDir, '001_test_migration.sql'), 'utf-8')
@@ -111,81 +103,63 @@ describe('generateMigration', () => {
     const migrationsDir = join(testDir, 'migrations')
     expect(existsSync(migrationsDir)).toBe(false)
 
-    await generateMigration('test', { cwd: testDir })
+    await generateMigration('test', { cwd: testDir, empty: true })
 
     expect(existsSync(migrationsDir)).toBe(true)
   })
-})
 
-describe('fieldTypeToSql', () => {
-  it('should convert id field to SQLite PRIMARY KEY', () => {
-    const field: FieldConfig = {
-      type: 'id',
-      nullable: false,
-      autoIncrement: true,
-      primaryKey: true,
-    }
-    expect(fieldTypeToSql(field)).toBe('INTEGER PRIMARY KEY AUTOINCREMENT')
+  it('should generate migration from schema file', async () => {
+    // Create a schema file
+    const schemaPath = join(testDir, 'schema.json')
+    writeFileSync(
+      schemaPath,
+      JSON.stringify({
+        tables: [
+          {
+            name: 'users',
+            columns: [
+              { name: 'id', type: 'INTEGER PRIMARY KEY AUTOINCREMENT' },
+              { name: 'email', type: 'TEXT NOT NULL UNIQUE' },
+              { name: 'name', type: 'TEXT NOT NULL' },
+            ],
+          },
+        ],
+      })
+    )
+
+    // Create wrangler.toml
+    writeFileSync(
+      join(testDir, 'wrangler.toml'),
+      `[[d1_databases]]\nbinding = "DB"\ndatabase_name = "test-db"\ndatabase_id = "abc123"`
+    )
+
+    // This will warn that database isn't available but still generate placeholder
+    await generateMigration('add_users', { cwd: testDir, schema: 'schema.json' })
+
+    const migrationsDir = join(testDir, 'migrations')
+    expect(existsSync(join(migrationsDir, '001_add_users.sql'))).toBe(true)
   })
 
-  it('should convert string field to TEXT', () => {
-    const field: FieldConfig = { type: 'string', nullable: false }
-    expect(fieldTypeToSql(field)).toBe('TEXT NOT NULL')
+  it('should show help text for --schema option', async () => {
+    await generateMigration('', { cwd: testDir })
+
+    expect(console.error).toHaveBeenCalledWith('Error: Migration name is required')
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('--schema'))
   })
 
-  it('should add nullable for nullable fields', () => {
-    const field: FieldConfig = { type: 'string', nullable: true }
-    expect(fieldTypeToSql(field)).not.toContain('NOT NULL')
-  })
+  it('should handle --empty flag to skip schema detection', async () => {
+    // Create wrangler.toml (would normally trigger introspection)
+    writeFileSync(
+      join(testDir, 'wrangler.toml'),
+      `[[d1_databases]]\nbinding = "DB"\ndatabase_name = "test-db"\ndatabase_id = "abc123"`
+    )
 
-  it('should add default value for strings', () => {
-    const field: FieldConfig = { type: 'string', nullable: false, default: 'user' }
-    expect(fieldTypeToSql(field)).toBe("TEXT NOT NULL DEFAULT 'user'")
-  })
+    await generateMigration('test', { cwd: testDir, empty: true })
 
-  it('should add default value for booleans', () => {
-    const field: FieldConfig = { type: 'boolean', nullable: false, default: false }
-    expect(fieldTypeToSql(field)).toBe('INTEGER NOT NULL DEFAULT 0')
-  })
+    const migrationsDir = join(testDir, 'migrations')
+    const content = readFileSync(join(migrationsDir, '001_test.sql'), 'utf-8')
 
-  it('should add default value for integers', () => {
-    const field: FieldConfig = { type: 'integer', nullable: false, default: 0 }
-    expect(fieldTypeToSql(field)).toBe('INTEGER NOT NULL DEFAULT 0')
-  })
-
-  it('should add UNIQUE constraint', () => {
-    const field: FieldConfig = { type: 'string', nullable: false, unique: true }
-    expect(fieldTypeToSql(field)).toBe('TEXT NOT NULL UNIQUE')
-  })
-
-  it('should handle integer type', () => {
-    const field: FieldConfig = { type: 'integer', nullable: false }
-    expect(fieldTypeToSql(field)).toBe('INTEGER NOT NULL')
-  })
-
-  it('should handle decimal type', () => {
-    const field: FieldConfig = { type: 'decimal', nullable: false }
-    expect(fieldTypeToSql(field)).toBe('REAL NOT NULL')
-  })
-
-  it('should handle datetime type', () => {
-    const field: FieldConfig = { type: 'datetime', nullable: false }
-    expect(fieldTypeToSql(field)).toBe('INTEGER NOT NULL')
-  })
-
-  it('should handle json type', () => {
-    const field: FieldConfig = { type: 'json', nullable: false }
-    expect(fieldTypeToSql(field)).toBe('TEXT NOT NULL')
-  })
-
-  it('should handle enum type with CHECK constraint', () => {
-    const field: FieldConfig = {
-      type: 'enum',
-      nullable: false,
-      values: ['user', 'admin', 'moderator'],
-    }
-    const result = fieldTypeToSql(field)
-    expect(result).toContain('TEXT NOT NULL')
-    expect(result).toContain("CHECK(value IN ('user', 'admin', 'moderator'))")
+    // Should contain placeholder, not auto-generated SQL
+    expect(content).toContain('Add your SQL statements below')
   })
 })

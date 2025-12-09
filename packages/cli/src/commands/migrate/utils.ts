@@ -3,7 +3,7 @@
  * @description Utility functions for migration system
  */
 
-import { existsSync, mkdirSync, readdirSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import type { MigrationFile } from './types'
 
@@ -139,4 +139,35 @@ export function toSnakeCase(name: string): string {
 export function formatTimestamp(timestamp: number): string {
   const date = new Date(timestamp)
   return date.toISOString().replace('T', ' ').substring(0, 19)
+}
+
+/**
+ * Get database name from wrangler.toml
+ * @param cwd Current working directory (defaults to process.cwd())
+ * @returns Database name or null if not found
+ */
+export function getDatabaseNameFromWrangler(cwd?: string): string | null {
+  try {
+    const baseDir = cwd || process.cwd()
+    const wranglerPath = join(baseDir, 'wrangler.toml')
+    const wranglerContent = readFileSync(wranglerPath, 'utf-8')
+
+    // Simple regex to find database_name in d1_databases section
+    const match = wranglerContent.match(/database_name\s*=\s*["']([^"']+)["']/)
+
+    return match ? match[1] : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Escape a string value for safe SQL insertion
+ * Prevents SQL injection by escaping single quotes
+ * @param value The string value to escape
+ * @returns Escaped string safe for SQL
+ */
+export function escapeSqlString(value: string): string {
+  // Escape single quotes by doubling them (SQL standard)
+  return value.replace(/'/g, "''")
 }

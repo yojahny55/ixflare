@@ -4,8 +4,12 @@
  */
 
 import { spawn } from 'child_process'
-import { readFileSync } from 'fs'
-import { getMigrationsDir, getAllMigrations, formatTimestamp } from './utils'
+import {
+  getMigrationsDir,
+  getAllMigrations,
+  formatTimestamp,
+  getDatabaseNameFromWrangler,
+} from './utils'
 import type { MigrationRecord } from './types'
 
 /**
@@ -66,19 +70,6 @@ export async function migrationStatus(): Promise<void> {
   if (appliedMigrations.length < allMigrations.length) {
     console.log('Run: ix migrate (to apply pending migrations)')
     console.log('')
-  }
-}
-
-/**
- * Get database name from wrangler.toml
- */
-function getDatabaseNameFromWrangler(): string | null {
-  try {
-    const wranglerContent = readFileSync('wrangler.toml', 'utf-8')
-    const match = wranglerContent.match(/database_name\s*=\s*["']([^"']+)["']/)
-    return match ? match[1] : null
-  } catch {
-    return null
   }
 }
 

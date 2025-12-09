@@ -5,9 +5,52 @@
 
 import { spawn } from 'child_process'
 import { existsSync, readFileSync } from 'fs'
-import { getMigrationsDir, getAllMigrations } from './utils'
+import {
+  getMigrationsDir,
+  getAllMigrations,
+  getDatabaseNameFromWrangler,
+  escapeSqlString,
+} from './utils'
 import type { MigrateOptions, MigrationRecord } from './types'
 import prompts from 'prompts'
+
+/**
+ * Destructive SQL patterns that require --force flag
+ */
+const DESTRUCTIVE_PATTERNS = [
+  /\bDROP\s+TABLE\b/i,
+  /\bDROP\s+INDEX\b/i,
+  /\bDROP\s+COLUMN\b/i,
+  /\bTRUNCATE\b/i,
+  /\bDELETE\s+FROM\b/i,
+  /\bALTER\s+TABLE\s+\w+\s+DROP\b/i,
+]
+
+/**
+ * Check if SQL content contains destructive operations
+ */
+function containsDestructiveOperations(sql: string): string[] {
+  const found: string[] = []
+  for (const pattern of DESTRUCTIVE_PATTERNS) {
+    const match = sql.match(pattern)
+    if (match) {
+      found.push(match[0])
+    }
+  }
+  return found
+}
+
+/**
+ * Check down migration file for destructive operations
+ */
+function checkDownMigrationForDestructiveOps(downPath: string): string[] {
+  try {
+    const content = readFileSync(downPath, 'utf-8')
+    return containsDestructiveOperations(content)
+  } catch {
+    return []
+  }
+}
 
 /**
  * Rollback the last applied migration
@@ -62,11 +105,33 @@ export async function rollbackMigration(options: MigrateOptions = {}): Promise<v
     process.exit(1)
   }
 
+  // Check for destructive operations in down migration
+  const destructiveOps = checkDownMigrationForDestructiveOps(migrationFile.downPath)
+
   // Display rollback information
   console.log('')
   console.log('Last applied migration:')
   console.log(`  ${lastMigration.name}`)
   console.log('')
+
+  // Warn about destructive operations in down migration
+  if (destructiveOps.length > 0) {
+    console.log('\x1b[33m⚠ Warning: Down migration contains destructive operations:\x1b[0m')
+    for (const op of destructiveOps) {
+      console.log(`  - ${op}`)
+    }
+    console.log('')
+
+    if (!options.force) {
+      console.error('\x1b[31mError: Destructive operations require --force flag\x1b[0m')
+      console.error('')
+      console.error('Use: ix migrate:rollback --force')
+      console.error('')
+      console.error('This is a safety measure to prevent accidental data loss.')
+      process.exit(1)
+      return
+    }
+  }
 
   // Prompt for confirmation unless --yes flag
   if (!options.yes) {
@@ -102,19 +167,6 @@ export async function rollbackMigration(options: MigrateOptions = {}): Promise<v
 }
 
 /**
- * Get database name from wrangler.toml
- */
-function getDatabaseNameFromWrangler(): string | null {
-  try {
-    const wranglerContent = readFileSync('wrangler.toml', 'utf-8')
-    const match = wranglerContent.match(/database_name\s*=\s*["']([^"']+)["']/)
-    return match ? match[1] : null
-  } catch {
-    return null
-  }
-}
-
-/**
  * Get applied migrations from _migrations table
  */
 async function getAppliedMigrations(
@@ -139,7 +191,9 @@ async function removeMigrationRecord(
   filename: string,
   env?: 'local' | 'remote'
 ): Promise<void> {
-  const sql = `DELETE FROM _migrations WHERE name = '${filename}'`
+  // Use escapeSqlString to prevent SQL injection
+  const safeFilename = escapeSqlString(filename)
+  const sql = `DELETE FROM _migrations WHERE name = '${safeFilename}'`
   await executeSql(databaseName, sql, env)
 }
 
