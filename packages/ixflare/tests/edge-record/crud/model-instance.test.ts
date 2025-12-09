@@ -312,4 +312,169 @@ describe('ModelInstance', () => {
       expect(instance.get('updatedAt')).toBeDefined()
     })
   })
+
+  describe('cache invalidation on update/delete - AC4, AC5', () => {
+    // Mock KV for cache tests
+    class MockKV {
+      private store = new Map<string, string>()
+
+      async get(key: string): Promise<string | null> {
+        return this.store.get(key) || null
+      }
+
+      async put(key: string, value: string): Promise<void> {
+        this.store.set(key, value)
+      }
+
+      async delete(key: string): Promise<void> {
+        this.store.delete(key)
+      }
+
+      // For verification
+      has(key: string): boolean {
+        return this.store.has(key)
+      }
+
+      // KVNamespace type guards
+      list() {
+        return { keys: [] }
+      }
+      getWithMetadata() {
+        return null
+      }
+    }
+
+    it('should invalidate cache on update() when cache enabled and KV provided - AC4', async () => {
+      const CachedUser = defineModel(
+        'users_cache_inv_test',
+        {
+          id: field.id(),
+          email: field.string(),
+          name: field.string(),
+          ...timestamps(),
+        },
+        {
+          storage: 'd1',
+          cache: {
+            enabled: true,
+            ttl: 300,
+          },
+        }
+      )
+
+      const kv = new MockKV()
+
+      // Pre-populate cache
+      const cacheKey = 'users_cache_inv_test:1'
+      await kv.put(cacheKey, JSON.stringify({ id: 1, name: 'Old Name' }))
+      expect(kv.has(cacheKey)).toBe(true)
+
+      // Create instance and update with KV
+      const instance = new ModelInstance(
+        CachedUser,
+        { id: 1, email: 'test@example.com', name: 'Test' },
+        false
+      )
+
+      await instance.update({ name: 'New Name' }, db, kv as unknown as KVNamespace)
+
+      // Cache should be invalidated
+      expect(kv.has(cacheKey)).toBe(false)
+    })
+
+    it('should invalidate cache on delete() when cache enabled and KV provided - AC5', async () => {
+      const CachedUser = defineModel(
+        'users_cache_del_test',
+        {
+          id: field.id(),
+          email: field.string(),
+          name: field.string(),
+          ...timestamps(),
+        },
+        {
+          storage: 'd1',
+          cache: {
+            enabled: true,
+            ttl: 300,
+          },
+        }
+      )
+
+      const kv = new MockKV()
+
+      // First, create the record in the database so delete returns changes > 0
+      const createInstance = new ModelInstance(
+        CachedUser,
+        { email: 'test@example.com', name: 'Test' },
+        true
+      )
+      await createInstance.save(db)
+      const id = createInstance.get('id')
+
+      // Pre-populate cache
+      const cacheKey = `users_cache_del_test:${id}`
+      await kv.put(cacheKey, JSON.stringify({ id, name: 'Cached' }))
+      expect(kv.has(cacheKey)).toBe(true)
+
+      // Delete with KV
+      await createInstance.delete(db, kv as unknown as KVNamespace)
+
+      // Cache should be invalidated
+      expect(kv.has(cacheKey)).toBe(false)
+    })
+
+    it('should NOT invalidate cache on update() when cache not enabled', async () => {
+      const NoCacheUser = defineModel('users_no_cache_upd', {
+        id: field.id(),
+        email: field.string(),
+        name: field.string(),
+        ...timestamps(),
+      })
+
+      const kv = new MockKV()
+
+      // Pre-populate cache (simulating stale data from elsewhere)
+      const cacheKey = 'users_no_cache_upd:1'
+      await kv.put(cacheKey, JSON.stringify({ id: 1, name: 'Cached' }))
+
+      const instance = new ModelInstance(
+        NoCacheUser,
+        { id: 1, email: 'test@example.com', name: 'Test' },
+        false
+      )
+
+      await instance.update({ name: 'New Name' }, db, kv as unknown as KVNamespace)
+
+      // Cache should still exist (no invalidation because cache not enabled)
+      expect(kv.has(cacheKey)).toBe(true)
+    })
+
+    it('should NOT invalidate cache on update() when KV not provided', async () => {
+      const CachedUser = defineModel(
+        'users_cache_no_kv',
+        {
+          id: field.id(),
+          email: field.string(),
+          name: field.string(),
+          ...timestamps(),
+        },
+        {
+          storage: 'd1',
+          cache: {
+            enabled: true,
+            ttl: 300,
+          },
+        }
+      )
+
+      const instance = new ModelInstance(
+        CachedUser,
+        { id: 1, email: 'test@example.com', name: 'Test' },
+        false
+      )
+
+      // Should not throw when KV not provided
+      await expect(instance.update({ name: 'New Name' }, db)).resolves.not.toThrow()
+    })
+  })
 })

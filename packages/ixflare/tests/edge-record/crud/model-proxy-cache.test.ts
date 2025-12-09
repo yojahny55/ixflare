@@ -346,3 +346,210 @@ describe('Model.find() with automatic caching', () => {
     )
   })
 })
+
+describe('Model.invalidateCache() - AC7', () => {
+  let kv: MockKVNamespace
+
+  beforeEach(() => {
+    kv = new MockKVNamespace()
+  })
+
+  it('should manually invalidate a cache entry', async () => {
+    const Product = defineModel(
+      'products_invalidate_test',
+      {
+        id: field.id(),
+        name: field.string(),
+      },
+      {
+        storage: 'd1',
+        cache: {
+          enabled: true,
+          ttl: 300,
+        },
+      }
+    )
+
+    // Pre-populate cache
+    await kv.put('products_invalidate_test:42', JSON.stringify({ id: 42, name: 'Cached Item' }))
+
+    // Verify cache exists
+    const beforeInvalidate = await kv.get('products_invalidate_test:42')
+    expect(beforeInvalidate).not.toBeNull()
+
+    // Invalidate cache
+    await Product.invalidateCache(42, kv)
+
+    // Verify cache is gone
+    const afterInvalidate = await kv.get('products_invalidate_test:42')
+    expect(afterInvalidate).toBeNull()
+  })
+
+  it('should handle invalidating non-existent cache entries without error', async () => {
+    const Product = defineModel(
+      'products_invalidate_test_2',
+      {
+        id: field.id(),
+        name: field.string(),
+      },
+      {
+        storage: 'd1',
+        cache: {
+          enabled: true,
+          ttl: 300,
+        },
+      }
+    )
+
+    // Should not throw when invalidating non-existent entry
+    await expect(Product.invalidateCache(999, kv)).resolves.not.toThrow()
+  })
+
+  it('should invalidate cache with string ID', async () => {
+    const Setting = defineModel(
+      'settings_invalidate_test',
+      {
+        id: field.string().primaryKey(),
+        value: field.string(),
+      },
+      {
+        storage: 'd1',
+        cache: {
+          enabled: true,
+          ttl: 300,
+        },
+      }
+    )
+
+    // Pre-populate cache
+    await kv.put('settings_invalidate_test:theme', JSON.stringify({ id: 'theme', value: 'dark' }))
+
+    // Invalidate
+    await Setting.invalidateCache('theme', kv)
+
+    // Verify removed
+    const cached = await kv.get('settings_invalidate_test:theme')
+    expect(cached).toBeNull()
+  })
+})
+
+describe('Model.warmCache() - AC8', () => {
+  let db: MockD1Database
+  let kv: MockKVNamespace
+
+  beforeEach(() => {
+    db = new MockD1Database()
+    kv = new MockKVNamespace()
+
+    // Set up test data
+    db.setData('products_warm_test', [
+      { id: 1, name: 'Product A' },
+      { id: 2, name: 'Product B' },
+      { id: 3, name: 'Product C' },
+    ])
+  })
+
+  it('should warm cache for multiple IDs', async () => {
+    const Product = defineModel(
+      'products_warm_test',
+      {
+        id: field.id(),
+        name: field.string(),
+      },
+      {
+        storage: 'd1',
+        cache: {
+          enabled: true,
+          ttl: 300,
+        },
+      }
+    )
+
+    // Warm cache
+    await Product.warmCache([1, 2, 3], db as unknown as D1Database, kv)
+
+    // Verify all items are cached
+    const cached1 = await kv.get('products_warm_test:1', 'json')
+    const cached2 = await kv.get('products_warm_test:2', 'json')
+    const cached3 = await kv.get('products_warm_test:3', 'json')
+
+    expect(cached1).toBeDefined()
+    expect(cached2).toBeDefined()
+    expect(cached3).toBeDefined()
+    expect((cached1 as Record<string, unknown>).name).toBe('Product A')
+    expect((cached2 as Record<string, unknown>).name).toBe('Product B')
+    expect((cached3 as Record<string, unknown>).name).toBe('Product C')
+  })
+
+  it('should handle empty IDs array without error', async () => {
+    const Product = defineModel(
+      'products_warm_test_2',
+      {
+        id: field.id(),
+        name: field.string(),
+      },
+      {
+        storage: 'd1',
+        cache: {
+          enabled: true,
+          ttl: 300,
+        },
+      }
+    )
+
+    // Should not throw
+    await expect(Product.warmCache([], db as unknown as D1Database, kv)).resolves.not.toThrow()
+  })
+
+  it('should only warm existing records (skip non-existent)', async () => {
+    const Product = defineModel(
+      'products_warm_test',
+      {
+        id: field.id(),
+        name: field.string(),
+      },
+      {
+        storage: 'd1',
+        cache: {
+          enabled: true,
+          ttl: 300,
+        },
+      }
+    )
+
+    // Warm cache with mix of existing and non-existing IDs
+    await Product.warmCache([1, 999], db as unknown as D1Database, kv)
+
+    // Existing should be cached
+    const cached1 = await kv.get('products_warm_test:1', 'json')
+    expect(cached1).toBeDefined()
+
+    // Non-existing should not be cached
+    const cached999 = await kv.get('products_warm_test:999')
+    expect(cached999).toBeNull()
+  })
+
+  it('should warn when cache is not enabled on model', async () => {
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const Product = defineModel(
+      'products_no_cache_warm',
+      {
+        id: field.id(),
+        name: field.string(),
+      },
+      {
+        storage: 'd1',
+        // No cache config
+      }
+    )
+
+    await Product.warmCache([1], db as unknown as D1Database, kv)
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('warmCache called on model')
+    )
+
+    consoleSpy.mockRestore()
+  })
+})
