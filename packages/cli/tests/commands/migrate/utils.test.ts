@@ -17,6 +17,8 @@ import {
   formatTimestamp,
   getDatabaseNameFromWrangler,
   escapeSqlString,
+  stripSqlComments,
+  containsDestructiveOperations,
 } from '../../../src/commands/migrate/utils'
 
 describe('Migration Utils', () => {
@@ -319,6 +321,87 @@ describe('Migration Utils', () => {
       expect(escaped).toBe("''; DROP TABLE users; --")
       // When used in SQL: WHERE name = '''; DROP TABLE users; --'
       // The doubled quote treats it as a literal quote, not string terminator
+    })
+  })
+
+  describe('stripSqlComments', () => {
+    it('should remove single-line comments', () => {
+      const sql = `SELECT * FROM users;-- This is a comment
+SELECT * FROM posts;`
+      const result = stripSqlComments(sql)
+      expect(result).toBe(`SELECT * FROM users;
+SELECT * FROM posts;`)
+    })
+
+    it('should remove multi-line comments', () => {
+      const sql = `SELECT * FROM users/* comment */WHERE id = 1;`
+      const result = stripSqlComments(sql)
+      expect(result).toBe(`SELECT * FROM usersWHERE id = 1;`)
+    })
+
+    it('should remove both comment types', () => {
+      const sql = `-- Header comment
+SELECT * FROM users/* inline */WHERE active = 1;-- end comment`
+      const result = stripSqlComments(sql)
+      expect(result).toBe(`
+SELECT * FROM usersWHERE active = 1;`)
+    })
+
+    it('should handle SQL with no comments', () => {
+      const sql = `SELECT * FROM users WHERE id = 1;`
+      const result = stripSqlComments(sql)
+      expect(result).toBe(sql)
+    })
+  })
+
+  describe('containsDestructiveOperations', () => {
+    it('should detect DROP TABLE', () => {
+      const sql = `DROP TABLE users;`
+      const result = containsDestructiveOperations(sql)
+      expect(result).toContain('DROP TABLE')
+    })
+
+    it('should detect TRUNCATE', () => {
+      const sql = `TRUNCATE users;`
+      const result = containsDestructiveOperations(sql)
+      expect(result).toContain('TRUNCATE')
+    })
+
+    it('should detect DELETE FROM', () => {
+      const sql = `DELETE FROM users WHERE active = 0;`
+      const result = containsDestructiveOperations(sql)
+      expect(result).toContain('DELETE FROM')
+    })
+
+    it('should detect ALTER TABLE ... DROP COLUMN', () => {
+      const sql = `ALTER TABLE users DROP COLUMN bio;`
+      const result = containsDestructiveOperations(sql)
+      expect(result.length).toBeGreaterThan(0)
+    })
+
+    it('should NOT detect DROP TABLE in comments', () => {
+      const sql = `-- TODO: DROP TABLE users later
+SELECT * FROM users;`
+      const result = containsDestructiveOperations(sql)
+      expect(result).toHaveLength(0)
+    })
+
+    it('should NOT detect DROP TABLE in multi-line comments', () => {
+      const sql = `/*
+DROP TABLE users;
+This is just a note about what we might do later
+*/
+SELECT * FROM users;`
+      const result = containsDestructiveOperations(sql)
+      expect(result).toHaveLength(0)
+    })
+
+    it('should return empty array for safe SQL', () => {
+      const sql = `CREATE TABLE users (id INTEGER PRIMARY KEY);
+ALTER TABLE users ADD COLUMN email TEXT;
+SELECT * FROM users;`
+      const result = containsDestructiveOperations(sql)
+      expect(result).toHaveLength(0)
     })
   })
 })

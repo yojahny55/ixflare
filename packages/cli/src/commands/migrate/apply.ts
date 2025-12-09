@@ -10,35 +10,10 @@ import {
   getAllMigrations,
   getDatabaseNameFromWrangler,
   escapeSqlString,
+  containsDestructiveOperations,
 } from './utils'
 import type { MigrateOptions, MigrationRecord, MigrationFile } from './types'
 import prompts from 'prompts'
-
-/**
- * Destructive SQL patterns that require --force flag
- */
-const DESTRUCTIVE_PATTERNS = [
-  /\bDROP\s+TABLE\b/i,
-  /\bDROP\s+INDEX\b/i,
-  /\bDROP\s+COLUMN\b/i,
-  /\bTRUNCATE\b/i,
-  /\bDELETE\s+FROM\b/i,
-  /\bALTER\s+TABLE\s+\w+\s+DROP\b/i,
-]
-
-/**
- * Check if SQL content contains destructive operations
- */
-function containsDestructiveOperations(sql: string): string[] {
-  const found: string[] = []
-  for (const pattern of DESTRUCTIVE_PATTERNS) {
-    const match = sql.match(pattern)
-    if (match) {
-      found.push(match[0])
-    }
-  }
-  return found
-}
 
 /**
  * Check migration file for destructive operations

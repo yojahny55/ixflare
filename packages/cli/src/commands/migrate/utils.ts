@@ -171,3 +171,52 @@ export function escapeSqlString(value: string): string {
   // Escape single quotes by doubling them (SQL standard)
   return value.replace(/'/g, "''")
 }
+
+/**
+ * Strip SQL comments from content to avoid false positives in destructive operation detection
+ * Removes both single-line (--) and multi-line block comments
+ * @param sql The SQL content to strip comments from
+ * @returns SQL content without comments
+ */
+export function stripSqlComments(sql: string): string {
+  // Remove multi-line comments /* ... */
+  let result = sql.replace(/\/\*[\s\S]*?\*\//g, '')
+
+  // Remove single-line comments -- ... (to end of line)
+  result = result.replace(/--.*$/gm, '')
+
+  return result
+}
+
+/**
+ * Destructive SQL patterns that require --force flag
+ * Used by both apply.ts and rollback.ts
+ */
+export const DESTRUCTIVE_PATTERNS = [
+  /\bDROP\s+TABLE\b/i,
+  /\bDROP\s+INDEX\b/i,
+  /\bDROP\s+COLUMN\b/i,
+  /\bTRUNCATE\b/i,
+  /\bDELETE\s+FROM\b/i,
+  /\bALTER\s+TABLE\s+\w+\s+DROP\b/i,
+]
+
+/**
+ * Check if SQL content contains destructive operations
+ * Strips comments before checking to avoid false positives
+ * @param sql The SQL content to check
+ * @returns Array of destructive operations found
+ */
+export function containsDestructiveOperations(sql: string): string[] {
+  // Strip comments to avoid false positives like "-- TODO: DROP TABLE later"
+  const strippedSql = stripSqlComments(sql)
+  const found: string[] = []
+
+  for (const pattern of DESTRUCTIVE_PATTERNS) {
+    const match = strippedSql.match(pattern)
+    if (match) {
+      found.push(match[0])
+    }
+  }
+  return found
+}
