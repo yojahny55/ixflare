@@ -22,7 +22,8 @@ import {
   isD1Database,
   isKVNamespace,
   isDurableObjectStorage,
-  type Database,
+  type StorageBinding,
+  type StorageTier,
 } from '@/edge-record/storage/types'
 import { KVAdapter } from '@/edge-record/storage/kv-adapter'
 import { DOAdapter } from '@/edge-record/storage/do-adapter'
@@ -103,14 +104,14 @@ export class ModelInstance<T extends SchemaDefinition> {
   /**
    * Save the instance to database (INSERT if new, UPDATE if existing)
    */
-  async save(db: Database): Promise<this> {
-    const storage = (this._model as any).$storage || 'd1'
+  async save(db: StorageBinding): Promise<this> {
+    const storage: StorageTier = this._model.$storage || 'd1'
 
     // Handle KV Storage
     if (storage === 'kv') {
       if (!isKVNamespace(db)) {
         throw new Error(
-          `Model ${this._model.$tableName} is configured for KV but received ${db.constructor.name}`
+          `Storage tier mismatch: Model '${this._model.$tableName}' has $storage='kv' but received incompatible binding. Expected KVNamespace.`
         )
       }
       this.updateTimestamps()
@@ -131,7 +132,7 @@ export class ModelInstance<T extends SchemaDefinition> {
     if (storage === 'do') {
       if (!isDurableObjectStorage(db)) {
         throw new Error(
-          `Model ${this._model.$tableName} is configured for DO but received ${db.constructor.name}`
+          `Storage tier mismatch: Model '${this._model.$tableName}' has $storage='do' but received incompatible binding. Expected DurableObjectStorage.`
         )
       }
       this.updateTimestamps()
@@ -153,7 +154,7 @@ export class ModelInstance<T extends SchemaDefinition> {
       // Check if we received KV/DO but wanted D1
       if (isKVNamespace(db) || isDurableObjectStorage(db)) {
         throw new Error(
-          `Model ${this._model.$tableName} is configured for D1 but received ${db.constructor.name}`
+          `Storage tier mismatch: Model '${this._model.$tableName}' has $storage='d1' but received incompatible binding. Expected D1Database.`
         )
       }
       // If it's something else (like a mock) assume it's D1-compatible or let it fail naturally
@@ -234,7 +235,7 @@ export class ModelInstance<T extends SchemaDefinition> {
   /**
    * Update fields and save to database
    */
-  async update(data: Partial<InferSchema<T>>, db: Database): Promise<this> {
+  async update(data: Partial<InferSchema<T>>, db: StorageBinding): Promise<this> {
     // Merge data first
     Object.assign(this._data, data)
     // Save handles routing and dirty tracking
@@ -247,8 +248,8 @@ export class ModelInstance<T extends SchemaDefinition> {
   /**
    * Delete this record from database
    */
-  async delete(db: Database): Promise<boolean> {
-    const storage = (this._model as any).$storage || 'd1'
+  async delete(db: StorageBinding): Promise<boolean> {
+    const storage: StorageTier = this._model.$storage || 'd1'
 
     if (storage === 'kv') {
       if (!isKVNamespace(db)) throw new Error('Invalid DB binding for KV model')

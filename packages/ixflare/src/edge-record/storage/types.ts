@@ -59,4 +59,5 @@ export interface ExtendedModelOptions extends StorageOptions {
   cache?: CacheOptions
 }
 
-export type Database = D1Database | KVNamespace | DurableObjectStorage
+/** @deprecated Use StorageBinding instead */
+export type Database = StorageBinding

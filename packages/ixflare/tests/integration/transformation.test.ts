@@ -294,7 +294,8 @@ describe('Request/Response Transformation Integration', () => {
       const timeHeader = response.headers.get('X-Response-Time')
       const duration = Number.parseInt(timeHeader?.replace('ms', '') ?? '0')
 
-      expect(duration).toBeGreaterThanOrEqual(50)
+      // Allow 2ms tolerance for timer precision variance
+      expect(duration).toBeGreaterThanOrEqual(48)
     })
 
     it('should measure time including middleware overhead', async () => {

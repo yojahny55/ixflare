@@ -167,7 +167,7 @@ describe('defineModel() Storage Integration', () => {
       )
       const d1 = createMockD1Database()
 
-      await expect(KVModel.create({ id: '1' }, d1 as any)).rejects.toThrow(/configured for KV/)
+      await expect(KVModel.create({ id: '1' }, d1 as any)).rejects.toThrow(/Storage tier mismatch/)
     })
   })
 

@@ -64,7 +64,16 @@ export type { RelationConfig, RelationType, RelationsConfig } from './relations'
 export { EagerLoader, type ModelInstanceWithRelations } from './relations'
 
 // Storage exports (Story 3.5)
-export { analyzeTier, validateTierChoice, KVAdapter, DOAdapter, CacheLayer } from './storage'
+export {
+  analyzeTier,
+  validateTierChoice,
+  KVAdapter,
+  DOAdapter,
+  CacheLayer,
+  isD1Database,
+  isKVNamespace,
+  isDurableObjectStorage,
+} from './storage'
 export type {
   StorageTier,
   ConsistencyLevel,
@@ -73,6 +82,7 @@ export type {
   ExtendedModelOptions,
   TierAnalysisResult,
   KVAdapterOptions,
+  StorageBinding,
 } from './storage'
 
 // Legacy exports (will be refactored in later stories)
