@@ -60,4 +60,6 @@ export interface Model<TSchema extends SchemaDefinition> {
   $relations?: Record<string, any> // RelationConfig, but avoiding circular import
   /** Selected storage tier for this model */
   $storage: StorageTier
+  /** Cache configuration for this model (if caching enabled) */
+  $cacheConfig?: CacheOptions
 }

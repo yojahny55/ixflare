@@ -97,6 +97,11 @@ export function defineModel<T extends SchemaDefinition>(
       enumerable: true,
       writable: false,
     },
+    $cacheConfig: {
+      value: options?.cache,
+      enumerable: true,
+      writable: false,
+    },
   }) as Model<T>
 
   // Register model with WeakRef to prevent memory leaks

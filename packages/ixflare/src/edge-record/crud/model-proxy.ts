@@ -11,6 +11,7 @@ import { QueryBuilder, type WhereOperator, type WhereConditions } from '@/edge-r
 import { create, find, upsert, createMany } from '@/edge-record/crud/crud-operations'
 import { KVAdapter } from '@/edge-record/storage/kv-adapter'
 import { DOAdapter } from '@/edge-record/storage/do-adapter'
+import { CacheLayer } from '@/edge-record/storage/cache-layer'
 import { isD1Database, isKVNamespace, isDurableObjectStorage } from '@/edge-record/storage/types'
 import { ModelInstance as ModelInstanceClass } from '@/edge-record/crud/model-instance'
 import { NotFoundError } from '@/edge-record/crud/errors'
@@ -35,16 +36,30 @@ export interface ModelCrudMethods<T extends SchemaDefinition> {
    *
    * @param id Record ID (number for D1, string for KV/DO)
    * @param db Storage binding
+   * @param kv Optional KV namespace for caching (if model has cache enabled)
+   * @param options Optional parameters (e.g., cache bypass)
    */
-  find(id: number | string, db: Database): Promise<ModelInstance<T> | null>
+  find(
+    id: number | string,
+    db: Database,
+    kv?: KVNamespace,
+    options?: { cache?: boolean }
+  ): Promise<ModelInstance<T> | null>
 
   /**
    * Find record by ID or throw NotFoundError
    *
    * @param id Record ID
    * @param db Storage binding
+   * @param kv Optional KV namespace for caching (if model has cache enabled)
+   * @param options Optional parameters (e.g., cache bypass)
    */
-  findOrFail(id: number | string, db: Database): Promise<ModelInstance<T>>
+  findOrFail(
+    id: number | string,
+    db: Database,
+    kv?: KVNamespace,
+    options?: { cache?: boolean }
+  ): Promise<ModelInstance<T>>
 
   /**
    * Create query builder for WHERE queries
@@ -107,6 +122,23 @@ export interface ModelCrudMethods<T extends SchemaDefinition> {
    * @param db Storage binding
    */
   delete(id: number | string, db: Database): Promise<void>
+
+  /**
+   * Manually invalidate a cache entry
+   *
+   * @param id Record ID
+   * @param kv KV namespace for cache
+   */
+  invalidateCache(id: string | number, kv: KVNamespace): Promise<void>
+
+  /**
+   * Warm cache for multiple IDs
+   *
+   * @param ids Array of IDs to warm
+   * @param db D1 database for source data
+   * @param kv KV namespace for cache
+   */
+  warmCache(ids: (string | number)[], db: D1Database, kv: KVNamespace): Promise<void>
 }
 
 /**
@@ -182,9 +214,25 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
       return create(model, data, db)
     },
 
-    async find(id: number | string, db: Database): Promise<ModelInstance<T> | null> {
+    async find(
+      id: number | string,
+      db: Database,
+      kv?: KVNamespace,
+      options?: { cache?: boolean }
+    ): Promise<ModelInstance<T> | null> {
       const tier = model.$storage
+      const cacheConfig = model.$cacheConfig
+      const shouldCache = options?.cache !== false && cacheConfig?.enabled && kv
 
+      // For D1 storage with caching enabled
+      if (tier === 'd1' && isD1Database(db) && shouldCache) {
+        const cacheLayer = new CacheLayer(model, kv!, db, cacheConfig!)
+        const result = await cacheLayer.get(id)
+        if (!result) return null
+        return new ModelInstanceClass(model, result as Partial<InferSchema<T>>, false)
+      }
+
+      // KV storage (native KV adapter, no caching layer)
       if (tier === 'kv' && isKVNamespace(db)) {
         const adapter = new KVAdapter(model, db)
         const result = await adapter.get(String(id))
@@ -192,6 +240,7 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
         return new ModelInstanceClass(model, result as Partial<InferSchema<T>>, false)
       }
 
+      // Durable Objects storage
       if (tier === 'do' && isDurableObjectStorage(db)) {
         const adapter = new DOAdapter(model, db)
         const result = await adapter.get(String(id))
@@ -199,7 +248,7 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
         return new ModelInstanceClass(model, result as Partial<InferSchema<T>>, false)
       }
 
-      // Default to D1
+      // Default to D1 without cache
       if (!isD1Database(db)) {
         throw new Error(
           `Storage tier mismatch: Model '${model.$tableName}' has $storage='${tier}' but received incompatible binding.`
@@ -208,8 +257,13 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
       return find(model, id as number, db)
     },
 
-    async findOrFail(id: number | string, db: Database): Promise<ModelInstance<T>> {
-      const result = await this.find(id, db)
+    async findOrFail(
+      id: number | string,
+      db: Database,
+      kv?: KVNamespace,
+      options?: { cache?: boolean }
+    ): Promise<ModelInstance<T>> {
+      const result = await this.find(id, db, kv, options)
 
       if (!result) {
         throw new NotFoundError(
@@ -380,6 +434,23 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
       const { escapeIdentifier } = await import('@/edge-record/schema/type-mapping')
       const sql = `DELETE FROM ${escapeIdentifier(model.$tableName)} WHERE id = ?`
       await db.prepare(sql).bind(id).run()
+    },
+
+    async invalidateCache(id: string | number, kv: KVNamespace): Promise<void> {
+      const cacheKey = `${model.$tableName}:${String(id)}`
+      await kv.delete(cacheKey)
+    },
+
+    async warmCache(ids: (string | number)[], db: D1Database, kv: KVNamespace): Promise<void> {
+      if (!model.$cacheConfig?.enabled) {
+        console.warn(
+          `[EdgeRecord] warmCache called on model '${model.$tableName}' but caching is not enabled`
+        )
+        return
+      }
+
+      const cacheLayer = new CacheLayer(model, kv, db, model.$cacheConfig)
+      await cacheLayer.warm(ids)
     },
   }
 

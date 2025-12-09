@@ -139,4 +139,84 @@ describe('defineModel()', () => {
 
     expect(User.$schema.profile.config.type).toBe('json')
   })
+
+  it('should store cache configuration when provided', () => {
+    const Product = defineModel(
+      'products_cache_test',
+      {
+        id: field.id(),
+        name: field.string(),
+        price: field.decimal({ precision: 10, scale: 2 }),
+      },
+      {
+        cache: {
+          enabled: true,
+          ttl: 300,
+          strategy: 'read-heavy',
+        },
+      }
+    )
+
+    expect(Product.$cacheConfig).toBeDefined()
+    expect(Product.$cacheConfig?.enabled).toBe(true)
+    expect(Product.$cacheConfig?.ttl).toBe(300)
+    expect(Product.$cacheConfig?.strategy).toBe('read-heavy')
+  })
+
+  it('should have undefined $cacheConfig when cache not configured', () => {
+    const User = defineModel('users_no_cache_test', {
+      id: field.id(),
+      email: field.string(),
+    })
+
+    expect(User.$cacheConfig).toBeUndefined()
+  })
+
+  it('should support cache strategy presets', () => {
+    const ReadHeavy = defineModel(
+      'read_heavy_model',
+      {
+        id: field.id(),
+        data: field.string(),
+      },
+      {
+        cache: {
+          enabled: true,
+          strategy: 'read-heavy',
+        },
+      }
+    )
+
+    const WriteHeavy = defineModel(
+      'write_heavy_model',
+      {
+        id: field.id(),
+        data: field.string(),
+      },
+      {
+        cache: {
+          enabled: true,
+          strategy: 'write-heavy',
+        },
+      }
+    )
+
+    const Balanced = defineModel(
+      'balanced_model',
+      {
+        id: field.id(),
+        data: field.string(),
+      },
+      {
+        cache: {
+          enabled: true,
+          strategy: 'balanced',
+        },
+      }
+    )
+
+    expect(ReadHeavy.$cacheConfig?.strategy).toBe('read-heavy')
+    expect(WriteHeavy.$cacheConfig?.strategy).toBe('write-heavy')
+    expect(Balanced.$cacheConfig?.strategy).toBe('balanced')
+  })
 })

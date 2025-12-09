@@ -235,11 +235,23 @@ export class ModelInstance<T extends SchemaDefinition> {
   /**
    * Update fields and save to database
    */
-  async update(data: Partial<InferSchema<T>>, db: StorageBinding): Promise<this> {
+  async update(data: Partial<InferSchema<T>>, db: StorageBinding, kv?: KVNamespace): Promise<this> {
     // Merge data first
     Object.assign(this._data, data)
     // Save handles routing and dirty tracking
-    return this.save(db)
+    await this.save(db)
+
+    // Invalidate cache if configured and KV provided
+    if (this._model.$cacheConfig?.enabled && kv) {
+      const pkField = getPkField(this._model)
+      const id = this._data[pkField]
+      if (id) {
+        const cacheKey = `${this._model.$tableName}:${String(id)}`
+        await kv.delete(cacheKey)
+      }
+    }
+
+    return this
   }
 
   /**
@@ -248,7 +260,7 @@ export class ModelInstance<T extends SchemaDefinition> {
   /**
    * Delete this record from database
    */
-  async delete(db: StorageBinding): Promise<boolean> {
+  async delete(db: StorageBinding, kv?: KVNamespace): Promise<boolean> {
     const storage: StorageTier = this._model.$storage || 'd1'
 
     if (storage === 'kv') {
@@ -279,7 +291,19 @@ export class ModelInstance<T extends SchemaDefinition> {
     const stmt = d1.prepare(sql).bind(this._data.id)
     const result = await stmt.run()
 
-    return result.meta.changes > 0
+    const wasDeleted = result.meta.changes > 0
+
+    // Invalidate cache if configured and KV provided
+    if (wasDeleted && this._model.$cacheConfig?.enabled && kv) {
+      const pkField = getPkField(this._model)
+      const id = this._data[pkField]
+      if (id) {
+        const cacheKey = `${this._model.$tableName}:${String(id)}`
+        await kv.delete(cacheKey)
+      }
+    }
+
+    return wasDeleted
   }
 
   /**
