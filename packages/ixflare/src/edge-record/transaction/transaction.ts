@@ -17,6 +17,8 @@ import {
   rollbackToSavepointSQL,
 } from './savepoint'
 import { isD1Database } from '@/edge-record/storage/types'
+import { ModelInstance } from '@/edge-record/crud/model-instance'
+import type { SchemaDefinition } from '@/edge-record/schema/types'
 
 /**
  * Default transaction timeout (5 seconds)
@@ -150,14 +152,35 @@ export async function transaction<T>(
 
     // On success
     if (isNested) {
-      // Release savepoint for nested transaction
       const parentCtx = options!.parent as TransactionContextImpl
+
+      // Calculate offset for statement indices (nested statements will be added after parent's current statements)
+      const statementIndexOffset = parentCtx.getStatements().length
+
+      // CRITICAL: Merge nested transaction's statements into parent
+      // This ensures nested operations are actually executed when root commits
+      for (const stmt of ctx.getStatements()) {
+        parentCtx.addStatement(stmt)
+      }
+
+      // Release savepoint (added AFTER nested statements so it comes last)
       const releaseStmt = db.prepare(releaseSavepointSQL(savepointName!))
       parentCtx.addStatement(releaseStmt)
 
-      // Merge modified records into parent
+      // Merge modified records into parent for cache invalidation
       for (const record of ctx.getModifiedRecords()) {
         parentCtx.getModifiedRecords().push(record)
+      }
+
+      // Merge pending creates with adjusted statement indices
+      for (const pending of ctx.getPendingCreates()) {
+        parentCtx.addPendingCreate(pending.instance, pending.statementIndex + statementIndexOffset)
+      }
+
+      // Merge pending instances into parent for legacy compatibility
+      for (const [model, instances] of ctx.getPendingInstances()) {
+        const parentInstances = parentCtx.getPendingInstances().get(model) || []
+        parentCtx.getPendingInstances().set(model, [...parentInstances, ...instances])
       }
     } else {
       // Execute all statements via batch (root transaction)
@@ -167,25 +190,25 @@ export async function transaction<T>(
         try {
           const results = await db.batch(statements)
 
-          // Assign IDs to created instances
-          const pendingInstances = ctx.getPendingInstances()
-          let createIndex = 0
+          // Assign IDs to created instances using correct statement indices
+          // This handles mixed operations (UPDATE, DELETE, CREATE) correctly
+          const pendingCreates = ctx.getPendingCreates()
 
-          for (const [, instances] of pendingInstances) {
-            for (const instance of instances) {
-              const result = results[createIndex]
-              if (result && 'meta' in result && result.meta && 'last_row_id' in result.meta) {
-                // Assign the ID from batch result using the set method
-                const id = result.meta.last_row_id
-                instance.set('id' as any, id)
+          for (const { instance, statementIndex } of pendingCreates) {
+            const result = results[statementIndex]
+            if (result && 'meta' in result && result.meta && 'last_row_id' in result.meta) {
+              // Assign the ID from batch result using the type-safe setId method
+              const id = result.meta.last_row_id
+              ;(instance as ModelInstance<SchemaDefinition>).setId(id)
 
-                // Update modified record with actual ID
-                const modifiedRecord = ctx.getModifiedRecords()[createIndex]
-                if (modifiedRecord) {
-                  modifiedRecord.id = id
-                }
+              // Update corresponding modified record with actual ID
+              // Find by matching instance (modifiedRecords order matches statement order for creates)
+              const modifiedRecord = ctx.getModifiedRecords().find(
+                (r) => r.operation === 'create' && r.id === 0
+              )
+              if (modifiedRecord) {
+                modifiedRecord.id = id
               }
-              createIndex++
             }
           }
         } catch (error) {

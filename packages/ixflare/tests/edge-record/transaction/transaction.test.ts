@@ -97,6 +97,38 @@ describe('Transaction', () => {
       expect(results[0].get('id')).toBe(1)
       expect(results[1].get('id')).toBe(2)
     })
+
+    it('should correctly assign IDs with mixed operations (update before create)', async () => {
+      // This test verifies that ID assignment uses correct statement indices
+      // even when there are UPDATE/DELETE statements before CREATE statements
+      const results = await transaction(db, async (tx) => {
+        // First: update (statement index 0)
+        await tx.update(Account, 999, { balance: 500 })
+
+        // Second: delete (statement index 1)
+        await tx.delete(Account, 888)
+
+        // Third: create (statement index 2) - should get ID from result[2], not result[0]
+        const newAccount = await tx.create(Account, { userId: 1, balance: 1000 })
+
+        // Fourth: another update (statement index 3)
+        await tx.update(Account, 777, { balance: 200 })
+
+        // Fifth: create (statement index 4) - should get ID from result[4]
+        const anotherAccount = await tx.create(Account, { userId: 2, balance: 2000 })
+
+        return [newAccount, anotherAccount]
+      })
+
+      // Verify IDs were assigned correctly despite mixed operations
+      expect(results[0].get('id')).toBeDefined()
+      expect(results[0].get('userId')).toBe(1)
+      expect(results[1].get('id')).toBeDefined()
+      expect(results[1].get('userId')).toBe(2)
+      // IDs should be sequential (1, 2) based on mock D1's auto-increment
+      expect(results[0].get('id')).toBe(1)
+      expect(results[1].get('id')).toBe(2)
+    })
   })
 
   describe('AC2: Automatic Rollback on Error', () => {
@@ -143,22 +175,35 @@ describe('Transaction', () => {
   })
 
   describe('AC3: Nested Transactions (Savepoints)', () => {
-    it('should support nested transactions with savepoints', async () => {
-      await transaction(db, async (tx) => {
-        await tx.create(Account, { userId: 1, balance: 1000 })
+    it('should support nested transactions with savepoints and return created records', async () => {
+      const results = await transaction(db, async (tx) => {
+        const account = await tx.create(Account, { userId: 1, balance: 1000 })
 
         // Nested transaction
-        await transaction(
+        const transfers = await transaction(
           db,
           async (innerTx) => {
-            await innerTx.create(Transfer, { fromId: 1, toId: 2, amount: 100 })
-            await innerTx.create(Transfer, { fromId: 1, toId: 3, amount: 50 })
+            const t1 = await innerTx.create(Transfer, { fromId: 1, toId: 2, amount: 100 })
+            const t2 = await innerTx.create(Transfer, { fromId: 1, toId: 3, amount: 50 })
+            return [t1, t2]
           },
           { parent: tx }
         )
+
+        return { account, transfers }
       })
 
-      expect(true).toBe(true)
+      // Verify parent transaction record was created with ID
+      expect(results.account.get('id')).toBeDefined()
+      expect(results.account.get('userId')).toBe(1)
+      expect(results.account.get('balance')).toBe(1000)
+
+      // Verify nested transaction records were created with IDs
+      expect(results.transfers).toHaveLength(2)
+      expect(results.transfers[0].get('id')).toBeDefined()
+      expect(results.transfers[0].get('amount')).toBe(100)
+      expect(results.transfers[1].get('id')).toBeDefined()
+      expect(results.transfers[1].get('amount')).toBe(50)
     })
 
     it('should propagate nested transaction errors to parent', async () => {
@@ -207,29 +252,40 @@ describe('Transaction', () => {
       expect(result).toBe('completed')
     })
 
-    it('should support multiple levels of nesting', async () => {
-      await transaction(db, async (tx) => {
-        await tx.create(Account, { userId: 1, balance: 1000 })
+    it('should support multiple levels of nesting and return all created records', async () => {
+      const results = await transaction(db, async (tx) => {
+        const account = await tx.create(Account, { userId: 1, balance: 1000 })
 
-        await transaction(
+        const nestedResults = await transaction(
           db,
           async (innerTx) => {
-            await innerTx.create(Transfer, { fromId: 1, toId: 2, amount: 100 })
+            const t1 = await innerTx.create(Transfer, { fromId: 1, toId: 2, amount: 100 })
 
             // Second level nesting
-            await transaction(
+            const deepNested = await transaction(
               db,
               async (innerInnerTx) => {
-                await innerInnerTx.create(Transfer, { fromId: 2, toId: 3, amount: 50 })
+                const t2 = await innerInnerTx.create(Transfer, { fromId: 2, toId: 3, amount: 50 })
+                return t2
               },
               { parent: innerTx }
             )
+
+            return { t1, deepNested }
           },
           { parent: tx }
         )
+
+        return { account, ...nestedResults }
       })
 
-      expect(true).toBe(true)
+      // Verify all records were created with IDs
+      expect(results.account.get('id')).toBeDefined()
+      expect(results.account.get('balance')).toBe(1000)
+      expect(results.t1.get('id')).toBeDefined()
+      expect(results.t1.get('amount')).toBe(100)
+      expect(results.deepNested.get('id')).toBeDefined()
+      expect(results.deepNested.get('amount')).toBe(50)
     })
   })
 

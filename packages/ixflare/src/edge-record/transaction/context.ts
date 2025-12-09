@@ -84,6 +84,15 @@ function validateOperatorValue(operator: 'increment' | 'decrement', value: unkno
 }
 
 /**
+ * Tracks a pending instance and its corresponding statement index
+ * @internal
+ */
+interface PendingCreate {
+  instance: ModelInstance<SchemaDefinition>
+  statementIndex: number
+}
+
+/**
  * TransactionContextImpl buffers operations and executes them via db.batch()
  */
 export class TransactionContextImpl implements TransactionContext {
@@ -91,6 +100,8 @@ export class TransactionContextImpl implements TransactionContext {
   private modifiedRecords: ModifiedRecord[] = []
   private pendingInstances: Map<Model<SchemaDefinition>, ModelInstance<SchemaDefinition>[]> =
     new Map()
+  /** Tracks pending creates with their statement indices for correct ID assignment */
+  private pendingCreates: PendingCreate[] = []
   public readonly _savepointDepth: number
   public readonly _parent?: TransactionContext
 
@@ -127,6 +138,22 @@ export class TransactionContextImpl implements TransactionContext {
   }
 
   /**
+   * Get pending creates with their statement indices
+   * @internal
+   */
+  getPendingCreates(): PendingCreate[] {
+    return this.pendingCreates
+  }
+
+  /**
+   * Add a pending create with statement index tracking
+   * @internal
+   */
+  addPendingCreate(instance: ModelInstance<SchemaDefinition>, statementIndex: number): void {
+    this.pendingCreates.push({ instance, statementIndex })
+  }
+
+  /**
    * Create a new record in the transaction
    */
   async create<T extends SchemaDefinition>(
@@ -159,12 +186,18 @@ export class TransactionContextImpl implements TransactionContext {
 
     const sql = `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`
     const stmt = this.db.prepare(sql).bind(...values)
+
+    // Track statement index BEFORE adding (current length = index of next statement)
+    const statementIndex = this.statements.length
     this.addStatement(stmt)
 
     // Create a placeholder instance (ID will be assigned after batch)
     const instance = new ModelInstance(model, fullData as Partial<any>, false)
 
-    // Store for later ID assignment
+    // Track this create with its statement index for correct ID assignment
+    this.addPendingCreate(instance as ModelInstance<SchemaDefinition>, statementIndex)
+
+    // Store for legacy getPendingInstances() compatibility
     if (!this.pendingInstances.has(model)) {
       this.pendingInstances.set(model, [])
     }

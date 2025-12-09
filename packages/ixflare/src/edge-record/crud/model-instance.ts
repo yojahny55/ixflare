@@ -77,6 +77,15 @@ export class ModelInstance<T extends SchemaDefinition> {
   }
 
   /**
+   * Set the record ID (used internally by transaction after batch commit)
+   * @internal
+   */
+  setId(id: number | string): this {
+    ;(this._data as Record<string, unknown>)['id'] = id
+    return this
+  }
+
+  /**
    * Check if any fields have been modified
    */
   isDirty(): boolean {
