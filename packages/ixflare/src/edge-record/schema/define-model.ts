@@ -6,6 +6,7 @@
 import { generateZodSchema } from './zod-generator'
 import type { SchemaDefinition, ModelOptions, Model } from './types'
 import { createModelProxy, type ModelWithCrud } from '@/edge-record/crud/model-proxy'
+import { analyzeTier } from '@/edge-record/storage/tier-analyzer'
 
 /**
  * Internal model registry
@@ -61,29 +62,42 @@ export function defineModel<T extends SchemaDefinition>(
     $schema: schema,
   } as unknown as Model<SchemaDefinition>)
 
+  // Create intermediate model for tier analysis
+  const intermediateModel = {
+    $tableName: tableName,
+    $schema: schema,
+    $relations: options?.relations,
+  } as unknown as Model<T>
+
+  // Analyze and set storage tier
+  const tierResult = analyzeTier(intermediateModel, options)
+
+  // Log warnings in development
+  if (tierResult.warnings.length > 0 && process.env.NODE_ENV !== 'production') {
+    console.warn(`[EdgeRecord] Model '${tableName}' storage warnings:`, tierResult.warnings)
+  }
+
   // Create final model with all properties
-  const model = Object.defineProperties(
-    {
-      $tableName: tableName,
-      $schema: schema,
-      $relations: options?.relations,
+  const model = Object.defineProperties(intermediateModel, {
+    $zodSchema: {
+      value: zodSchema,
+      enumerable: true,
+      writable: false,
     },
-    {
-      $zodSchema: {
-        value: zodSchema,
-        enumerable: true,
-        writable: false,
+    $infer: {
+      // $infer is a type-only property for TypeScript: `typeof Model.$infer`
+      // Accessing at runtime returns a symbol to indicate misuse
+      get() {
+        return INFER_SYMBOL
       },
-      $infer: {
-        // $infer is a type-only property for TypeScript: `typeof Model.$infer`
-        // Accessing at runtime returns a symbol to indicate misuse
-        get() {
-          return INFER_SYMBOL
-        },
-        enumerable: true,
-      },
-    }
-  ) as Model<T>
+      enumerable: true,
+    },
+    $storage: {
+      value: tierResult.tier,
+      enumerable: true,
+      writable: false,
+    },
+  }) as Model<T>
 
   // Register model with WeakRef to prevent memory leaks
   modelRegistry.set(tableName, new WeakRef(model as Model<SchemaDefinition>))

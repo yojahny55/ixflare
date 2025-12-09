@@ -63,6 +63,24 @@ export { hasMany, hasOne, belongsTo, manyToMany } from './relations'
 export type { RelationConfig, RelationType, RelationsConfig } from './relations'
 export { EagerLoader, type ModelInstanceWithRelations } from './relations'
 
+// Storage exports (Story 3.5)
+export {
+  analyzeTier,
+  validateTierChoice,
+  KVAdapter,
+  DOAdapter,
+  CacheLayer,
+} from './storage'
+export type {
+  StorageTier,
+  ConsistencyLevel,
+  StorageOptions,
+  CacheOptions,
+  ExtendedModelOptions,
+  TierAnalysisResult,
+  KVAdapterOptions,
+} from './storage'
+
 // Legacy exports (will be refactored in later stories)
 export { Model as LegacyModel } from './model'
 export type { ModelDefinition, ModelSchema, QueryOptions } from './types'

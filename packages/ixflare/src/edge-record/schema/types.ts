@@ -5,6 +5,7 @@
 
 import type { z } from 'zod'
 import type { FieldBuilder } from './field'
+import type { StorageTier, ConsistencyLevel, StorageOptions, CacheOptions } from '../storage/types'
 
 /**
  * Schema definition - a record of field names to FieldBuilder instances
@@ -27,7 +28,7 @@ export type InferSchema<T extends SchemaDefinition> = {
 /**
  * Model options for configuration
  */
-export interface ModelOptions {
+export interface ModelOptions extends StorageOptions {
   // Future options can be added here:
   // - timestamps?: boolean
   // - tableName?: string (override)
@@ -37,6 +38,9 @@ export interface ModelOptions {
   /** Relationship definitions for this model */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   relations?: Record<string, any> // RelationConfig, but avoiding circular import
+
+  /** Cache configuration for hybrid storage */
+  cache?: CacheOptions
 }
 
 /**
@@ -54,4 +58,6 @@ export interface Model<TSchema extends SchemaDefinition> {
   /** Relationship configurations for this model */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   $relations?: Record<string, any> // RelationConfig, but avoiding circular import
+  /** Selected storage tier for this model */
+  $storage: StorageTier
 }
