@@ -94,11 +94,7 @@ export type {
   IsolationLevel,
   UpdateOperators,
 } from './transaction'
-export {
-  TransactionError,
-  TransactionTimeoutError,
-  TransactionRollbackError,
-} from './crud/errors'
+export { TransactionError, TransactionTimeoutError, TransactionRollbackError } from './crud/errors'
 
 // Legacy exports (will be refactored in later stories)
 export { Model as LegacyModel } from './model'

@@ -5,7 +5,7 @@
 
 import type { SchemaDefinition, Model } from '@/edge-record/schema/types'
 import type { CreateInput } from '@/edge-record/crud/crud-operations'
-import type { ModelInstance } from '@/edge-record/crud/model-instance'
+import { ModelInstance } from '@/edge-record/crud/model-instance'
 import type {
   TransactionContext,
   TransactionUpdateInput,
@@ -18,9 +18,20 @@ import { escapeIdentifier } from '@/edge-record/schema/type-mapping'
 import type { FieldBuilder } from '@/edge-record/schema/field'
 
 /**
- * Helper to get field type from schema
+ * Built-in timestamp field names that are added automatically
  */
-function getFieldType(schemaEntry: unknown): string {
+const TIMESTAMP_FIELDS = new Set(['createdAt', 'updatedAt'])
+
+/**
+ * Helper to get field type from schema
+ * Returns 'datetime' for timestamp fields, extracts type from FieldBuilder, or defaults to 'string'
+ */
+function getFieldType(schemaEntry: unknown, fieldName?: string): string {
+  // Handle timestamp fields that are added dynamically
+  if (fieldName && TIMESTAMP_FIELDS.has(fieldName)) {
+    return 'datetime'
+  }
+
   if (typeof schemaEntry === 'object' && schemaEntry !== null && 'config' in schemaEntry) {
     return (schemaEntry as FieldBuilder).config.type
   }
@@ -55,9 +66,7 @@ function toD1Value(value: unknown, fieldType: string): unknown {
  */
 function isUpdateOperator(value: unknown): value is UpdateOperators {
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    ('increment' in value || 'decrement' in value)
+    typeof value === 'object' && value !== null && ('increment' in value || 'decrement' in value)
   )
 }
 
@@ -141,7 +150,7 @@ export class TransactionContextImpl implements TransactionContext {
 
     for (const [key, value] of Object.entries(fullData)) {
       const snakeKey = toSnakeCase(key)
-      const fieldType = getFieldType(model.schema[key as keyof T])
+      const fieldType = getFieldType(model.$schema[key as keyof T], key)
 
       columns.push(escapeIdentifier(snakeKey))
       placeholders.push('?')
@@ -206,7 +215,7 @@ export class TransactionContextImpl implements TransactionContext {
         }
       } else {
         // Regular update
-        const fieldType = getFieldType(model.schema[key as keyof T])
+        const fieldType = getFieldType(model.$schema[key as keyof T], key)
         setClauses.push(`${escapedKey} = ?`)
         values.push(toD1Value(value, fieldType))
       }
@@ -229,10 +238,7 @@ export class TransactionContextImpl implements TransactionContext {
   /**
    * Delete a record by ID in the transaction
    */
-  async delete<T extends SchemaDefinition>(
-    model: Model<T>,
-    id: string | number
-  ): Promise<void> {
+  async delete<T extends SchemaDefinition>(model: Model<T>, id: string | number): Promise<void> {
     const tableName = escapeIdentifier(model.$tableName)
     const sql = `DELETE FROM ${tableName} WHERE id = ?`
     const stmt = this.db.prepare(sql).bind(id)

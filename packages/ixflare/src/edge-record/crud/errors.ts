@@ -55,7 +55,11 @@ export class ConflictError extends EdgeRecordError {
  * Base error class for transaction operations
  */
 export class TransactionError extends EdgeRecordError {
-  constructor(code: string, message: string, public readonly cause?: Error) {
+  constructor(
+    code: string,
+    message: string,
+    public readonly cause?: Error
+  ) {
     super(`TRANSACTION.${code}`, message, 500)
     this.name = 'TransactionError'
   }

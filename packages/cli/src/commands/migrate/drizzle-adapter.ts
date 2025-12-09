@@ -10,6 +10,7 @@ import { join } from 'path'
 import { spawn } from 'child_process'
 import type { ExtractedModel, ExtractedColumn } from './model-loader'
 
+
 /**
  * Drizzle schema snapshot structure (simplified)
  */

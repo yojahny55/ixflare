@@ -8,6 +8,7 @@ import { transaction } from '@/edge-record/transaction'
 import { TransactionTimeoutError, TransactionError } from '@/edge-record/crud/errors'
 import { defineModel, field, timestamps } from '@/edge-record/schema'
 import { createMockD1Database } from '../crud/mock-d1'
+import { MockKVNamespace } from '../storage/mock-kv'
 
 describe('Transaction', () => {
   const Account = defineModel('accounts', {
@@ -160,12 +161,12 @@ describe('Transaction', () => {
       expect(true).toBe(true)
     })
 
-    it('should rollback nested transaction without affecting parent', async () => {
+    it('should propagate nested transaction errors to parent', async () => {
       await expect(
         transaction(db, async (tx) => {
           await tx.create(Account, { userId: 1, balance: 1000 })
 
-          // This nested transaction will fail
+          // This nested transaction will fail and propagate error
           await transaction(
             db,
             async (innerTx) => {
@@ -176,6 +177,34 @@ describe('Transaction', () => {
           )
         })
       ).rejects.toThrow('Nested transaction failed')
+    })
+
+    it('should allow parent to catch and handle nested transaction errors', async () => {
+      // Parent can catch nested errors and continue - savepoint isolates the failure
+      const result = await transaction(db, async (tx) => {
+        await tx.create(Account, { userId: 1, balance: 1000 })
+
+        try {
+          // This nested transaction will fail
+          await transaction(
+            db,
+            async (innerTx) => {
+              await innerTx.create(Transfer, { fromId: 1, toId: 2, amount: 100 })
+              throw new Error('Nested transaction failed')
+            },
+            { parent: tx }
+          )
+        } catch (error) {
+          // Parent catches the error - nested ops are rolled back via savepoint
+          // but parent can continue
+        }
+
+        // Parent continues after catching nested error
+        await tx.create(Account, { userId: 2, balance: 500 })
+        return 'completed'
+      })
+
+      expect(result).toBe('completed')
     })
 
     it('should support multiple levels of nesting', async () => {
@@ -319,6 +348,31 @@ describe('Transaction', () => {
       })
 
       expect(result).toBe(42)
+    })
+  })
+
+  describe('Storage Type Validation', () => {
+    it('should reject non-D1 storage bindings', async () => {
+      const kvNamespace = new MockKVNamespace()
+
+      await expect(
+        transaction(kvNamespace as unknown as D1Database, async (tx) => {
+          await tx.create(Account, { userId: 1, balance: 1000 })
+        })
+      ).rejects.toThrow(TransactionError)
+    })
+
+    it('should provide clear error message for non-D1 storage', async () => {
+      const kvNamespace = new MockKVNamespace()
+
+      try {
+        await transaction(kvNamespace as unknown as D1Database, async (tx) => {
+          await tx.create(Account, { userId: 1, balance: 1000 })
+        })
+      } catch (error) {
+        expect(error).toBeInstanceOf(TransactionError)
+        expect((error as TransactionError).message).toContain('D1 storage tier')
+      }
     })
   })
 })

@@ -16,14 +16,20 @@ describe('Savepoint', () => {
   describe('generateSavepointName', () => {
     it('should generate unique savepoint names', async () => {
       const name1 = generateSavepointName(1)
-      // Wait 1ms to ensure different timestamp
-      await new Promise((resolve) => setTimeout(resolve, 1))
       const name2 = generateSavepointName(1)
 
-      expect(name1).toMatch(/^sp_1_\d+$/)
-      expect(name2).toMatch(/^sp_1_\d+$/)
-      // Names should be different due to timestamp
+      // Format: sp_{depth}_{timestamp}_{counter}_{randomSuffix}
+      expect(name1).toMatch(/^sp_1_\d+_\d+_[a-z0-9]+$/)
+      expect(name2).toMatch(/^sp_1_\d+_\d+_[a-z0-9]+$/)
+      // Names should be different due to counter and random suffix
       expect(name1).not.toBe(name2)
+    })
+
+    it('should generate unique names even in same millisecond', () => {
+      // Generate multiple names rapidly - should all be unique due to counter
+      const names = Array.from({ length: 100 }, () => generateSavepointName(1))
+      const uniqueNames = new Set(names)
+      expect(uniqueNames.size).toBe(100)
     })
 
     it('should include depth in savepoint name', () => {

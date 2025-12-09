@@ -16,7 +16,7 @@ import {
   releaseSavepointSQL,
   rollbackToSavepointSQL,
 } from './savepoint'
-import { CacheLayer } from '@/edge-record/storage/cache-layer'
+import { isD1Database } from '@/edge-record/storage/types'
 
 /**
  * Default transaction timeout (5 seconds)
@@ -40,26 +40,56 @@ const MAX_TIMEOUT_MS = 30000
  * @param options Transaction options (timeout, parent, isolation)
  * @returns Promise<T> The result of the transaction callback
  *
- * @throws {TransactionTimeoutError} If transaction exceeds timeout
- * @throws {TransactionError} If transaction fails
+ * @throws {TransactionError} If db is not a D1Database (code: INVALID_STORAGE)
+ * @throws {TransactionTimeoutError} If transaction exceeds timeout (default: 5s, max: 30s)
+ * @throws {TransactionRollbackError} If D1 batch execution fails
  * @throws {Error} If callback throws an error (transaction is automatically rolled back)
  *
  * @example
  * ```typescript
- * // Simple transaction
- * await transaction(env.DB, async (tx) => {
+ * import { transaction } from 'ixflare/orm'
+ *
+ * // Simple transaction with return value
+ * const transfer = await transaction(env.DB, async (tx) => {
  *   await tx.update(Account, senderId, { balance: { decrement: amount } })
  *   await tx.update(Account, receiverId, { balance: { increment: amount } })
- *   await tx.create(Transfer, { fromId: senderId, toId: receiverId, amount })
+ *   return await tx.create(Transfer, { fromId: senderId, toId: receiverId, amount })
  * })
+ * console.log(`Transfer ID: ${transfer.get('id')}`)
  *
- * // Nested transaction with savepoint
+ * // Transaction with timeout option
+ * await transaction(env.DB, async (tx) => {
+ *   await tx.create(Order, { userId, total })
+ *   await tx.update(Product, productId, { inventory: { decrement: quantity } })
+ * }, { timeout: 10000 }) // 10 second timeout
+ *
+ * // Automatic rollback on error
+ * try {
+ *   await transaction(env.DB, async (tx) => {
+ *     await tx.create(Order, { userId, total })
+ *     if (inventory < quantity) {
+ *       throw new Error('Insufficient inventory') // Automatically rolls back
+ *     }
+ *     await tx.update(Product, productId, { inventory: { decrement: quantity } })
+ *   })
+ * } catch (error) {
+ *   console.error('Order failed:', error.message)
+ * }
+ *
+ * // Nested transaction with savepoint (error isolation)
  * await transaction(env.DB, async (tx) => {
  *   await tx.create(Order, orderData)
- *   await transaction(env.DB, async (innerTx) => {
- *     await innerTx.create(OrderItem, item1)
- *     await innerTx.create(OrderItem, item2)
- *   }, { parent: tx })
+ *
+ *   try {
+ *     await transaction(env.DB, async (innerTx) => {
+ *       await innerTx.create(OrderItem, item1)
+ *       await innerTx.create(OrderItem, item2)
+ *       throw new Error('Item validation failed')
+ *     }, { parent: tx }) // Savepoint created for nested transaction
+ *   } catch (error) {
+ *     // Nested operations rolled back via savepoint, parent continues
+ *     console.warn('Items failed, order created without items')
+ *   }
  * })
  * ```
  */
@@ -68,6 +98,14 @@ export async function transaction<T>(
   callback: (tx: TransactionContext) => Promise<T>,
   options?: TransactionOptions
 ): Promise<T> {
+  // Validate D1 database type - transactions only work with D1
+  if (!isD1Database(db)) {
+    throw new TransactionError(
+      'INVALID_STORAGE',
+      'Transactions are only supported for D1 storage tier. KV and Durable Objects have different consistency models.'
+    )
+  }
+
   // Validate and set timeout
   const timeoutMs = Math.min(options?.timeout ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS)
   const startTime = Date.now()
@@ -89,10 +127,13 @@ export async function transaction<T>(
     parentCtx.addStatement(savepointStmt)
   }
 
+  // Create timeout timer with cleanup capability
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+
   try {
     // Race transaction callback against timeout
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         const elapsed = Date.now() - startTime
         const operationCount = ctx.getStatements().length
         reject(new TransactionTimeoutError(timeoutMs, elapsed, operationCount))
@@ -101,6 +142,11 @@ export async function transaction<T>(
 
     // Execute callback
     const result = await Promise.race([callback(ctx), timeoutPromise])
+
+    // Clear timeout timer to prevent resource leak
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
 
     // On success
     if (isNested) {
@@ -125,13 +171,13 @@ export async function transaction<T>(
           const pendingInstances = ctx.getPendingInstances()
           let createIndex = 0
 
-          for (const [model, instances] of pendingInstances) {
+          for (const [, instances] of pendingInstances) {
             for (const instance of instances) {
               const result = results[createIndex]
               if (result && 'meta' in result && result.meta && 'last_row_id' in result.meta) {
-                // Assign the ID from batch result
+                // Assign the ID from batch result using the set method
                 const id = result.meta.last_row_id
-                ;(instance as any).id = id
+                instance.set('id' as any, id)
 
                 // Update modified record with actual ID
                 const modifiedRecord = ctx.getModifiedRecords()[createIndex]
@@ -157,6 +203,11 @@ export async function transaction<T>(
 
     return result
   } catch (error) {
+    // Clear timeout timer to prevent resource leak
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
+
     // On error: rollback
     if (isNested) {
       // Rollback to savepoint for nested transaction
@@ -176,21 +227,33 @@ export async function transaction<T>(
 
 /**
  * Invalidate cache for all modified records
+ * Groups records by KV namespace to minimize network calls
  * @internal
  */
-async function invalidateCache(modifiedRecords: Array<{ model: any; id: string | number }>): Promise<void> {
-  for (const { model, id } of modifiedRecords) {
-    // Check if model has caching enabled
-    const cacheOptions = model.options?.cache
+async function invalidateCache(
+  modifiedRecords: Array<{ model: any; id: string | number }>
+): Promise<void> {
+  // Group records by KV namespace to batch invalidations
+  const kvGroups = new Map<KVNamespace, string[]>()
 
-    if (cacheOptions && cacheOptions.kv) {
-      const cacheLayer = new CacheLayer(cacheOptions.kv, {
-        enabled: cacheOptions.enabled ?? true,
-        ttl: cacheOptions.ttl,
-      })
+  for (const { model, id } of modifiedRecords) {
+    // Use $cacheConfig which is where defineModel stores cache options
+    const cacheOptions = model.$cacheConfig
+
+    if (cacheOptions?.kv && (cacheOptions.enabled ?? true)) {
+      const kv = cacheOptions.kv
+
+      if (!kvGroups.has(kv)) {
+        kvGroups.set(kv, [])
+      }
 
       const cacheKey = `${model.$tableName}:${id}`
-      await cacheLayer.delete(cacheKey)
+      kvGroups.get(kv)!.push(cacheKey)
     }
+  }
+
+  // Invalidate all keys for each KV namespace
+  for (const [kv, keys] of kvGroups) {
+    await Promise.all(keys.map((key) => kv.delete(key)))
   }
 }

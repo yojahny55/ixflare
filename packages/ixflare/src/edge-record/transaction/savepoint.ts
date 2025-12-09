@@ -4,11 +4,20 @@
  */
 
 /**
+ * Counter for generating unique savepoint names
+ * Combined with timestamp and random suffix for collision resistance
+ */
+let savepointCounter = 0
+
+/**
  * Generate a unique savepoint name
- * Uses depth and timestamp to ensure uniqueness
+ * Uses depth, counter, timestamp, and random suffix for collision resistance
+ * in high-concurrency scenarios
  */
 export function generateSavepointName(depth: number): string {
-  return `sp_${depth}_${Date.now()}`
+  const counter = savepointCounter++
+  const randomSuffix = Math.random().toString(36).slice(2, 8)
+  return `sp_${depth}_${Date.now()}_${counter}_${randomSuffix}`
 }
 
 /**
@@ -34,6 +43,14 @@ export function rollbackToSavepointSQL(name: string): string {
 
 /**
  * Savepoint manager tracks nested transaction hierarchy
+ *
+ * @remarks
+ * This class provides a stack-based abstraction for managing savepoints.
+ * Currently not used in the main transaction implementation (which manages
+ * savepoints inline), but exported for potential advanced use cases where
+ * manual savepoint management is needed.
+ *
+ * @internal
  */
 export class SavepointManager {
   private stack: string[] = []

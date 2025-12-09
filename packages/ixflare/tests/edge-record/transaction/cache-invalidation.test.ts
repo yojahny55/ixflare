@@ -37,7 +37,7 @@ describe('Transaction Cache Invalidation', () => {
 
   beforeEach(() => {
     db = createMockD1Database()
-    mockKV = Account.options?.cache?.kv as KVNamespace
+    mockKV = Account.$cacheConfig?.kv as KVNamespace
     vi.clearAllMocks()
   })
 
