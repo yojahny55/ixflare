@@ -1,7 +1,15 @@
-import type { Model, SchemaDefinition, InferSchema } from '../schema/types'
+import type { Model, SchemaDefinition, InferSchema } from '@/edge-record/schema/types'
 import type { CacheOptions } from './types'
 import { KVAdapter } from './kv-adapter'
-import { transformKeysToCamelCase } from '../crud/case-transform'
+import { transformKeysToCamelCase } from '@/edge-record/crud/case-transform'
+import { escapeIdentifier } from '@/edge-record/schema/type-mapping'
+
+/** Default TTL values by strategy */
+const STRATEGY_TTL: Record<'read-heavy' | 'write-heavy' | 'balanced', number> = {
+  'read-heavy': 600, // 10 minutes - aggressive caching
+  'write-heavy': 60, // 1 minute - conservative caching
+  balanced: 300, // 5 minutes - default middle-ground
+}
 
 /**
  * Cache Layer for EdgeRecord
@@ -17,14 +25,15 @@ import { transformKeysToCamelCase } from '../crud/case-transform'
  * - Reducing D1 query load
  *
  * Strategies:
- * - read-heavy: Aggressive caching, longer TTL
- * - write-heavy: Conservative caching, shorter TTL
- * - balanced: Default middle-ground
+ * - read-heavy: Aggressive caching, longer TTL (10 min)
+ * - write-heavy: Conservative caching, shorter TTL (1 min)
+ * - balanced: Default middle-ground (5 min)
  */
 export class CacheLayer<T extends SchemaDefinition> {
   private kvAdapter: KVAdapter<T>
   private strategy: 'read-heavy' | 'write-heavy' | 'balanced'
   private ttl: number
+  private escapedTableName: string
 
   constructor(
     private model: Model<T>,
@@ -32,9 +41,16 @@ export class CacheLayer<T extends SchemaDefinition> {
     private sourceDb: D1Database,
     private options: CacheOptions
   ) {
-    this.kvAdapter = new KVAdapter(model, kv, { ttl: options.ttl })
     this.strategy = options.strategy || 'balanced'
-    this.ttl = options.ttl || 300 // 5 min default
+    // Use strategy-based TTL if not explicitly provided
+    this.ttl = options.ttl ?? STRATEGY_TTL[this.strategy]
+    // Ensure TTL meets KV minimum (60s)
+    if (this.ttl < 60) {
+      this.ttl = 60
+    }
+    this.kvAdapter = new KVAdapter(model, kv, { ttl: this.ttl })
+    // Pre-escape table name for SQL injection prevention
+    this.escapedTableName = escapeIdentifier(model.$tableName)
   }
 
   /**
@@ -50,8 +66,10 @@ export class CacheLayer<T extends SchemaDefinition> {
     const cached = await this.kvAdapter.get(cacheKey)
     if (cached) return cached
 
-    // Fallback to D1
-    const stmt = this.sourceDb.prepare(`SELECT * FROM ${this.model.$tableName} WHERE id = ?`).bind(id)
+    // Fallback to D1 (table name pre-escaped in constructor)
+    const stmt = this.sourceDb
+      .prepare(`SELECT * FROM ${this.escapedTableName} WHERE id = ?`)
+      .bind(id)
     const result = await stmt.first()
 
     if (result) {
@@ -80,9 +98,11 @@ export class CacheLayer<T extends SchemaDefinition> {
    * @param ids Array of IDs to warm
    */
   async warm(ids: (string | number)[]): Promise<void> {
+    if (ids.length === 0) return
+
     const placeholders = ids.map(() => '?').join(', ')
     const stmt = this.sourceDb
-      .prepare(`SELECT * FROM ${this.model.$tableName} WHERE id IN (${placeholders})`)
+      .prepare(`SELECT * FROM ${this.escapedTableName} WHERE id IN (${placeholders})`)
       .bind(...ids)
     const results = await stmt.all()
 

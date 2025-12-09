@@ -205,7 +205,7 @@ describe('analyzeTier()', () => {
 })
 
 describe('validateTierChoice()', () => {
-  describe('AC9: Tier analyzer warns when characteristics don\'t match tier', () => {
+  describe("AC9: Tier analyzer warns when characteristics don't match tier", () => {
     it('should warn when KV selected but model has relations', () => {
       const User = defineModel(
         'users_tier_validation_1',

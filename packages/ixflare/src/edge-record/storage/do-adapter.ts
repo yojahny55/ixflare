@@ -1,5 +1,8 @@
-import type { Model, SchemaDefinition, InferSchema } from '../schema/types'
-import { transformKeysToCamelCase, transformKeysToSnakeCase } from '../crud/case-transform'
+import type { Model, SchemaDefinition, InferSchema } from '@/edge-record/schema/types'
+import {
+  transformKeysToCamelCase,
+  transformKeysToSnakeCase,
+} from '@/edge-record/crud/case-transform'
 
 /**
  * Durable Objects Storage Adapter for EdgeRecord

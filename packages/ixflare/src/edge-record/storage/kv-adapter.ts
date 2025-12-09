@@ -1,5 +1,8 @@
-import type { Model, SchemaDefinition, InferSchema } from '../schema/types'
-import { transformKeysToCamelCase, transformKeysToSnakeCase } from '../crud/case-transform'
+import type { Model, SchemaDefinition, InferSchema } from '@/edge-record/schema/types'
+import {
+  transformKeysToCamelCase,
+  transformKeysToSnakeCase,
+} from '@/edge-record/crud/case-transform'
 
 export interface KVAdapterOptions {
   /** Expiration in seconds (minimum 60s per KV limits) */
@@ -79,9 +82,7 @@ export class KVAdapter<T extends SchemaDefinition> {
    * Returns array of IDs (without table name prefix)
    */
   async list(prefix?: string): Promise<string[]> {
-    const listPrefix = prefix
-      ? `${this.model.$tableName}:${prefix}`
-      : `${this.model.$tableName}:`
+    const listPrefix = prefix ? `${this.model.$tableName}:${prefix}` : `${this.model.$tableName}:`
     const result = await this.kv.list({ prefix: listPrefix })
     return result.keys.map((k) => k.name.replace(`${this.model.$tableName}:`, ''))
   }

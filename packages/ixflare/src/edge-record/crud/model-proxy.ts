@@ -1,39 +1,60 @@
 /**
  * @module edge-record/crud/model-proxy
- * @description Proxy that adds static CRUD methods to Model objects
+ * @description Proxy that adds static CRUD methods to Model objects with storage-aware dispatch
  */
 
 import type { SchemaDefinition, InferSchema, Model } from '@/edge-record/schema/types'
 import type { CreateInput } from '@/edge-record/crud/crud-operations'
 import type { ModelInstance } from '@/edge-record/crud/model-instance'
+import type { Database } from '@/edge-record/storage/types'
 import { QueryBuilder, type WhereOperator, type WhereConditions } from '@/edge-record/query-builder'
-import { create, find, findOrFail, upsert, createMany } from '@/edge-record/crud/crud-operations'
+import { create, find, upsert, createMany } from '@/edge-record/crud/crud-operations'
+import { KVAdapter } from '@/edge-record/storage/kv-adapter'
+import { DOAdapter } from '@/edge-record/storage/do-adapter'
+import { isD1Database, isKVNamespace, isDurableObjectStorage } from '@/edge-record/storage/types'
+import { ModelInstance as ModelInstanceClass } from '@/edge-record/crud/model-instance'
+import { NotFoundError } from '@/edge-record/crud/errors'
 
 /**
  * CRUD methods interface added to Model
+ *
+ * Storage-aware: Methods accept any StorageBinding and route automatically
+ * based on model.$storage tier.
  */
 export interface ModelCrudMethods<T extends SchemaDefinition> {
   /**
    * Create a new record
+   *
+   * @param data Record data (excluding id, createdAt, updatedAt)
+   * @param db Storage binding (D1Database, KVNamespace, or DurableObjectStorage)
    */
-  create(data: CreateInput<T>, db: D1Database): Promise<ModelInstance<T>>
+  create(data: CreateInput<T>, db: Database): Promise<ModelInstance<T>>
 
   /**
    * Find record by ID (returns null if not found)
+   *
+   * @param id Record ID (number for D1, string for KV/DO)
+   * @param db Storage binding
    */
-  find(id: number, db: D1Database): Promise<ModelInstance<T> | null>
+  find(id: number | string, db: Database): Promise<ModelInstance<T> | null>
 
   /**
    * Find record by ID or throw NotFoundError
+   *
+   * @param id Record ID
+   * @param db Storage binding
    */
-  findOrFail(id: number, db: D1Database): Promise<ModelInstance<T>>
+  findOrFail(id: number | string, db: Database): Promise<ModelInstance<T>>
 
   /**
    * Create query builder for WHERE queries
    *
+   * Note: Query builder only works with D1 storage. For KV/DO,
+   * use direct adapter methods or find() by key.
+   *
    * @example
    * ```typescript
-   * // Object notation
+   * // Object notation (D1 only)
    * User.where({ role: 'admin' })
    *
    * // Two-argument notation
@@ -41,7 +62,6 @@ export interface ModelCrudMethods<T extends SchemaDefinition> {
    *
    * // Three-argument notation with comparison operator
    * User.where('createdAt', '>', Date.now() - 86400000)
-   * User.where('age', '>=', 18)
    * ```
    */
   where(conditions: WhereConditions<T>): QueryBuilder<T>
@@ -53,35 +73,40 @@ export interface ModelCrudMethods<T extends SchemaDefinition> {
   ): QueryBuilder<T>
 
   /**
-   * Eager load relationships
+   * Eager load relationships (D1 only)
    *
    * @example
    * ```typescript
-   * // Load single relation
    * const users = await User.with('posts').all(db)
-   *
-   * // Load multiple relations
-   * const users = await User.with('posts', 'profile').all(db)
-   *
-   * // Nested relations
-   * const posts = await Post.with('author', 'author.profile').all(db)
    * ```
    */
   with(...relations: string[]): QueryBuilder<T>
 
   /**
    * Upsert a record (create or update based on match)
+   *
+   * Note: For KV/DO, this does a simple put (overwrites by key)
    */
   upsert(
     match: Partial<InferSchema<T>>,
     values: Partial<InferSchema<T>>,
-    db: D1Database
+    db: Database
   ): Promise<ModelInstance<T>>
 
   /**
-   * Bulk insert records
+   * Bulk insert records (D1 only - uses batch operations)
+   *
+   * For KV/DO, records are inserted sequentially
    */
-  createMany(records: CreateInput<T>[], db: D1Database): Promise<ModelInstance<T>[]>
+  createMany(records: CreateInput<T>[], db: Database): Promise<ModelInstance<T>[]>
+
+  /**
+   * Delete a record by ID
+   *
+   * @param id Record ID
+   * @param db Storage binding
+   */
+  delete(id: number | string, db: Database): Promise<void>
 }
 
 /**
@@ -90,20 +115,110 @@ export interface ModelCrudMethods<T extends SchemaDefinition> {
 export type ModelWithCrud<T extends SchemaDefinition> = Model<T> & ModelCrudMethods<T>
 
 /**
- * Create a proxy that adds CRUD methods to a Model
+ * Get the primary key field name from schema
+ */
+function getPrimaryKeyField<T extends SchemaDefinition>(model: Model<T>): string {
+  for (const [fieldName, field] of Object.entries(model.$schema)) {
+    if (field.config?.primaryKey) {
+      return fieldName
+    }
+  }
+  return 'id' // Default
+}
+
+/**
+ * Create a proxy that adds CRUD methods to a Model with storage-aware dispatch
  */
 export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): ModelWithCrud<T> {
   const crudMethods: ModelCrudMethods<T> = {
-    create(data: CreateInput<T>, db: D1Database): Promise<ModelInstance<T>> {
+    async create(data: CreateInput<T>, db: Database): Promise<ModelInstance<T>> {
+      const tier = model.$storage
+
+      if (tier === 'kv' && isKVNamespace(db)) {
+        const adapter = new KVAdapter(model, db)
+        const pkField = getPrimaryKeyField(model)
+        const id = (data as Record<string, unknown>)[pkField] as string
+
+        if (!id) {
+          throw new Error(
+            `KV storage requires a primary key value in data. Missing field: ${pkField}`
+          )
+        }
+
+        await adapter.put(id, data as Partial<InferSchema<T>>)
+        return new ModelInstanceClass(
+          model,
+          { ...data, [pkField]: id } as Partial<InferSchema<T>>,
+          false
+        )
+      }
+
+      if (tier === 'do' && isDurableObjectStorage(db)) {
+        const adapter = new DOAdapter(model, db)
+        const pkField = getPrimaryKeyField(model)
+        const id = (data as Record<string, unknown>)[pkField] as string
+
+        if (!id) {
+          throw new Error(
+            `DO storage requires a primary key value in data. Missing field: ${pkField}`
+          )
+        }
+
+        await adapter.put(id, data as Partial<InferSchema<T>>)
+        return new ModelInstanceClass(
+          model,
+          { ...data, [pkField]: id } as Partial<InferSchema<T>>,
+          false
+        )
+      }
+
+      // Default to D1
+      if (!isD1Database(db)) {
+        throw new Error(
+          `Storage tier mismatch: Model '${model.$tableName}' has $storage='${tier}' but received incompatible binding. ` +
+            `Expected ${tier === 'kv' ? 'KVNamespace' : tier === 'do' ? 'DurableObjectStorage' : 'D1Database'}.`
+        )
+      }
       return create(model, data, db)
     },
 
-    find(id: number, db: D1Database): Promise<ModelInstance<T> | null> {
-      return find(model, id, db)
+    async find(id: number | string, db: Database): Promise<ModelInstance<T> | null> {
+      const tier = model.$storage
+
+      if (tier === 'kv' && isKVNamespace(db)) {
+        const adapter = new KVAdapter(model, db)
+        const result = await adapter.get(String(id))
+        if (!result) return null
+        return new ModelInstanceClass(model, result as Partial<InferSchema<T>>, false)
+      }
+
+      if (tier === 'do' && isDurableObjectStorage(db)) {
+        const adapter = new DOAdapter(model, db)
+        const result = await adapter.get(String(id))
+        if (!result) return null
+        return new ModelInstanceClass(model, result as Partial<InferSchema<T>>, false)
+      }
+
+      // Default to D1
+      if (!isD1Database(db)) {
+        throw new Error(
+          `Storage tier mismatch: Model '${model.$tableName}' has $storage='${tier}' but received incompatible binding.`
+        )
+      }
+      return find(model, id as number, db)
     },
 
-    findOrFail(id: number, db: D1Database): Promise<ModelInstance<T>> {
-      return findOrFail(model, id, db)
+    async findOrFail(id: number | string, db: Database): Promise<ModelInstance<T>> {
+      const result = await this.find(id, db)
+
+      if (!result) {
+        throw new NotFoundError(
+          `${model.$tableName.toUpperCase()}.NOT_FOUND`,
+          `${model.$tableName} with id ${id} not found`
+        )
+      }
+
+      return result
     },
 
     where(
@@ -111,38 +226,160 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
       operatorOrValue?: WhereOperator | unknown,
       value?: unknown
     ): QueryBuilder<T> {
+      // QueryBuilder only works with D1
+      if (model.$storage !== 'd1') {
+        console.warn(
+          `[EdgeRecord] QueryBuilder.where() is designed for D1 storage. ` +
+            `Model '${model.$tableName}' uses '${model.$storage}' storage. ` +
+            `Consider using find() with key lookup instead.`
+        )
+      }
+
       const qb = new QueryBuilder(model)
 
       if (typeof fieldOrConditions === 'object') {
-        // Object notation: where({ role: 'admin' })
         return qb.where(fieldOrConditions)
       } else if (value !== undefined) {
-        // Three-argument form: where(field, operator, value)
         return qb.where(fieldOrConditions, operatorOrValue as WhereOperator, value)
       } else if (operatorOrValue !== undefined) {
-        // Two-argument form: where(field, value)
         return qb.where(fieldOrConditions, operatorOrValue as InferSchema<T>[keyof InferSchema<T>])
       } else {
-        // Should not happen, but return empty query builder
         return qb
       }
     },
 
     with(...relations: string[]): QueryBuilder<T> {
+      if (model.$storage !== 'd1') {
+        console.warn(
+          `[EdgeRecord] Eager loading with() only works with D1 storage. ` +
+            `Model '${model.$tableName}' uses '${model.$storage}' storage.`
+        )
+      }
       const qb = new QueryBuilder(model)
       return qb.with(...relations)
     },
 
-    upsert(
+    async upsert(
       match: Partial<InferSchema<T>>,
       values: Partial<InferSchema<T>>,
-      db: D1Database
+      db: Database
     ): Promise<ModelInstance<T>> {
+      const tier = model.$storage
+
+      if (tier === 'kv' && isKVNamespace(db)) {
+        const adapter = new KVAdapter(model, db)
+        const pkField = getPrimaryKeyField(model)
+        const id = (match as Record<string, unknown>)[pkField] as string
+
+        if (!id) {
+          throw new Error(
+            `KV upsert requires primary key in match criteria. Missing field: ${pkField}`
+          )
+        }
+
+        const merged = { ...match, ...values }
+        await adapter.put(id, merged as Partial<InferSchema<T>>)
+        return new ModelInstanceClass(model, merged as Partial<InferSchema<T>>, false)
+      }
+
+      if (tier === 'do' && isDurableObjectStorage(db)) {
+        const adapter = new DOAdapter(model, db)
+        const pkField = getPrimaryKeyField(model)
+        const id = (match as Record<string, unknown>)[pkField] as string
+
+        if (!id) {
+          throw new Error(
+            `DO upsert requires primary key in match criteria. Missing field: ${pkField}`
+          )
+        }
+
+        const merged = { ...match, ...values }
+        await adapter.put(id, merged as Partial<InferSchema<T>>)
+        return new ModelInstanceClass(model, merged as Partial<InferSchema<T>>, false)
+      }
+
+      // Default to D1
+      if (!isD1Database(db)) {
+        throw new Error(
+          `Storage tier mismatch: Model '${model.$tableName}' has $storage='${tier}' but received incompatible binding.`
+        )
+      }
       return upsert(model, match, values, db)
     },
 
-    createMany(records: CreateInput<T>[], db: D1Database): Promise<ModelInstance<T>[]> {
+    async createMany(records: CreateInput<T>[], db: Database): Promise<ModelInstance<T>[]> {
+      const tier = model.$storage
+
+      if (tier === 'kv' && isKVNamespace(db)) {
+        const adapter = new KVAdapter(model, db)
+        const pkField = getPrimaryKeyField(model)
+        const instances: ModelInstance<T>[] = []
+
+        for (const record of records) {
+          const id = (record as Record<string, unknown>)[pkField] as string
+          if (!id) {
+            throw new Error(
+              `KV createMany requires primary key in each record. Missing field: ${pkField}`
+            )
+          }
+          await adapter.put(id, record as Partial<InferSchema<T>>)
+          instances.push(new ModelInstanceClass(model, record as Partial<InferSchema<T>>, false))
+        }
+        return instances
+      }
+
+      if (tier === 'do' && isDurableObjectStorage(db)) {
+        const adapter = new DOAdapter(model, db)
+        const pkField = getPrimaryKeyField(model)
+        const instances: ModelInstance<T>[] = []
+
+        for (const record of records) {
+          const id = (record as Record<string, unknown>)[pkField] as string
+          if (!id) {
+            throw new Error(
+              `DO createMany requires primary key in each record. Missing field: ${pkField}`
+            )
+          }
+          await adapter.put(id, record as Partial<InferSchema<T>>)
+          instances.push(new ModelInstanceClass(model, record as Partial<InferSchema<T>>, false))
+        }
+        return instances
+      }
+
+      // Default to D1
+      if (!isD1Database(db)) {
+        throw new Error(
+          `Storage tier mismatch: Model '${model.$tableName}' has $storage='${tier}' but received incompatible binding.`
+        )
+      }
       return createMany(model, records, db)
+    },
+
+    async delete(id: number | string, db: Database): Promise<void> {
+      const tier = model.$storage
+
+      if (tier === 'kv' && isKVNamespace(db)) {
+        const adapter = new KVAdapter(model, db)
+        await adapter.delete(String(id))
+        return
+      }
+
+      if (tier === 'do' && isDurableObjectStorage(db)) {
+        const adapter = new DOAdapter(model, db)
+        await adapter.delete(String(id))
+        return
+      }
+
+      // Default to D1
+      if (!isD1Database(db)) {
+        throw new Error(
+          `Storage tier mismatch: Model '${model.$tableName}' has $storage='${tier}' but received incompatible binding.`
+        )
+      }
+
+      const { escapeIdentifier } = await import('@/edge-record/schema/type-mapping')
+      const sql = `DELETE FROM ${escapeIdentifier(model.$tableName)} WHERE id = ?`
+      await db.prepare(sql).bind(id).run()
     },
   }
 

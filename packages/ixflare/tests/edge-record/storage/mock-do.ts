@@ -49,7 +49,11 @@ export class MockDurableObjectStorage implements DurableObjectStorage {
     return this.store.delete(key)
   }
 
-  async list(options?: { start?: string; end?: string; limit?: number }): Promise<Map<string, unknown>> {
+  async list(options?: {
+    start?: string
+    end?: string
+    limit?: number
+  }): Promise<Map<string, unknown>> {
     const result = new Map<string, unknown>()
     const keys = Array.from(this.store.keys()).sort()
 

@@ -5,7 +5,7 @@
 
 import type { z } from 'zod'
 import type { FieldBuilder } from './field'
-import type { StorageTier, ConsistencyLevel, StorageOptions, CacheOptions } from '../storage/types'
+import type { StorageTier, StorageOptions, CacheOptions } from '@/edge-record/storage/types'
 
 /**
  * Schema definition - a record of field names to FieldBuilder instances

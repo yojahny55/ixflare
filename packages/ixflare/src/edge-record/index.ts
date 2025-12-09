@@ -64,13 +64,7 @@ export type { RelationConfig, RelationType, RelationsConfig } from './relations'
 export { EagerLoader, type ModelInstanceWithRelations } from './relations'
 
 // Storage exports (Story 3.5)
-export {
-  analyzeTier,
-  validateTierChoice,
-  KVAdapter,
-  DOAdapter,
-  CacheLayer,
-} from './storage'
+export { analyzeTier, validateTierChoice, KVAdapter, DOAdapter, CacheLayer } from './storage'
 export type {
   StorageTier,
   ConsistencyLevel,

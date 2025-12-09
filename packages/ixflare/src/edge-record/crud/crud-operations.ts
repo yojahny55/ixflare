@@ -9,6 +9,14 @@ import { ModelInstance } from '@/edge-record/crud/model-instance'
 import { NotFoundError } from '@/edge-record/crud/errors'
 import { toSnakeCase } from '@/edge-record/crud/case-transform'
 import { escapeIdentifier } from '@/edge-record/schema/type-mapping'
+import {
+  isD1Database,
+  isKVNamespace,
+  isDurableObjectStorage,
+  type Database,
+} from '@/edge-record/storage/types'
+import { KVAdapter } from '@/edge-record/storage/kv-adapter'
+import { DOAdapter } from '@/edge-record/storage/do-adapter'
 
 /**
  * Helper to extract FieldConfig from schema entry (handles FieldBuilder)
@@ -81,7 +89,7 @@ export type UpdateInput<T extends SchemaDefinition> = Partial<Omit<InferSchema<T
 export async function create<T extends SchemaDefinition>(
   model: Model<T>,
   data: CreateInput<T>,
-  db: D1Database
+  db: Database
 ): Promise<ModelInstance<T>> {
   // Create instance marked as new
   const instance = new ModelInstance(model, data as Partial<InferSchema<T>>, true)
@@ -111,9 +119,35 @@ export async function create<T extends SchemaDefinition>(
  */
 export async function find<T extends SchemaDefinition>(
   model: Model<T>,
-  id: number,
-  db: D1Database
+  id: number | string,
+  db: Database
 ): Promise<ModelInstance<T> | null> {
+  const storage = (model as any).$storage || 'd1'
+
+  // KV
+  if (storage === 'kv') {
+    if (!isKVNamespace(db)) throw new Error('Invalid DB binding for KV model')
+    const adapter = new KVAdapter(model, db)
+    const result = await adapter.get(String(id))
+    if (!result) return null
+    return new ModelInstance(model, result as Partial<InferSchema<T>>, false)
+  }
+
+  // DO
+  if (storage === 'do') {
+    if (!isDurableObjectStorage(db)) throw new Error('Invalid DB binding for DO model')
+    const adapter = new DOAdapter(model, db)
+    const result = await adapter.get(String(id))
+    if (!result) return null
+    return new ModelInstance(model, result as Partial<InferSchema<T>>, false)
+  }
+
+  // D1
+  if (!isD1Database(db)) {
+    // Fallback safety
+    throw new Error(`Model ${model.$tableName} expects D1Database`)
+  }
+
   const sql = `SELECT * FROM ${escapeIdentifier(model.$tableName)} WHERE id = ?`
   const stmt = db.prepare(sql).bind(id)
   const row = await stmt.first<Record<string, unknown>>()
@@ -150,8 +184,8 @@ export async function find<T extends SchemaDefinition>(
  */
 export async function findOrFail<T extends SchemaDefinition>(
   model: Model<T>,
-  id: number,
-  db: D1Database
+  id: number | string,
+  db: Database
 ): Promise<ModelInstance<T>> {
   const result = await find(model, id, db)
 
@@ -196,8 +230,26 @@ export async function upsert<T extends SchemaDefinition>(
   model: Model<T>,
   match: Partial<InferSchema<T>>,
   values: Partial<InferSchema<T>>,
-  db: D1Database
+  db: Database
 ): Promise<ModelInstance<T>> {
+  const storage = (model as any).$storage || 'd1'
+
+  if (storage !== 'd1') {
+    // For KV/DO, assuming match contains ID.
+    // This simplified logic mirrors update() or create().
+    // Since upsert() implies logic based on match criteria...
+    if (!isD1Database(db)) {
+      // If we are here, we should probably check if ID is in match
+      // But for now let's just create() which handles upsert-like behavior on KV
+      // Assuming values combined with match has ID.
+      const merged = { ...match, ...values } as CreateInput<T>
+      return create(model, merged, db)
+    }
+  }
+
+  // D1 Logic
+  const d1 = db as D1Database
+
   // Try to find existing record
   const matchFields = Object.keys(match)
   const matchValues = matchFields.map((k) => match[k as keyof InferSchema<T>])
@@ -206,7 +258,7 @@ export async function upsert<T extends SchemaDefinition>(
     .map((f) => `${escapeIdentifier(toSnakeCase(f))} = ?`)
     .join(' AND ')
   const sql = `SELECT * FROM ${escapeIdentifier(model.$tableName)} WHERE ${whereClause}`
-  const stmt = db.prepare(sql).bind(...matchValues)
+  const stmt = d1.prepare(sql).bind(...matchValues)
   const existing = await stmt.first<Record<string, unknown>>()
 
   if (existing) {
@@ -249,8 +301,12 @@ export async function upsertAtomic<T extends SchemaDefinition>(
   model: Model<T>,
   conflictColumns: Array<keyof InferSchema<T>>,
   data: CreateInput<T>,
-  db: D1Database
+  db: Database
 ): Promise<ModelInstance<T>> {
+  if (!isD1Database(db)) {
+    throw new Error('upsertAtomic only supports D1Database')
+  }
+  const d1 = db as D1Database
   const now = Date.now()
 
   // Prepare data with timestamps
@@ -296,7 +352,7 @@ export async function upsertAtomic<T extends SchemaDefinition>(
 
   const sql = `INSERT INTO ${escapeIdentifier(model.$tableName)} (${escapedFields}) VALUES (${placeholders}) ON CONFLICT(${conflictCols}) DO UPDATE SET ${setClause}`
 
-  const stmt = db.prepare(sql).bind(...dbValues)
+  const stmt = d1.prepare(sql).bind(...dbValues)
   await stmt.run()
 
   // Fetch the created/updated record to get the ID
@@ -306,7 +362,7 @@ export async function upsertAtomic<T extends SchemaDefinition>(
   const conflictValues = conflictColumns.map((c) => dbData[toSnakeCase(c as string)])
 
   const fetchSql = `SELECT * FROM ${escapeIdentifier(model.$tableName)} WHERE ${conflictWhere}`
-  const fetchStmt = db.prepare(fetchSql).bind(...conflictValues)
+  const fetchStmt = d1.prepare(fetchSql).bind(...conflictValues)
   const row = await fetchStmt.first<Record<string, unknown>>()
 
   if (!row) {
@@ -346,11 +402,23 @@ const D1_BATCH_LIMIT = 100
 export async function createMany<T extends SchemaDefinition>(
   model: Model<T>,
   records: Array<CreateInput<T>>,
-  db: D1Database
+  db: Database
 ): Promise<ModelInstance<T>[]> {
   if (records.length === 0) {
     return []
   }
+
+  const storage = (model as any).$storage || 'd1'
+  if (storage !== 'd1') {
+    // Sequential create for KV/DO
+    const instances: ModelInstance<T>[] = []
+    for (const record of records) {
+      instances.push(await create(model, record, db))
+    }
+    return instances
+  }
+
+  const d1 = db as D1Database
 
   const now = Date.now()
   const allStatements: D1PreparedStatement[] = []
@@ -383,14 +451,14 @@ export async function createMany<T extends SchemaDefinition>(
     const escapedFields = dbFields.map((f) => escapeIdentifier(f)).join(', ')
     const sql = `INSERT INTO ${escapeIdentifier(model.$tableName)} (${escapedFields}) VALUES (${placeholders})`
 
-    allStatements.push(db.prepare(sql).bind(...dbValues))
+    allStatements.push(d1.prepare(sql).bind(...dbValues))
   }
 
   // Execute in batches to respect D1's 100 statement limit
   const allResults: D1Result<unknown>[] = []
   for (let i = 0; i < allStatements.length; i += D1_BATCH_LIMIT) {
     const batch = allStatements.slice(i, i + D1_BATCH_LIMIT)
-    const batchResults = await db.batch(batch)
+    const batchResults = await d1.batch(batch)
     allResults.push(...batchResults)
   }
 

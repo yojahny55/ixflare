@@ -2,6 +2,37 @@ export type StorageTier = 'kv' | 'd1' | 'do'
 
 export type ConsistencyLevel = 'eventual' | 'strong'
 
+/**
+ * Storage binding type - the actual Cloudflare binding passed at runtime
+ *
+ * Maps storage tiers to their corresponding Cloudflare binding types:
+ * - 'd1' → D1Database
+ * - 'kv' → KVNamespace
+ * - 'do' → DurableObjectStorage (from DurableObjectState.storage)
+ */
+export type StorageBinding = D1Database | KVNamespace | DurableObjectStorage
+
+/**
+ * Type guard to check if binding is D1Database
+ */
+export function isD1Database(binding: StorageBinding): binding is D1Database {
+  return 'prepare' in binding && 'batch' in binding
+}
+
+/**
+ * Type guard to check if binding is KVNamespace
+ */
+export function isKVNamespace(binding: StorageBinding): binding is KVNamespace {
+  return 'get' in binding && 'put' in binding && 'list' in binding && !('prepare' in binding)
+}
+
+/**
+ * Type guard to check if binding is DurableObjectStorage
+ */
+export function isDurableObjectStorage(binding: StorageBinding): binding is DurableObjectStorage {
+  return 'transaction' in binding && 'deleteAll' in binding && !('prepare' in binding)
+}
+
 export interface StorageOptions {
   /** Explicit storage tier selection (overrides auto-detection) */
   storage?: StorageTier
@@ -27,3 +58,5 @@ export interface CacheOptions {
 export interface ExtendedModelOptions extends StorageOptions {
   cache?: CacheOptions
 }
+
+export type Database = D1Database | KVNamespace | DurableObjectStorage

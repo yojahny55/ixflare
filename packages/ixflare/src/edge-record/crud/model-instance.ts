@@ -18,7 +18,26 @@ function getFieldConfig(schemaEntry: unknown): FieldConfig | undefined {
   }
   return undefined
 }
+import {
+  isD1Database,
+  isKVNamespace,
+  isDurableObjectStorage,
+  type Database,
+} from '@/edge-record/storage/types'
+import { KVAdapter } from '@/edge-record/storage/kv-adapter'
+import { DOAdapter } from '@/edge-record/storage/do-adapter'
 import { escapeIdentifier } from '@/edge-record/schema/type-mapping'
+
+function getPkField<T extends SchemaDefinition>(model: Model<T>): keyof InferSchema<T> {
+  const schema = model.$schema
+  for (const key in schema) {
+    const config = getFieldConfig(schema[key])
+    if (config?.primaryKey) {
+      return key as keyof InferSchema<T>
+    }
+  }
+  return 'id' as keyof InferSchema<T>
+}
 
 /**
  * ModelInstance wraps a database record with instance methods
@@ -81,7 +100,66 @@ export class ModelInstance<T extends SchemaDefinition> {
   /**
    * Save the instance to database (INSERT if new, UPDATE if existing)
    */
-  async save(db: D1Database): Promise<this> {
+  /**
+   * Save the instance to database (INSERT if new, UPDATE if existing)
+   */
+  async save(db: Database): Promise<this> {
+    const storage = (this._model as any).$storage || 'd1'
+
+    // Handle KV Storage
+    if (storage === 'kv') {
+      if (!isKVNamespace(db)) {
+        throw new Error(
+          `Model ${this._model.$tableName} is configured for KV but received ${db.constructor.name}`
+        )
+      }
+      this.updateTimestamps()
+      const pkField = getPkField(this._model)
+      const id = this._data[pkField]
+
+      if (!id) throw new Error('Cannot save to KV: Primary key is missing')
+
+      const adapter = new KVAdapter(this._model, db)
+      await adapter.put(String(id), this._data)
+
+      this._isNew = false
+      this._original = { ...this._data }
+      return this
+    }
+
+    // Handle Durable Objects Storage
+    if (storage === 'do') {
+      if (!isDurableObjectStorage(db)) {
+        throw new Error(
+          `Model ${this._model.$tableName} is configured for DO but received ${db.constructor.name}`
+        )
+      }
+      this.updateTimestamps()
+      const pkField = getPkField(this._model)
+      const id = this._data[pkField]
+
+      if (!id) throw new Error('Cannot save to DO: Primary key is missing')
+
+      const adapter = new DOAdapter(this._model, db)
+      await adapter.put(String(id), this._data)
+
+      this._isNew = false
+      this._original = { ...this._data }
+      return this
+    }
+
+    // Default: D1 Storage
+    if (!isD1Database(db)) {
+      // Check if we received KV/DO but wanted D1
+      if (isKVNamespace(db) || isDurableObjectStorage(db)) {
+        throw new Error(
+          `Model ${this._model.$tableName} is configured for D1 but received ${db.constructor.name}`
+        )
+      }
+      // If it's something else (like a mock) assume it's D1-compatible or let it fail naturally
+    }
+    const d1 = db as D1Database
+
     if (this._isNew) {
       // Set timestamps before building SQL
       const now = Date.now()
@@ -101,7 +179,7 @@ export class ModelInstance<T extends SchemaDefinition> {
       const escapedFields = dbFields.map((f) => escapeIdentifier(f)).join(', ')
       const sql = `INSERT INTO ${escapeIdentifier(this._model.$tableName)} (${escapedFields}) VALUES (${placeholders})`
 
-      const stmt = db.prepare(sql).bind(...dbValues)
+      const stmt = d1.prepare(sql).bind(...dbValues)
       const result = await stmt.run()
 
       if (result.meta.last_row_id) {
@@ -130,7 +208,7 @@ export class ModelInstance<T extends SchemaDefinition> {
         const setClause = fields.map((f) => `${escapeIdentifier(f)} = ?`).join(', ')
         const sql = `UPDATE ${escapeIdentifier(this._model.$tableName)} SET ${setClause} WHERE id = ?`
 
-        const stmt = db.prepare(sql).bind(...values, this._data.id)
+        const stmt = d1.prepare(sql).bind(...values, this._data.id)
         await stmt.run()
 
         this._original = { ...this._data }
@@ -140,41 +218,64 @@ export class ModelInstance<T extends SchemaDefinition> {
     return this
   }
 
+  private updateTimestamps() {
+    const now = Date.now()
+    if (this._isNew && 'createdAt' in this._model.$schema) {
+      ;(this._data as Record<string, unknown>)['createdAt'] = now
+    }
+    if ('updatedAt' in this._model.$schema) {
+      ;(this._data as Record<string, unknown>)['updatedAt'] = now
+    }
+  }
+
   /**
    * Update fields and save to database
    */
-  async update(data: Partial<InferSchema<T>>, db: D1Database): Promise<this> {
-    // Update updatedAt timestamp
-    const now = Date.now()
-    if ('updatedAt' in this._model.$schema) {
-      ;(data as Record<string, unknown>)['updatedAt'] = now
-    }
-
-    // Merge data into instance
+  /**
+   * Update fields and save to database
+   */
+  async update(data: Partial<InferSchema<T>>, db: Database): Promise<this> {
+    // Merge data first
     Object.assign(this._data, data)
-
-    // Transform to snake_case for DB
-    const dbData = this.transformToDb(data)
-    const fields = Object.keys(dbData).filter((k) => k !== 'id')
-    const values = fields.map((k) => dbData[k])
-
-    const setClause = fields.map((f) => `${escapeIdentifier(f)} = ?`).join(', ')
-    const sql = `UPDATE ${escapeIdentifier(this._model.$tableName)} SET ${setClause} WHERE id = ?`
-
-    const stmt = db.prepare(sql).bind(...values, this._data.id)
-    await stmt.run()
-
-    this._original = { ...this._data }
-
-    return this
+    // Save handles routing and dirty tracking
+    return this.save(db)
   }
 
   /**
    * Delete this record from database
    */
-  async delete(db: D1Database): Promise<boolean> {
+  /**
+   * Delete this record from database
+   */
+  async delete(db: Database): Promise<boolean> {
+    const storage = (this._model as any).$storage || 'd1'
+
+    if (storage === 'kv') {
+      if (!isKVNamespace(db)) throw new Error('Invalid DB binding for KV model')
+      const pkField = getPkField(this._model)
+      const id = this._data[pkField]
+      if (id) {
+        await new KVAdapter(this._model, db).delete(String(id))
+        return true
+      }
+      return false
+    }
+
+    if (storage === 'do') {
+      if (!isDurableObjectStorage(db)) throw new Error('Invalid DB binding for DO model')
+      const pkField = getPkField(this._model)
+      const id = this._data[pkField]
+      if (id) {
+        await new DOAdapter(this._model, db).delete(String(id))
+        return true
+      }
+      return false
+    }
+
+    // D1
+    const d1 = db as D1Database
     const sql = `DELETE FROM ${escapeIdentifier(this._model.$tableName)} WHERE id = ?`
-    const stmt = db.prepare(sql).bind(this._data.id)
+    const stmt = d1.prepare(sql).bind(this._data.id)
     const result = await stmt.run()
 
     return result.meta.changes > 0

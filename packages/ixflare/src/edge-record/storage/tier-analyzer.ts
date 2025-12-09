@@ -1,4 +1,4 @@
-import type { Model, SchemaDefinition } from '../schema/types'
+import type { Model, SchemaDefinition } from '@/edge-record/schema/types'
 import type { StorageTier, ExtendedModelOptions } from './types'
 
 export interface TierAnalysisResult {
@@ -76,9 +76,7 @@ interface KVSuitabilityResult {
  * - No relations defined
  * - Simple schema (≤5 fields)
  */
-function analyzeKVSuitability<T extends SchemaDefinition>(
-  model: Model<T>
-): KVSuitabilityResult {
+function analyzeKVSuitability<T extends SchemaDefinition>(model: Model<T>): KVSuitabilityResult {
   const schema = model.$schema
   const reasons: string[] = []
 
@@ -96,7 +94,11 @@ function analyzeKVSuitability<T extends SchemaDefinition>(
   const isSimpleSchema = fieldCount <= 5
 
   if (hasStringPK && hasNoRelations && isSimpleSchema) {
-    reasons.push('String primary key detected', 'No relationships defined', 'Simple schema structure')
+    reasons.push(
+      'String primary key detected',
+      'No relationships defined',
+      'Simple schema structure'
+    )
     return { suitable: true, confidence: 'medium', reasons }
   }
 
