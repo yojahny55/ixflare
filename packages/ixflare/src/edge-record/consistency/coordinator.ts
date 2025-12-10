@@ -5,6 +5,12 @@
 
 import type { CoordinatorOptions } from './types'
 
+/** Default event retention period (1 hour) */
+const DEFAULT_EVENT_RETENTION_MS = 60 * 60 * 1000
+
+/** Maximum events to return per query */
+const MAX_EVENTS_PER_QUERY = 100
+
 /**
  * Consistency Coordinator Durable Object
  *
@@ -208,17 +214,23 @@ export class ConsistencyCoordinator {
    *
    * @param tableName The table name
    * @param since Timestamp to get events since
+   * @param limit Maximum number of events to return (default: 100)
    * @returns Array of events
    */
-  async getEvents(tableName: string, since: number): Promise<unknown[]> {
+  async getEvents(
+    tableName: string,
+    since: number,
+    limit: number = MAX_EVENTS_PER_QUERY
+  ): Promise<unknown[]> {
     const prefix = `events:${tableName}:`
-    const list = await this.storage.list({ prefix })
+    const list = await this.storage.list({ prefix, limit: limit * 2 }) // Fetch extra to filter
 
     const events: unknown[] = []
     for (const [, value] of list) {
       const event = value as { timestamp: number }
       if (event.timestamp >= since) {
         events.push(value)
+        if (events.length >= limit) break
       }
     }
 
@@ -227,6 +239,54 @@ export class ConsistencyCoordinator {
       const bTs = (b as { timestamp: number }).timestamp
       return aTs - bTs
     })
+  }
+
+  /**
+   * Clean up old events beyond retention period
+   *
+   * Should be called periodically (e.g., via Durable Objects alarm)
+   *
+   * @param tableName Optional table name to clean (all tables if not specified)
+   * @param retentionMs Retention period in milliseconds (default: 1 hour)
+   * @returns Number of events deleted
+   *
+   * @example
+   * ```typescript
+   * // In Durable Object alarm handler
+   * async alarm() {
+   *   const cleaned = await this.coordinator.cleanupOldEvents()
+   *   console.log(`Cleaned ${cleaned} old events`)
+   *   // Schedule next cleanup
+   *   await this.state.storage.setAlarm(Date.now() + 3600000)
+   * }
+   * ```
+   */
+  async cleanupOldEvents(
+    tableName?: string,
+    retentionMs: number = DEFAULT_EVENT_RETENTION_MS
+  ): Promise<number> {
+    const cutoffTime = Date.now() - retentionMs
+    const prefix = tableName ? `events:${tableName}:` : 'events:'
+    const list = await this.storage.list({ prefix })
+
+    const keysToDelete: string[] = []
+    for (const [key, value] of list) {
+      const event = value as { timestamp: number }
+      if (event.timestamp < cutoffTime) {
+        keysToDelete.push(key)
+      }
+    }
+
+    if (keysToDelete.length > 0) {
+      // Delete in batches of 128 (DO storage limit)
+      const batchSize = 128
+      for (let i = 0; i < keysToDelete.length; i += batchSize) {
+        const batch = keysToDelete.slice(i, i + batchSize)
+        await this.storage.delete(batch)
+      }
+    }
+
+    return keysToDelete.length
   }
 
   /**

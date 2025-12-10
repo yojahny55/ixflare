@@ -7,7 +7,7 @@ import type { SchemaDefinition, InferSchema, Model } from '@/edge-record/schema/
 import type { FieldConfig, FieldBuilder } from '@/edge-record/schema/field'
 import { ModelInstance } from '@/edge-record/crud/model-instance'
 import { NotFoundError } from '@/edge-record/crud/errors'
-import { toSnakeCase } from '@/edge-record/crud/case-transform'
+import { toSnakeCase, transformKeysToSnakeCase } from '@/edge-record/crud/case-transform'
 import { escapeIdentifier } from '@/edge-record/schema/type-mapping'
 import {
   isD1Database,
@@ -105,12 +105,8 @@ export async function create<T extends SchemaDefinition>(
     if (id) {
       const cacheKey = `${model.$tableName}:${String(id)}`
       const instanceData = instance.toJSON()
-      // Transform to snake_case for KV storage
-      const snakeCaseData: Record<string, unknown> = {}
-      for (const key in instanceData) {
-        const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-        snakeCaseData[snakeKey] = instanceData[key as keyof InferSchema<T>]
-      }
+      // Transform to snake_case for KV storage (consistent with KVAdapter)
+      const snakeCaseData = transformKeysToSnakeCase(instanceData as Record<string, unknown>)
       await model.$cacheConfig.kv.put(cacheKey, JSON.stringify(snakeCaseData), {
         expirationTtl: model.$cacheConfig.ttl || 300,
       })

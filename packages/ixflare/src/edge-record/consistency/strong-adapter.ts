@@ -44,6 +44,14 @@ export class StrongConsistencyAdapter<T extends SchemaDefinition> {
     private model: Model<T>,
     private storage: DurableObjectStorage
   ) {
+    // Validate model has strong consistency configured
+    if (model.$consistency !== 'strong') {
+      const actualLevel = model.$consistency || 'balanced (default)'
+      throw new Error(
+        `[StrongConsistencyAdapter] Model '${model.$tableName}' must have consistency: 'strong'. ` +
+          `Current: '${actualLevel}'. Set { consistency: 'strong' } in defineModel options.`
+      )
+    }
     this.doAdapter = new DOAdapter(model, storage)
   }
 

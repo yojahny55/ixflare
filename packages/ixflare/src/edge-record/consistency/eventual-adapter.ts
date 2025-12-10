@@ -14,6 +14,37 @@ import { escapeIdentifier } from '@/edge-record/schema/type-mapping'
 export type SyncStatus = 'pending' | 'synced' | 'failed'
 
 /**
+ * Retry configuration for D1 sync
+ */
+interface RetryConfig {
+  maxRetries: number
+  baseDelayMs: number
+  maxDelayMs: number
+}
+
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 3,
+  baseDelayMs: 100,
+  maxDelayMs: 2000,
+}
+
+/**
+ * Simple exponential backoff delay
+ */
+function getRetryDelay(attempt: number, config: RetryConfig): number {
+  const delay = Math.min(config.baseDelayMs * Math.pow(2, attempt), config.maxDelayMs)
+  // Add jitter (±25%)
+  return delay * (0.75 + Math.random() * 0.5)
+}
+
+/**
+ * Sleep helper
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
  * Eventual Consistency Adapter
  *
  * Provides eventual consistency with KV-first writes and background D1 sync.
@@ -50,6 +81,8 @@ export class EventualConsistencyAdapter<T extends SchemaDefinition> {
   private kvAdapter: KVAdapter<T>
   private escapedTableName: string
 
+  private retryConfig: RetryConfig
+
   constructor(
     private model: Model<T>,
     private kv: KVNamespace,
@@ -59,10 +92,26 @@ export class EventualConsistencyAdapter<T extends SchemaDefinition> {
       ttl?: number
       /** Manual sync mode (don't auto-sync to D1) */
       manualSync?: boolean
+      /** Retry configuration for failed D1 syncs */
+      retry?: Partial<RetryConfig>
+      /** Enable debug logging (default: false in production) */
+      debug?: boolean
     }
   ) {
     this.kvAdapter = new KVAdapter(model, kv, { ttl: options?.ttl })
     this.escapedTableName = escapeIdentifier(model.$tableName)
+    this.retryConfig = { ...DEFAULT_RETRY_CONFIG, ...options?.retry }
+  }
+
+  /**
+   * Log helper that respects debug setting
+   * @private
+   */
+  private log(level: 'info' | 'warn' | 'error', message: string, ...args: unknown[]): void {
+    const isProduction = typeof process !== 'undefined' && process.env?.NODE_ENV === 'production'
+    if (level === 'error' || (this.options?.debug && !isProduction)) {
+      console[level](`[EventualConsistencyAdapter] ${message}`, ...args)
+    }
   }
 
   /**
@@ -75,7 +124,7 @@ export class EventualConsistencyAdapter<T extends SchemaDefinition> {
   /**
    * Store a record with KV-first write
    *
-   * Writes to KV immediately and queues D1 sync.
+   * Writes to KV immediately and queues D1 sync with retry.
    */
   async put(id: string, data: Partial<InferSchema<T>>): Promise<void> {
     // Write to KV first (fast path)
@@ -83,13 +132,43 @@ export class EventualConsistencyAdapter<T extends SchemaDefinition> {
 
     // Queue D1 sync unless manual sync mode
     if (!this.options?.manualSync) {
-      // NOTE: In production, use Cloudflare Queues or scheduled workers
-      // This is a best-effort sync that may fail silently
-      this.syncToD1(id, data).catch((err) => {
-        console.error(`[EventualConsistencyAdapter] D1 sync failed for ${id}:`, err)
-        // In production: send to dead letter queue or retry mechanism
+      this.syncWithRetry(id, data).catch((err) => {
+        this.log('error', `D1 sync failed permanently for ${id} after retries:`, err)
       })
     }
+  }
+
+  /**
+   * Sync to D1 with exponential backoff retry
+   * @private
+   */
+  private async syncWithRetry(id: string, data: Partial<InferSchema<T>>): Promise<void> {
+    let lastError: Error | undefined
+
+    for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
+      try {
+        const status = await this.syncToD1(id, data)
+        if (status === 'synced') {
+          if (attempt > 0) {
+            this.log('info', `D1 sync succeeded for ${id} on attempt ${attempt + 1}`)
+          }
+          return
+        }
+        // If status is 'failed' but no exception, treat as retriable
+        lastError = new Error(`Sync returned status: ${status}`)
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err))
+        this.log('warn', `D1 sync attempt ${attempt + 1} failed for ${id}:`, lastError.message)
+      }
+
+      // Don't sleep after last attempt
+      if (attempt < this.retryConfig.maxRetries) {
+        const delay = getRetryDelay(attempt, this.retryConfig)
+        await sleep(delay)
+      }
+    }
+
+    throw lastError || new Error(`D1 sync failed for ${id}`)
   }
 
   /**
@@ -102,7 +181,7 @@ export class EventualConsistencyAdapter<T extends SchemaDefinition> {
     // Queue D1 delete unless manual sync mode
     if (!this.options?.manualSync) {
       this.deleteFromD1(id).catch((err) => {
-        console.error(`[EventualConsistencyAdapter] D1 delete failed for ${id}:`, err)
+        this.log('error', `D1 delete failed for ${id}:`, err)
       })
     }
   }
@@ -147,7 +226,7 @@ export class EventualConsistencyAdapter<T extends SchemaDefinition> {
 
       return 'synced'
     } catch (error) {
-      console.error(`[EventualConsistencyAdapter] syncToD1 error:`, error)
+      this.log('error', `syncToD1 error for ${id}:`, error)
       return 'failed'
     }
   }

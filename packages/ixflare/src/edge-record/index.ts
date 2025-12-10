@@ -76,7 +76,6 @@ export {
 } from './storage'
 export type {
   StorageTier,
-  ConsistencyLevel,
   StorageOptions,
   CacheOptions,
   ExtendedModelOptions,
@@ -92,13 +91,13 @@ export {
   ConsistencyCoordinator,
 } from './consistency'
 export type {
+  ConsistencyLevel,
   InvalidationStrategy,
   WriteThroughOptions,
   CoordinatorOptions,
   ExtendedCacheOptions,
   SyncStatus,
 } from './consistency'
-export type { ConsistencyLevel as ConsistencyLevelType } from './consistency'
 
 // Transaction exports (Story 3.8)
 export { transaction } from './transaction'

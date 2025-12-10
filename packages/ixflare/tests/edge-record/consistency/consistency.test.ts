@@ -46,8 +46,24 @@ const createMockDOStorage = (): DurableObjectStorage => {
     put: vi.fn(async (key: string, value: unknown) => {
       store.set(key, value)
     }),
-    delete: vi.fn(async (key: string) => {
-      store.delete(key)
+    delete: vi.fn(async (keys: string | string[]) => {
+      if (Array.isArray(keys)) {
+        keys.forEach((k) => store.delete(k))
+      } else {
+        store.delete(keys)
+      }
+    }),
+    list: vi.fn(async (options?: { prefix?: string; limit?: number }) => {
+      const prefix = options?.prefix || ''
+      const limit = options?.limit || 1000
+      const entries: [string, unknown][] = []
+      for (const [key, value] of store) {
+        if (key.startsWith(prefix)) {
+          entries.push([key, value])
+          if (entries.length >= limit) break
+        }
+      }
+      return new Map(entries)
     }),
     transaction: vi.fn(async (callback: (txn: DurableObjectTransaction) => Promise<unknown>) => {
       const txn = {
@@ -149,6 +165,17 @@ describe('Consistency - Strong Consistency with DO', () => {
 
   beforeEach(() => {
     mockDO = createMockDOStorage()
+  })
+
+  it('should reject models without strong consistency', () => {
+    const BalancedModel = defineModel('balanced_items', {
+      id: field.id(),
+      name: field.string(),
+    })
+
+    expect(() => new StrongConsistencyAdapter(BalancedModel, mockDO)).toThrow(
+      /must have consistency: 'strong'/
+    )
   })
 
   it('should perform atomic increment', async () => {
@@ -331,6 +358,44 @@ describe('Consistency - DO-Based Coordinator', () => {
     expect(health.checks.storage).toBe(true)
     expect(health.checks.db).toBe(false)
     expect(health.checks.kv).toBe(false)
+  })
+
+  it('should cleanup old events', async () => {
+    const coordinator = new ConsistencyCoordinator(mockDO, mockD1, mockKV)
+
+    // Write some events with old timestamps
+    const oldTimestamp = Date.now() - 2 * 60 * 60 * 1000 // 2 hours ago
+    await mockDO.put(`events:products:${oldTimestamp}`, {
+      type: 'update',
+      tableName: 'products',
+      id: 'old-1',
+      timestamp: oldTimestamp,
+    })
+
+    // Cleanup with 1 hour retention
+    const cleaned = await coordinator.cleanupOldEvents('products', 60 * 60 * 1000)
+
+    expect(cleaned).toBe(1)
+  })
+
+  it('should limit events returned by getEvents', async () => {
+    const coordinator = new ConsistencyCoordinator(mockDO, mockD1, mockKV)
+    const now = Date.now()
+
+    // Write multiple events
+    for (let i = 0; i < 5; i++) {
+      await coordinator.write(
+        'products',
+        `product-${i}`,
+        { name: `Product ${i}` },
+        { broadcast: true }
+      )
+    }
+
+    // Get with limit
+    const events = await coordinator.getEvents('products', now - 1000, 3)
+
+    expect(events.length).toBeLessThanOrEqual(3)
   })
 })
 
