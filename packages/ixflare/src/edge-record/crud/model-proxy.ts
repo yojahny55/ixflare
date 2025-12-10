@@ -476,7 +476,10 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
         }
 
         const sql = `UPDATE ${escapeIdentifier(model.$tableName)} SET ${updates.join(', ')} WHERE id = ?`
-        await db.prepare(sql).bind(...params, id).run()
+        await db
+          .prepare(sql)
+          .bind(...params, id)
+          .run()
         return
       }
 
