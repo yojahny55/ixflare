@@ -100,6 +100,8 @@ export async function create<T extends SchemaDefinition>(
   await instance.save(db)
 
   // Write-through caching: populate cache immediately if enabled
+  // NOTE: KV write is best-effort - D1 is source of truth. If KV fails,
+  // we log the error but don't crash (the record exists in D1).
   if (model.$cacheConfig?.enabled && model.$cacheConfig.writeThrough && model.$cacheConfig.kv) {
     const id = (instance as unknown as Record<string, unknown>)['id']
     if (id) {
@@ -107,9 +109,18 @@ export async function create<T extends SchemaDefinition>(
       const instanceData = instance.toJSON()
       // Transform to snake_case for KV storage (consistent with KVAdapter)
       const snakeCaseData = transformKeysToSnakeCase(instanceData as Record<string, unknown>)
-      await model.$cacheConfig.kv.put(cacheKey, JSON.stringify(snakeCaseData), {
-        expirationTtl: model.$cacheConfig.ttl || 300,
-      })
+      try {
+        await model.$cacheConfig.kv.put(cacheKey, JSON.stringify(snakeCaseData), {
+          expirationTtl: model.$cacheConfig.ttl || 300,
+        })
+      } catch (kvError) {
+        // Log but don't crash - D1 write succeeded, cache will be populated on next read
+        console.error(
+          `[EdgeRecord] Write-through cache failed for ${model.$tableName}:${id}. ` +
+            `D1 record exists but cache is stale. Error:`,
+          kvError
+        )
+      }
     }
   }
 
@@ -278,6 +289,14 @@ export async function upsert<T extends SchemaDefinition>(
   db: Database,
   options?: { withTrashed?: boolean }
 ): Promise<ModelInstance<T>> {
+  // Runtime warning about race condition (development only)
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
+    console.warn(
+      `[EdgeRecord] upsert() on '${model.$tableName}' is NOT atomic and may cause race conditions. ` +
+        `Consider using upsertAtomic() with UNIQUE constraint columns for high-concurrency scenarios.`
+    )
+  }
+
   const storage = model.$storage || 'd1'
 
   if (storage !== 'd1') {

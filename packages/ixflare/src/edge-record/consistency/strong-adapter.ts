@@ -12,6 +12,13 @@ import { DOAdapter } from '@/edge-record/storage/do-adapter'
  * Wraps Durable Objects storage to provide strong consistency guarantees.
  * All operations are serialized through a single DO instance per record.
  *
+ * **⚠️ ARCHITECTURE CONSTRAINT:**
+ * This adapter requires `DurableObjectStorage` which is ONLY available
+ * **inside** a Durable Object class. Workers cannot access DO storage directly -
+ * they only have `DurableObjectNamespace` (stubs). You must:
+ * 1. Create a Durable Object class that instantiates this adapter
+ * 2. Expose methods on the DO that Workers can call via stubs
+ *
  * Use cases:
  * - Counters and rate limiters
  * - Inventory management
@@ -26,15 +33,31 @@ import { DOAdapter } from '@/edge-record/storage/do-adapter'
  *
  * @example
  * ```typescript
+ * // 1. Define model with strong consistency
  * export const Inventory = defineModel('inventory', {
- *   productId: field.integer().primaryKey(),
+ *   productId: field.string().primaryKey(),
  *   quantity: field.integer(),
- * }, {
- *   consistency: 'strong',  // Routes to this adapter
- * })
+ * }, { consistency: 'strong', storage: 'do' })
  *
- * // Atomic operations
- * await Inventory.decrement(productId, 'quantity', 1)
+ * // 2. Create Durable Object class (this is where adapter lives)
+ * export class InventoryDO implements DurableObject {
+ *   private adapter: StrongConsistencyAdapter<typeof Inventory.$schema>
+ *
+ *   constructor(state: DurableObjectState, env: Env) {
+ *     this.adapter = new StrongConsistencyAdapter(Inventory, state.storage)
+ *   }
+ *
+ *   async fetch(request: Request) {
+ *     const { productId, amount } = await request.json()
+ *     const newQty = await this.adapter.decrement(productId, 'quantity', amount)
+ *     return Response.json({ quantity: newQty })
+ *   }
+ * }
+ *
+ * // 3. Worker calls DO via stub (NOT direct adapter usage)
+ * const id = env.INVENTORY.idFromName(productId)
+ * const stub = env.INVENTORY.get(id)
+ * const response = await stub.fetch(new Request('...'))
  * ```
  */
 export class StrongConsistencyAdapter<T extends SchemaDefinition> {

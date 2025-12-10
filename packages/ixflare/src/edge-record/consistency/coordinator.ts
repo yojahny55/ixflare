@@ -12,10 +12,15 @@ const DEFAULT_EVENT_RETENTION_MS = 60 * 60 * 1000
 const MAX_EVENTS_PER_QUERY = 100
 
 /**
- * Consistency Coordinator Durable Object
+ * Consistency Coordinator for Multi-Tier Data
  *
  * Provides write coordination and ordering guarantees across storage tiers.
  * Ensures proper sequencing of writes before propagating to KV/D1.
+ *
+ * **⚠️ ARCHITECTURE CONSTRAINT:**
+ * This coordinator requires `DurableObjectStorage` which is ONLY available
+ * **inside** a Durable Object class. Workers cannot use this directly.
+ * You must create a DO class that wraps this coordinator.
  *
  * Use cases:
  * - Critical writes requiring ordering guarantees
@@ -31,25 +36,40 @@ const MAX_EVENTS_PER_QUERY = 100
  *
  * @example
  * ```typescript
- * // In your worker
- * export class ConsistencyCoordinatorDO implements DurableObject {
- *   constructor(private state: DurableObjectState, private env: Env) {}
+ * // 1. Create a Durable Object that wraps the coordinator
+ * export class InventoryCoordinatorDO implements DurableObject {
+ *   private coordinator: ConsistencyCoordinator
+ *
+ *   constructor(state: DurableObjectState, env: Env) {
+ *     this.coordinator = new ConsistencyCoordinator(
+ *       state.storage,  // Only available inside DO
+ *       env.DB,
+ *       env.CACHE_KV
+ *     )
+ *   }
+ *
+ *   async updateInventory(productId: string, newQuantity: number) {
+ *     await this.coordinator.write('inventory', productId, {
+ *       quantity: newQuantity,
+ *     }, { invalidateKV: true, syncToD1: true })
+ *   }
  *
  *   async fetch(request: Request) {
- *     const coordinator = new ConsistencyCoordinator(
- *       this.state.storage,
- *       this.env.DB,
- *       this.env.CACHE_KV
- *     )
- *     return coordinator.handleRequest(request)
+ *     const { action, productId, quantity } = await request.json()
+ *     if (action === 'update') {
+ *       await this.updateInventory(productId, quantity)
+ *     }
+ *     return new Response('OK')
  *   }
  * }
  *
- * // Usage in application
- * const coordinator = new ConsistencyCoordinator(env.COORDINATOR)
- * await coordinator.write('inventory', productId, {
- *   quantity: newQuantity,
- * }, { invalidateKV: true, syncToD1: true })
+ * // 2. Worker calls DO via stub (NOT direct coordinator usage)
+ * const id = env.INVENTORY_COORDINATOR.idFromName('global')
+ * const stub = env.INVENTORY_COORDINATOR.get(id)
+ * await stub.fetch(new Request('http://internal/', {
+ *   method: 'POST',
+ *   body: JSON.stringify({ action: 'update', productId: '123', quantity: 50 })
+ * }))
  * ```
  */
 export class ConsistencyCoordinator {

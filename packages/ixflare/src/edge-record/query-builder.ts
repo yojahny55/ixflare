@@ -610,9 +610,24 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
   /**
    * Bulk update matching records
+   *
+   * **⚠️ CACHE WARNING:** Bulk updates do NOT automatically invalidate cache entries.
+   * If caching is enabled, affected records may remain stale in KV until TTL expires.
+   * For cache-critical updates, use find() + instance.update() for each record,
+   * or manually invalidate cache after bulk update.
+   *
    * @returns Number of updated rows
    */
   async update(data: Partial<InferSchema<T>>, db: D1Database): Promise<number> {
+    // Warn about cache invalidation limitation
+    if (this.model.$cacheConfig?.enabled) {
+      console.warn(
+        `[EdgeRecord] Bulk update on '${this.model.$tableName}' does not invalidate cache. ` +
+          `Affected records may be stale in KV until TTL expires. ` +
+          `Consider using individual updates or manual cache invalidation.`
+      )
+    }
+
     // Add updatedAt if exists
     if ('updatedAt' in this.model.$schema) {
       ;(data as Record<string, unknown>)['updatedAt'] = Date.now()
@@ -641,9 +656,24 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
   /**
    * Bulk delete matching records
    * If model has soft deletes enabled, performs UPDATE to set deletedAt instead of DELETE
+   *
+   * **⚠️ CACHE WARNING:** Bulk deletes do NOT automatically invalidate cache entries.
+   * If caching is enabled, deleted records may remain in KV until TTL expires.
+   * For cache-critical deletes, use find() + instance.delete() for each record,
+   * or manually invalidate cache after bulk delete.
+   *
    * @returns Number of deleted rows
    */
   async delete(db: D1Database): Promise<number> {
+    // Warn about cache invalidation limitation
+    if (this.model.$cacheConfig?.enabled) {
+      console.warn(
+        `[EdgeRecord] Bulk delete on '${this.model.$tableName}' does not invalidate cache. ` +
+          `Deleted records may remain in KV until TTL expires. ` +
+          `Consider using individual deletes or manual cache invalidation.`
+      )
+    }
+
     // Check if soft deletes enabled
     if (this.model.$softDeletes) {
       // Soft delete: UPDATE deletedAt = Date.now()
