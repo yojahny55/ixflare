@@ -306,6 +306,66 @@ describe('Pagination', () => {
       expect(result.data).toHaveLength(20)
       expect(result.meta.hasMore).toBe(true)
     })
+
+    it('should paginate backward using prevCursor', async () => {
+      // Navigate forward to page 2 first
+      const page1 = await Post.where({})
+        .orderBy('id', 'asc')
+        .cursorPaginate({ limit: 20 }, db)
+
+      const page2 = await Post.where({})
+        .orderBy('id', 'asc')
+        .cursorPaginate({ cursor: page1.meta.nextCursor!, limit: 20 }, db)
+
+      expect(page2.meta.prevCursor).toBeTruthy()
+
+      // Navigate backward to page 1
+      const backToPage1 = await Post.where({})
+        .orderBy('id', 'asc')
+        .cursorPaginate({ cursor: page2.meta.prevCursor!, limit: 20, direction: 'backward' }, db)
+
+      // Should get the same data as page 1, in same order
+      expect(backToPage1.data).toHaveLength(20)
+      expect(backToPage1.data[0].id).toBe(page1.data[0].id)
+      expect(backToPage1.data[19].id).toBe(page1.data[19].id)
+    })
+
+    it('should handle backward pagination on first page', async () => {
+      // First page with no cursor
+      const page1 = await Post.where({})
+        .orderBy('id', 'asc')
+        .cursorPaginate({ limit: 20 }, db)
+
+      // Try to go backward from first page - should return empty or first page
+      if (page1.meta.prevCursor) {
+        const beforeFirst = await Post.where({})
+          .orderBy('id', 'asc')
+          .cursorPaginate({ cursor: page1.meta.prevCursor, limit: 20, direction: 'backward' }, db)
+
+        // Going backward from first page should still work but may have fewer results
+        expect(beforeFirst.data.length).toBeLessThanOrEqual(20)
+      }
+    })
+  })
+
+  describe('Cursor BigInt Support', () => {
+    it('should encode and decode BigInt cursor values', () => {
+      const cursor = { createdAt: BigInt('9007199254740993'), id: BigInt('9007199254740994') }
+      const encoded = encodeCursor(cursor as unknown as Cursor)
+      const decoded = decodeCursor(encoded)
+
+      expect(decoded.createdAt).toBe(BigInt('9007199254740993'))
+      expect(decoded.id).toBe(BigInt('9007199254740994'))
+    })
+
+    it('should handle mixed BigInt and regular values', () => {
+      const cursor = { createdAt: 12345, id: BigInt('9007199254740993') }
+      const encoded = encodeCursor(cursor as unknown as Cursor)
+      const decoded = decodeCursor(encoded)
+
+      expect(decoded.createdAt).toBe(12345)
+      expect(decoded.id).toBe(BigInt('9007199254740993'))
+    })
   })
 
   describe('Pagination with Soft Deletes', () => {

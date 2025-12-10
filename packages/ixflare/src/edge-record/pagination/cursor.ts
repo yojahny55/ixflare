@@ -7,6 +7,7 @@ import { ValidationError } from '../crud/errors'
 
 /**
  * Encodes a cursor object to a Base64 URL-safe string
+ * Handles BigInt values by converting them to strings with a special prefix
  *
  * @param cursor - Cursor object containing orderField value and id
  * @returns Base64 URL-safe encoded cursor string
@@ -18,7 +19,13 @@ import { ValidationError } from '../crud/errors'
  * ```
  */
 export function encodeCursor(cursor: Cursor): string {
-  const json = JSON.stringify(cursor)
+  // Custom replacer to handle BigInt values (JSON.stringify throws on BigInt)
+  const json = JSON.stringify(cursor, (key, value) => {
+    if (typeof value === 'bigint') {
+      return `__bigint__${value.toString()}`
+    }
+    return value
+  })
   const base64 = btoa(json)
 
   // Make URL-safe by replacing characters and removing padding
@@ -27,6 +34,7 @@ export function encodeCursor(cursor: Cursor): string {
 
 /**
  * Decodes a Base64 URL-safe cursor string back to a cursor object
+ * Restores BigInt values that were encoded with the __bigint__ prefix
  *
  * @param encoded - Base64 URL-safe encoded cursor string
  * @returns Decoded cursor object
@@ -46,8 +54,13 @@ export function decodeCursor(encoded: string): Cursor {
     // Decode Base64 to JSON string
     const json = atob(padded)
 
-    // Parse JSON to object
-    const cursor = JSON.parse(json) as Cursor
+    // Parse JSON to object with BigInt restoration
+    const cursor = JSON.parse(json, (key, value) => {
+      if (typeof value === 'string' && value.startsWith('__bigint__')) {
+        return BigInt(value.slice(10))
+      }
+      return value
+    }) as Cursor
 
     // Validate cursor structure
     if (typeof cursor !== 'object' || cursor === null) {

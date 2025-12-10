@@ -202,10 +202,36 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
     orderField: string
     orderValue: unknown
     id: number | string
-    direction: '>' | '<'
+    /** Comparison operator for keyset condition */
+    operator: '>' | '<'
+    /** Whether to skip eager loading (for limit+1 optimization) */
+    skipEagerLoad?: boolean
   }
+  /** Whether current query should skip eager loading (used for hasMore check) */
+  private skipEagerLoading = false
 
   constructor(private model: Model<T>) {}
+
+  /**
+   * Add keyset condition for cursor pagination
+   * Encapsulates the compound keyset logic: (orderField op val) OR (orderField = val AND id op cursorId)
+   * @param cursor - Decoded cursor object
+   * @param operator - Comparison operator ('>' for forward, '<' for backward)
+   * @internal
+   */
+  private addKeysetCondition(
+    cursor: { [key: string]: unknown; id: number | string },
+    operator: '>' | '<'
+  ): void {
+    if (!this.orderByField) return
+
+    this.cursorConditions = {
+      orderField: this.orderByField,
+      orderValue: cursor[this.orderByField],
+      id: cursor.id,
+      operator,
+    }
+  }
 
   /**
    * Get current AND group (last group in andGroups array)
@@ -545,8 +571,8 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
       (row) => new ModelInstance(this.model, row as Partial<InferSchema<T>>, false)
     ) as ModelInstanceWithRelations<T>[]
 
-    // Load eager relations if any
-    if (this.eagerRelations.length > 0) {
+    // Load eager relations if any (skip when explicitly disabled for optimization)
+    if (this.eagerRelations.length > 0 && !this.skipEagerLoading) {
       const loader = new EagerLoader(this.model, this.eagerRelations)
       await loader.load(instances, db)
     }
@@ -938,6 +964,8 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
     )
 
     // Get total count (respects WHERE conditions and soft delete filter)
+    // Note: count() and all() both call buildWhereClause() - overhead is minimal
+    // as it's just string concatenation, and caching would add complexity
     const total = await this.count(db)
 
     // Calculate pagination metadata
@@ -1018,47 +1046,72 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
     // Normalize and cap limit
     const limit = Math.min(MAX_PAGE_SIZE, Math.max(1, options.limit || DEFAULT_PAGE_SIZE))
+    const isBackward = options.direction === 'backward'
 
-    // Decode cursor and store keyset conditions (applied separately in buildWhereClause)
+    // For backward pagination, temporarily invert the sort direction
+    const originalOrderDirection = this.orderDirection
+    if (isBackward) {
+      this.orderDirection = originalOrderDirection === 'asc' ? 'desc' : 'asc'
+    }
+
+    // Decode cursor and add keyset conditions via helper method
     if (options.cursor) {
       const cursor = decodeCursor(options.cursor)
 
       // Validate cursor has expected fields
       validateCursor(cursor, this.orderByField)
 
-      // Store cursor conditions for proper keyset pagination
-      // These will be ANDed with existing WHERE conditions in buildWhereClause
-      this.cursorConditions = {
-        orderField: this.orderByField,
-        orderValue: cursor[this.orderByField],
-        id: cursor.id,
-        direction: this.orderDirection === 'asc' ? '>' : '<',
+      // Determine comparison operator:
+      // - Forward with ASC: > (get records after cursor)
+      // - Forward with DESC: < (get records before cursor value-wise, which is "after" in DESC order)
+      // - Backward with ASC: < (get records before cursor), ORDER BY DESC, then reverse
+      // - Backward with DESC: > (get records after cursor value-wise), ORDER BY ASC, then reverse
+      let operator: '>' | '<'
+      if (isBackward) {
+        // Invert operator for backward pagination
+        operator = originalOrderDirection === 'asc' ? '<' : '>'
+      } else {
+        operator = originalOrderDirection === 'asc' ? '>' : '<'
       }
+
+      this.addKeysetCondition(cursor, operator)
     }
 
-    // Fetch limit + 1 to determine hasMore
+    // Fetch limit + 1 to determine hasMore (skip eager loading for efficiency)
     this.limitValue = limit + 1
-    const results = await this.all(db)
+    this.skipEagerLoading = true
+    const rawResults = await this.all(db)
 
     // Determine if more records exist
-    const hasMore = results.length > limit
-    const data = hasMore ? results.slice(0, limit) : results
+    const hasMore = rawResults.length > limit
+    let data = hasMore ? rawResults.slice(0, limit) : rawResults
 
-    // Generate next cursor from last item
-    // Use .get() to access ModelInstance data since _data is private
+    // For backward pagination, reverse results to restore original order
+    if (isBackward) {
+      data = data.reverse()
+      // Restore original order direction
+      this.orderDirection = originalOrderDirection
+    }
+
+    // Now perform eager loading only on the final data set
+    if (this.eagerRelations.length > 0 && data.length > 0) {
+      await this.loadEagerRelations(data, db)
+    }
+
+    // Generate nextCursor from last item (for forward navigation)
     const lastItem = data[data.length - 1]
     const nextCursor =
-      hasMore && data.length > 0
+      data.length > 0 && (hasMore || isBackward)
         ? encodeCursor({
             [this.orderByField]: lastItem.get(this.orderByField as keyof InferSchema<T>),
             id: lastItem.get('id' as keyof InferSchema<T>) as number | string,
           } as Cursor)
         : null
 
-    // Generate previous cursor from first item (for bi-directional navigation)
+    // Generate prevCursor from first item (for backward navigation)
     const firstItem = data[0]
     const prevCursor =
-      data.length > 0 && options.cursor
+      data.length > 0 && (options.cursor || isBackward)
         ? encodeCursor({
             [this.orderByField]: firstItem.get(this.orderByField as keyof InferSchema<T>),
             id: firstItem.get('id' as keyof InferSchema<T>) as number | string,
@@ -1068,11 +1121,24 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
     return {
       data,
       meta: {
-        hasMore,
-        nextCursor,
-        prevCursor,
+        hasMore: isBackward ? Boolean(options.cursor) : hasMore,
+        nextCursor: isBackward ? (hasMore ? nextCursor : null) : nextCursor,
+        prevCursor: isBackward ? prevCursor : (options.cursor ? prevCursor : null),
       },
     }
+  }
+
+  /**
+   * Load eager relations for model instances
+   * Used by cursorPaginate to load relations only on final data set
+   * @internal
+   */
+  private async loadEagerRelations(
+    instances: ModelInstance<T>[],
+    db: D1Database
+  ): Promise<void> {
+    const loader = new EagerLoader(this.model, this.eagerRelations)
+    await loader.load(instances as ModelInstanceWithRelations<T>[], db)
   }
 
   /**
@@ -1101,13 +1167,13 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
     const baseWhereClause = buildWhereClauseFromGroups(filteredGroups)
 
     // Add cursor keyset conditions if present
-    // These need special handling: (baseConditions) AND ((orderField > val) OR (orderField = val AND id > cursorId))
+    // These need special handling: (baseConditions) AND ((orderField op val) OR (orderField = val AND id op cursorId))
     if (this.cursorConditions) {
-      const { orderField, orderValue, id, direction } = this.cursorConditions
+      const { orderField, operator } = this.cursorConditions
       const orderDbField = escapeIdentifier(toSnakeCase(orderField))
 
-      // Build keyset condition: (orderField > val) OR (orderField = val AND id > cursorId)
-      const keysetClause = `(${orderDbField} ${direction} ? OR (${orderDbField} = ? AND "id" ${direction} ?))`
+      // Build keyset condition: (orderField op val) OR (orderField = val AND id op cursorId)
+      const keysetClause = `(${orderDbField} ${operator} ? OR (${orderDbField} = ? AND "id" ${operator} ?))`
 
       if (baseWhereClause) {
         // AND the keyset with existing conditions

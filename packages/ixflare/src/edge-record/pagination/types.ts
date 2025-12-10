@@ -129,6 +129,14 @@ export interface CursorPaginationOptions {
    * @default 20
    */
   limit?: number
+
+  /**
+   * Direction of pagination traversal
+   * - 'forward': Get records after the cursor (default)
+   * - 'backward': Get records before the cursor
+   * @default 'forward'
+   */
+  direction?: 'forward' | 'backward'
 }
 
 /**
