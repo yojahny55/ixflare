@@ -8,6 +8,41 @@ export interface RenderOptions {
   streaming?: boolean
   /** Data to inject for hydration */
   bootstrapData?: unknown
+  /** Abort signal for cancellation */
+  abortSignal?: AbortSignal
+  /** Bootstrap scripts to include */
+  bootstrapScripts?: string[]
+  /** Error handler for rendering errors */
+  onError?: (error: unknown) => void
+}
+
+export interface RenderResult {
+  /** HTML string result (for renderToString) */
+  html?: string
+  /** ReadableStream result (for renderToStream) */
+  stream?: ReadableStream
+}
+
+export interface PageProps<T = unknown> {
+  /** Data from loader function */
+  data: T
+  /** Search params from URL */
+  searchParams?: Record<string, string>
+  /** Route params */
+  params?: Record<string, string>
+}
+
+export interface LoaderContext {
+  /** Request object */
+  request: Request
+  /** Route params */
+  params: Record<string, string>
+  /** Search params */
+  searchParams: URLSearchParams
+  /** Cloudflare context */
+  env?: unknown
+  /** Execution context */
+  ctx?: ExecutionContext
 }
 
 export interface IslandConfig {
