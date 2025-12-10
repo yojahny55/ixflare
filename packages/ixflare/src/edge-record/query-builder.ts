@@ -33,6 +33,7 @@ import { ModelInstance } from './crud/model-instance'
 import { toSnakeCase } from './crud/case-transform'
 import { escapeIdentifier } from './schema/type-mapping'
 import { EagerLoader, type ModelInstanceWithRelations } from './relations/eager-loader'
+import { NotFoundError } from './crud/errors'
 
 /**
  * D1 parameter limit - maximum bound parameters per query
@@ -178,7 +179,9 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
   private offsetValue?: number
   private selectedFields?: string[]
   private eagerRelations: string[] = []
+  /** Flag to include soft-deleted records in query results (bypasses global scope filter) */
   private _includeTrashed = false
+  /** Flag to only return soft-deleted records (inverts global scope filter) */
   private _onlyTrashed = false
 
   constructor(private model: Model<T>) {}
@@ -766,10 +769,89 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
   }
 
   /**
+   * Find a record by ID
+   *
+   * Respects soft delete scopes: `withTrashed()` includes deleted records,
+   * `onlyTrashed()` returns only deleted records.
+   *
+   * @param id The record ID to find
+   * @param db The D1Database instance
+   * @returns ModelInstance or null if not found
+   *
+   * @example
+   * ```typescript
+   * // Normal find (excludes soft-deleted)
+   * const user = await User.where({}).find(1, db)
+   *
+   * // Include soft-deleted records
+   * const deletedUser = await User.withTrashed().find(1, db)
+   *
+   * // Find only in soft-deleted records
+   * const trashedUser = await User.onlyTrashed().find(1, db)
+   * ```
+   */
+  async find(id: number | string, db: D1Database): Promise<ModelInstance<T> | null> {
+    // Build WHERE clause with soft delete filter
+    let sql = `SELECT * FROM ${escapeIdentifier(this.model.$tableName)} WHERE id = ?`
+
+    // Apply soft delete filter based on scope
+    if (this.model.$softDeletes && !this._includeTrashed) {
+      if (this._onlyTrashed) {
+        sql += ' AND "deleted_at" IS NOT NULL'
+      } else {
+        sql += ' AND "deleted_at" IS NULL'
+      }
+    }
+
+    const stmt = db.prepare(sql).bind(id)
+    const row = await stmt.first<Record<string, unknown>>()
+
+    if (!row) {
+      return null
+    }
+
+    return new ModelInstance(this.model, row as Partial<InferSchema<T>>, false)
+  }
+
+  /**
+   * Find a record by ID or throw NotFoundError
+   *
+   * Respects soft delete scopes: `withTrashed()` includes deleted records,
+   * `onlyTrashed()` returns only deleted records.
+   *
+   * @param id The record ID to find
+   * @param db The D1Database instance
+   * @returns ModelInstance (never null)
+   * @throws NotFoundError if record not found
+   *
+   * @example
+   * ```typescript
+   * // Normal findOrFail (excludes soft-deleted)
+   * const user = await User.where({}).findOrFail(1, db)
+   *
+   * // Include soft-deleted records
+   * const deletedUser = await User.withTrashed().findOrFail(1, db)
+   * ```
+   */
+  async findOrFail(id: number | string, db: D1Database): Promise<ModelInstance<T>> {
+    const result = await this.find(id, db)
+
+    if (!result) {
+      throw new NotFoundError(
+        `${this.model.$tableName.toUpperCase()}.NOT_FOUND`,
+        `${this.model.$tableName} with id ${id} not found`
+      )
+    }
+
+    return result
+  }
+
+  /**
    * Group by field for aggregation
    *
    * Returns a GroupedQueryBuilder that supports count(), sum(), and avg() aggregations.
    * Results are typed to include the grouped field with its correct type.
+   * Soft delete filter is automatically applied if model has soft deletes enabled.
    *
    * @example
    * ```typescript
@@ -783,7 +865,13 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
    * ```
    */
   groupBy<K extends keyof InferSchema<T> & string>(field: K): GroupedQueryBuilder<T, K> {
-    return new GroupedQueryBuilder<T, K>(this.model, this.andGroups, field)
+    return new GroupedQueryBuilder<T, K>(
+      this.model,
+      this.andGroups,
+      field,
+      this._includeTrashed,
+      this._onlyTrashed
+    )
   }
 
   /**
@@ -864,6 +952,7 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
  * Query builder for grouped aggregations
  *
  * Created by calling `QueryBuilder.groupBy(field)`. Supports count(), sum(), and avg() aggregations.
+ * Automatically applies soft delete filter if the model has soft deletes enabled.
  *
  * @example
  * ```typescript
@@ -885,12 +974,21 @@ export class GroupedQueryBuilder<
   private orderDirection: 'asc' | 'desc' = 'asc'
   private limitValue?: number
   private offsetValue?: number
+  /** Flag to include soft-deleted records in query results */
+  private _includeTrashed: boolean
+  /** Flag to only return soft-deleted records */
+  private _onlyTrashed: boolean
 
   constructor(
     private model: Model<T>,
     private andGroups: WhereCondition[][],
-    private groupField: K & string
-  ) {}
+    private groupField: K & string,
+    includeTrashed = false,
+    onlyTrashed = false
+  ) {
+    this._includeTrashed = includeTrashed
+    this._onlyTrashed = onlyTrashed
+  }
 
   /**
    * Get flattened conditions
@@ -902,9 +1000,27 @@ export class GroupedQueryBuilder<
 
   /**
    * Build WHERE clause using shared utility
+   * Applies global soft delete filter if model has soft deletes enabled
    * @internal
    */
   private buildWhereClause(): string {
+    // Apply soft delete global scope filter
+    if (this.model.$softDeletes && !this._includeTrashed) {
+      // Clone andGroups to avoid mutating original
+      const filteredGroups = this.andGroups.map((group) => [...group])
+
+      // Add soft delete condition to the first group (main WHERE clause)
+      if (this._onlyTrashed) {
+        // Only show deleted records
+        filteredGroups[0].unshift({ field: 'deletedAt', operator: 'IS NOT NULL', value: null })
+      } else {
+        // Default: exclude deleted records
+        filteredGroups[0].unshift({ field: 'deletedAt', operator: 'IS NULL', value: null })
+      }
+
+      return buildWhereClauseFromGroups(filteredGroups)
+    }
+
     return buildWhereClauseFromGroups(this.andGroups)
   }
 

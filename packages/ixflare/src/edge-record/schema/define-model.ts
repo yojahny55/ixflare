@@ -86,8 +86,9 @@ export function defineModel<T extends SchemaDefinition>(
       )
     }
 
-    // Log index recommendation in development
-    if (process.env.NODE_ENV !== 'production') {
+    // Log index recommendation in development (but not during tests)
+    const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true'
+    if (process.env.NODE_ENV !== 'production' && !isTest) {
       console.info(
         `[EdgeRecord] Model '${tableName}' has soft deletes enabled. ` +
           `For optimal query performance, create a partial index:\n` +

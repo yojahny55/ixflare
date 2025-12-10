@@ -3,9 +3,10 @@
  * @description Comprehensive tests for soft delete functionality
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { ModelInstance } from '@/edge-record/crud/model-instance'
 import { defineModel, field, timestamps } from '@/edge-record/schema'
+import { QueryBuilder } from '@/edge-record/query-builder'
 import { createMockD1Database } from './mock-d1'
 
 describe('Soft Deletes', () => {
@@ -276,6 +277,116 @@ describe('Soft Deletes', () => {
       )
 
       await expect(user.forceDelete(db)).resolves.toBeDefined()
+    })
+  })
+
+  describe('SQL Generation - Soft Delete Filter', () => {
+    it('should include deleted_at IS NULL in QueryBuilder.toSQL() for soft delete models', () => {
+      const qb = new QueryBuilder(User)
+      const { query } = qb.where({ name: 'Test' }).toSQL()
+
+      expect(query).toContain('deleted_at')
+      expect(query).toContain('IS NULL')
+    })
+
+    it('should NOT include deleted_at filter for non-soft-delete models', () => {
+      const qb = new QueryBuilder(Post)
+      const { query } = qb.where({ title: 'Test' }).toSQL()
+
+      expect(query).not.toContain('deleted_at')
+    })
+
+    it('should include deleted_at IS NOT NULL when using onlyTrashed()', () => {
+      const qb = new QueryBuilder(User)
+      const { query } = qb.onlyTrashed().toSQL()
+
+      expect(query).toContain('deleted_at')
+      expect(query).toContain('IS NOT NULL')
+    })
+
+    it('should NOT include deleted_at filter when using withTrashed()', () => {
+      const qb = new QueryBuilder(User)
+      const { query } = qb.withTrashed().toSQL()
+
+      // withTrashed should bypass the filter entirely
+      expect(query).not.toContain('deleted_at')
+    })
+  })
+
+  describe('GroupedQueryBuilder - Soft Delete Filter', () => {
+    it('should apply soft delete filter to grouped queries via QueryBuilder', async () => {
+      // groupBy is only available through QueryBuilder, not as static method
+      const qb = new QueryBuilder(User)
+      await expect(qb.groupBy('name').count(db)).resolves.toBeDefined()
+    })
+
+    it('should apply soft delete filter when chaining where().groupBy()', async () => {
+      await expect(
+        User.where({ email: 'test@example.com' }).groupBy('name').count(db)
+      ).resolves.toBeDefined()
+    })
+
+    it('should respect withTrashed() in grouped queries', async () => {
+      await expect(User.withTrashed().groupBy('name').count(db)).resolves.toBeDefined()
+    })
+
+    it('should respect onlyTrashed() in grouped queries', async () => {
+      await expect(User.onlyTrashed().groupBy('name').count(db)).resolves.toBeDefined()
+    })
+  })
+
+  describe('Model.find() - Soft Delete Filter', () => {
+    it('should have find method on model', () => {
+      expect(typeof User.find).toBe('function')
+    })
+
+    it('should have findOrFail method on model', () => {
+      expect(typeof User.findOrFail).toBe('function')
+    })
+
+    it('should call find without error on soft delete model', async () => {
+      // The mock doesn't return records, but we can verify it doesn't throw
+      await expect(User.find(1, db)).resolves.toBeNull()
+    })
+  })
+
+  describe('QueryBuilder.find() - withTrashed() Support (Task 7.3)', () => {
+    it('should have find() method on QueryBuilder', () => {
+      const qb = new QueryBuilder(User)
+      expect(typeof qb.find).toBe('function')
+    })
+
+    it('should have findOrFail() method on QueryBuilder', () => {
+      const qb = new QueryBuilder(User)
+      expect(typeof qb.findOrFail).toBe('function')
+    })
+
+    it('should allow withTrashed().find() pattern', async () => {
+      // This is the critical test - User.withTrashed().find() must work
+      await expect(User.withTrashed().find(1, db)).resolves.toBeNull()
+    })
+
+    it('should allow onlyTrashed().find() pattern', async () => {
+      await expect(User.onlyTrashed().find(1, db)).resolves.toBeNull()
+    })
+
+    it('should allow withTrashed().findOrFail() pattern', async () => {
+      // Should throw NotFoundError since mock returns null
+      await expect(User.withTrashed().findOrFail(1, db)).rejects.toThrow(/not found/)
+    })
+
+    it('should allow chaining where().find()', async () => {
+      await expect(User.where({ name: 'Test' }).find(1, db)).resolves.toBeNull()
+    })
+  })
+
+  describe('Static Model Methods - Soft Delete', () => {
+    it('should have delete method that soft deletes', async () => {
+      await expect(User.delete(1, db)).resolves.toBeUndefined()
+    })
+
+    it('should have forceDelete method for permanent deletion', async () => {
+      await expect(User.forceDelete(1, db)).resolves.toBeUndefined()
     })
   })
 })

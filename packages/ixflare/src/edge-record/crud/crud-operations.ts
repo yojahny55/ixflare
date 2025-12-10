@@ -103,10 +103,16 @@ export async function create<T extends SchemaDefinition>(
 /**
  * Find a record by ID
  *
+ * Respects soft delete filter: if model has soft deletes enabled,
+ * soft-deleted records are excluded by default. Use QueryBuilder.withTrashed()
+ * to include soft-deleted records.
+ *
  * @template T The schema definition type
  * @param model The model definition
  * @param id The record ID to find
  * @param db The D1Database instance
+ * @param options Optional parameters
+ * @param options.withTrashed Include soft-deleted records (default: false)
  * @returns ModelInstance or null if not found
  *
  * @example
@@ -115,14 +121,18 @@ export async function create<T extends SchemaDefinition>(
  * if (user) {
  *   console.log(user.get('email'))
  * }
+ *
+ * // Include soft-deleted records
+ * const deletedUser = await find(User, 1, env.DB, { withTrashed: true })
  * ```
  */
 export async function find<T extends SchemaDefinition>(
   model: Model<T>,
   id: number | string,
-  db: Database
+  db: Database,
+  options?: { withTrashed?: boolean }
 ): Promise<ModelInstance<T> | null> {
-  const storage = (model as any).$storage || 'd1'
+  const storage = model.$storage || 'd1'
 
   // KV
   if (storage === 'kv') {
@@ -148,7 +158,15 @@ export async function find<T extends SchemaDefinition>(
     throw new Error(`Model ${model.$tableName} expects D1Database`)
   }
 
-  const sql = `SELECT * FROM ${escapeIdentifier(model.$tableName)} WHERE id = ?`
+  // Build SQL with soft delete filter if applicable
+  let sql = `SELECT * FROM ${escapeIdentifier(model.$tableName)} WHERE id = ?`
+
+  // Apply soft delete filter if model has soft deletes enabled and not bypassed
+  const softDeletes = model.$softDeletes
+  if (softDeletes && !options?.withTrashed) {
+    sql += ' AND "deleted_at" IS NULL'
+  }
+
   const stmt = db.prepare(sql).bind(id)
   const row = await stmt.first<Record<string, unknown>>()
 
@@ -163,10 +181,15 @@ export async function find<T extends SchemaDefinition>(
 /**
  * Find a record by ID or throw NotFoundError
  *
+ * Respects soft delete filter: if model has soft deletes enabled,
+ * soft-deleted records are excluded by default.
+ *
  * @template T The schema definition type
  * @param model The model definition
  * @param id The record ID to find
  * @param db The D1Database instance
+ * @param options Optional parameters
+ * @param options.withTrashed Include soft-deleted records (default: false)
  * @returns ModelInstance (never null)
  * @throws NotFoundError if record not found
  *
@@ -185,9 +208,10 @@ export async function find<T extends SchemaDefinition>(
 export async function findOrFail<T extends SchemaDefinition>(
   model: Model<T>,
   id: number | string,
-  db: Database
+  db: Database,
+  options?: { withTrashed?: boolean }
 ): Promise<ModelInstance<T>> {
-  const result = await find(model, id, db)
+  const result = await find(model, id, db, options)
 
   if (!result) {
     throw new NotFoundError(
@@ -209,11 +233,16 @@ export async function findOrFail<T extends SchemaDefinition>(
  * For atomic upserts on unique columns, use {@link upsertAtomic} instead,
  * which uses SQLite's `INSERT ... ON CONFLICT` syntax.
  *
+ * Respects soft delete filter: soft-deleted records are excluded from matching
+ * by default, so upserting will create a new record if the only match is soft-deleted.
+ *
  * @template T The schema definition type
  * @param model The model definition
  * @param match Fields to match on to find existing record
  * @param values Values to set (create or update)
  * @param db The D1Database instance
+ * @param options Optional parameters
+ * @param options.withTrashed Include soft-deleted records in match (default: false)
  * @returns ModelInstance (created or updated)
  *
  * @example
@@ -230,9 +259,10 @@ export async function upsert<T extends SchemaDefinition>(
   model: Model<T>,
   match: Partial<InferSchema<T>>,
   values: Partial<InferSchema<T>>,
-  db: Database
+  db: Database,
+  options?: { withTrashed?: boolean }
 ): Promise<ModelInstance<T>> {
-  const storage = (model as any).$storage || 'd1'
+  const storage = model.$storage || 'd1'
 
   if (storage !== 'd1') {
     // For KV/DO, assuming match contains ID.
@@ -254,9 +284,13 @@ export async function upsert<T extends SchemaDefinition>(
   const matchFields = Object.keys(match)
   const matchValues = matchFields.map((k) => match[k as keyof InferSchema<T>])
 
-  const whereClause = matchFields
-    .map((f) => `${escapeIdentifier(toSnakeCase(f))} = ?`)
-    .join(' AND ')
+  let whereClause = matchFields.map((f) => `${escapeIdentifier(toSnakeCase(f))} = ?`).join(' AND ')
+
+  // Apply soft delete filter if model has soft deletes enabled and not bypassed
+  if (model.$softDeletes && !options?.withTrashed) {
+    whereClause += ` AND ${escapeIdentifier('deleted_at')} IS NULL`
+  }
+
   const sql = `SELECT * FROM ${escapeIdentifier(model.$tableName)} WHERE ${whereClause}`
   const stmt = d1.prepare(sql).bind(...matchValues)
   const existing = await stmt.first<Record<string, unknown>>()
@@ -408,7 +442,7 @@ export async function createMany<T extends SchemaDefinition>(
     return []
   }
 
-  const storage = (model as any).$storage || 'd1'
+  const storage = model.$storage || 'd1'
   if (storage !== 'd1') {
     // Sequential create for KV/DO
     const instances: ModelInstance<T>[] = []
