@@ -41,6 +41,9 @@ export interface ModelOptions extends StorageOptions {
 
   /** Cache configuration for hybrid storage */
   cache?: CacheOptions
+
+  /** Enable soft deletes (requires deletedAt field in schema) */
+  softDeletes?: boolean
 }
 
 /**
@@ -62,4 +65,6 @@ export interface Model<TSchema extends SchemaDefinition> {
   $storage: StorageTier
   /** Cache configuration for this model (if caching enabled) */
   $cacheConfig?: CacheOptions
+  /** Soft deletes enabled flag */
+  $softDeletes?: boolean
 }

@@ -178,6 +178,8 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
   private offsetValue?: number
   private selectedFields?: string[]
   private eagerRelations: string[] = []
+  private _includeTrashed = false
+  private _onlyTrashed = false
 
   constructor(private model: Model<T>) {}
 
@@ -458,6 +460,47 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
   }
 
   /**
+   * Include soft-deleted records in query results
+   *
+   * By default, models with soft deletes enabled automatically filter out deleted records.
+   * Use this method to include soft-deleted records in the query.
+   *
+   * @example
+   * ```typescript
+   * // Include soft-deleted users
+   * const allUsers = await User.withTrashed().all(db)
+   *
+   * // Find user even if soft-deleted
+   * const user = await User.withTrashed().find(1, db)
+   * ```
+   */
+  withTrashed(): this {
+    this._includeTrashed = true
+    this._onlyTrashed = false
+    return this
+  }
+
+  /**
+   * Only return soft-deleted records
+   *
+   * Use this method to query only records that have been soft-deleted.
+   *
+   * @example
+   * ```typescript
+   * // Get only deleted users
+   * const deletedUsers = await User.onlyTrashed().all(db)
+   *
+   * // Count deleted records
+   * const deletedCount = await User.onlyTrashed().count(db)
+   * ```
+   */
+  onlyTrashed(): this {
+    this._onlyTrashed = true
+    this._includeTrashed = false
+    return this
+  }
+
+  /**
    * Execute query and return all matching records
    * Returns ModelInstances when selecting all fields, plain objects when specific fields selected
    */
@@ -547,11 +590,47 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
   /**
    * Bulk delete matching records
+   * If model has soft deletes enabled, performs UPDATE to set deletedAt instead of DELETE
    * @returns Number of deleted rows
    */
   async delete(db: D1Database): Promise<number> {
+    // Check if soft deletes enabled
+    if (this.model.$softDeletes) {
+      // Soft delete: UPDATE deletedAt = Date.now()
+      const now = Date.now()
+      const updates: Record<string, unknown> = { deletedAt: now }
+
+      // Also update updatedAt if exists
+      if ('updatedAt' in this.model.$schema) {
+        updates.updatedAt = now
+      }
+
+      return this.update(updates as Partial<InferSchema<T>>, db)
+    }
+
+    // Hard delete
     const whereClause = this.buildWhereClause()
-    const whereParams = this.conditions.map((c) => c.value)
+    const whereParams = this.conditions
+      .filter((c) => c.operator !== 'IS NULL' && c.operator !== 'IS NOT NULL')
+      .map((c) => c.value)
+
+    const sql = `DELETE FROM ${escapeIdentifier(this.model.$tableName)}${whereClause}`
+    const stmt = db.prepare(sql).bind(...whereParams)
+    const result = await stmt.run()
+
+    return result.meta.changes
+  }
+
+  /**
+   * Permanently delete matching records (bypass soft deletes)
+   * Always performs hard DELETE even if soft deletes are enabled
+   * @returns Number of deleted rows
+   */
+  async forceDelete(db: D1Database): Promise<number> {
+    const whereClause = this.buildWhereClause()
+    const whereParams = this.conditions
+      .filter((c) => c.operator !== 'IS NULL' && c.operator !== 'IS NOT NULL')
+      .map((c) => c.value)
 
     const sql = `DELETE FROM ${escapeIdentifier(this.model.$tableName)}${whereClause}`
     const stmt = db.prepare(sql).bind(...whereParams)
@@ -709,9 +788,27 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
 
   /**
    * Build WHERE clause from AND groups with OR logic
+   * Applies global soft delete filter if model has soft deletes enabled
    * @internal
    */
   private buildWhereClause(): string {
+    // Apply soft delete global scope filter
+    if (this.model.$softDeletes && !this._includeTrashed) {
+      // Clone andGroups to avoid mutating original
+      const filteredGroups = this.andGroups.map((group) => [...group])
+
+      // Add soft delete condition to the first group (main WHERE clause)
+      if (this._onlyTrashed) {
+        // Only show deleted records
+        filteredGroups[0].unshift({ field: 'deletedAt', operator: 'IS NOT NULL', value: null })
+      } else {
+        // Default: exclude deleted records
+        filteredGroups[0].unshift({ field: 'deletedAt', operator: 'IS NULL', value: null })
+      }
+
+      return buildWhereClauseFromGroups(filteredGroups)
+    }
+
     return buildWhereClauseFromGroups(this.andGroups)
   }
 

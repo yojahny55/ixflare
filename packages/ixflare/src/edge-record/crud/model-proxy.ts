@@ -98,6 +98,26 @@ export interface ModelCrudMethods<T extends SchemaDefinition> {
   with(...relations: string[]): QueryBuilder<T>
 
   /**
+   * Include soft-deleted records in query
+   *
+   * @example
+   * ```typescript
+   * const allUsers = await User.withTrashed().all(db)
+   * ```
+   */
+  withTrashed(): QueryBuilder<T>
+
+  /**
+   * Only return soft-deleted records
+   *
+   * @example
+   * ```typescript
+   * const deletedUsers = await User.onlyTrashed().all(db)
+   * ```
+   */
+  onlyTrashed(): QueryBuilder<T>
+
+  /**
    * Upsert a record (create or update based on match)
    *
    * Note: For KV/DO, this does a simple put (overwrites by key)
@@ -122,6 +142,14 @@ export interface ModelCrudMethods<T extends SchemaDefinition> {
    * @param db Storage binding
    */
   delete(id: number | string, db: Database): Promise<void>
+
+  /**
+   * Permanently delete a record by ID (bypass soft deletes)
+   *
+   * @param id Record ID
+   * @param db Storage binding
+   */
+  forceDelete(id: number | string, db: Database): Promise<void>
 
   /**
    * Manually invalidate a cache entry
@@ -313,6 +341,28 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
       return qb.with(...relations)
     },
 
+    withTrashed(): QueryBuilder<T> {
+      if (model.$storage !== 'd1') {
+        console.warn(
+          `[EdgeRecord] withTrashed() only works with D1 storage. ` +
+            `Model '${model.$tableName}' uses '${model.$storage}' storage.`
+        )
+      }
+      const qb = new QueryBuilder(model)
+      return qb.withTrashed()
+    },
+
+    onlyTrashed(): QueryBuilder<T> {
+      if (model.$storage !== 'd1') {
+        console.warn(
+          `[EdgeRecord] onlyTrashed() only works with D1 storage. ` +
+            `Model '${model.$tableName}' uses '${model.$storage}' storage.`
+        )
+      }
+      const qb = new QueryBuilder(model)
+      return qb.onlyTrashed()
+    },
+
     async upsert(
       match: Partial<InferSchema<T>>,
       values: Partial<InferSchema<T>>,
@@ -412,6 +462,24 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
     async delete(id: number | string, db: Database): Promise<void> {
       const tier = model.$storage
 
+      // Soft delete for D1 with soft deletes enabled
+      if (tier === 'd1' && model.$softDeletes && isD1Database(db)) {
+        const now = Date.now()
+        const { escapeIdentifier } = await import('@/edge-record/schema/type-mapping')
+
+        const updates: string[] = ['deleted_at = ?']
+        const params: unknown[] = [now]
+
+        if ('updatedAt' in model.$schema) {
+          updates.push('updated_at = ?')
+          params.push(now)
+        }
+
+        const sql = `UPDATE ${escapeIdentifier(model.$tableName)} SET ${updates.join(', ')} WHERE id = ?`
+        await db.prepare(sql).bind(...params, id).run()
+        return
+      }
+
       if (tier === 'kv' && isKVNamespace(db)) {
         const adapter = new KVAdapter(model, db)
         await adapter.delete(String(id))
@@ -424,7 +492,34 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
         return
       }
 
-      // Default to D1
+      // Default to D1 hard delete (soft deletes not enabled)
+      if (!isD1Database(db)) {
+        throw new Error(
+          `Storage tier mismatch: Model '${model.$tableName}' has $storage='${tier}' but received incompatible binding.`
+        )
+      }
+
+      const { escapeIdentifier } = await import('@/edge-record/schema/type-mapping')
+      const sql = `DELETE FROM ${escapeIdentifier(model.$tableName)} WHERE id = ?`
+      await db.prepare(sql).bind(id).run()
+    },
+
+    async forceDelete(id: number | string, db: Database): Promise<void> {
+      const tier = model.$storage
+
+      if (tier === 'kv' && isKVNamespace(db)) {
+        const adapter = new KVAdapter(model, db)
+        await adapter.delete(String(id))
+        return
+      }
+
+      if (tier === 'do' && isDurableObjectStorage(db)) {
+        const adapter = new DOAdapter(model, db)
+        await adapter.delete(String(id))
+        return
+      }
+
+      // Default to D1 - always hard delete regardless of soft deletes setting
       if (!isD1Database(db)) {
         throw new Error(
           `Storage tier mismatch: Model '${model.$tableName}' has $storage='${tier}' but received incompatible binding.`

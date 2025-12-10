@@ -265,13 +265,52 @@ export class ModelInstance<T extends SchemaDefinition> {
 
   /**
    * Delete this record from database
-   */
-  /**
-   * Delete this record from database
+   * If soft deletes are enabled, sets deletedAt timestamp instead of removing the record
    */
   async delete(db: StorageBinding, kv?: KVNamespace): Promise<boolean> {
     const storage: StorageTier = this._model.$storage || 'd1'
 
+    // Check if soft deletes enabled for D1 storage
+    if (storage === 'd1' && this._model.$softDeletes) {
+      const d1 = db as D1Database
+      const now = Date.now()
+
+      // Set deletedAt and updatedAt timestamps
+      ;(this._data as Record<string, unknown>)['deletedAt'] = now
+      if ('updatedAt' in this._model.$schema) {
+        ;(this._data as Record<string, unknown>)['updatedAt'] = now
+      }
+
+      // Transform to snake_case for DB
+      const dbData: Record<string, unknown> = { deleted_at: now }
+      if ('updatedAt' in this._model.$schema) {
+        dbData.updated_at = now
+      }
+
+      const fields = Object.keys(dbData)
+      const values = fields.map((f) => dbData[f])
+      const setClause = fields.map((f) => `${escapeIdentifier(f)} = ?`).join(', ')
+
+      const sql = `UPDATE ${escapeIdentifier(this._model.$tableName)} SET ${setClause} WHERE id = ?`
+      const stmt = d1.prepare(sql).bind(...values, this._data.id)
+      const result = await stmt.run()
+
+      const wasDeleted = result.meta.changes > 0
+
+      // Invalidate cache if configured and KV provided
+      if (wasDeleted && this._model.$cacheConfig?.enabled && kv) {
+        const pkField = getPkField(this._model)
+        const id = this._data[pkField]
+        if (id) {
+          const cacheKey = `${this._model.$tableName}:${String(id)}`
+          await kv.delete(cacheKey)
+        }
+      }
+
+      return wasDeleted
+    }
+
+    // Hard delete for KV storage
     if (storage === 'kv') {
       if (!isKVNamespace(db)) throw new Error('Invalid DB binding for KV model')
       const pkField = getPkField(this._model)
@@ -283,6 +322,7 @@ export class ModelInstance<T extends SchemaDefinition> {
       return false
     }
 
+    // Hard delete for DO storage
     if (storage === 'do') {
       if (!isDurableObjectStorage(db)) throw new Error('Invalid DB binding for DO model')
       const pkField = getPkField(this._model)
@@ -294,7 +334,124 @@ export class ModelInstance<T extends SchemaDefinition> {
       return false
     }
 
-    // D1
+    // Hard delete for D1 (soft deletes not enabled)
+    const d1 = db as D1Database
+    const sql = `DELETE FROM ${escapeIdentifier(this._model.$tableName)} WHERE id = ?`
+    const stmt = d1.prepare(sql).bind(this._data.id)
+    const result = await stmt.run()
+
+    const wasDeleted = result.meta.changes > 0
+
+    // Invalidate cache if configured and KV provided
+    if (wasDeleted && this._model.$cacheConfig?.enabled && kv) {
+      const pkField = getPkField(this._model)
+      const id = this._data[pkField]
+      if (id) {
+        const cacheKey = `${this._model.$tableName}:${String(id)}`
+        await kv.delete(cacheKey)
+      }
+    }
+
+    return wasDeleted
+  }
+
+  /**
+   * Restore a soft-deleted record (sets deletedAt to null)
+   * Only works for models with soft deletes enabled
+   * @throws Error if soft deletes are not enabled or record is not soft-deleted
+   */
+  async restore(db: StorageBinding, kv?: KVNamespace): Promise<this> {
+    // Validate soft deletes are enabled
+    if (!this._model.$softDeletes) {
+      throw new Error(
+        `Cannot restore: Model '${this._model.$tableName}' does not have soft deletes enabled`
+      )
+    }
+
+    // Validate record is currently soft-deleted
+    const deletedAt = this._data['deletedAt' as keyof InferSchema<T>]
+    if (!deletedAt) {
+      throw new Error('Cannot restore: Record is not soft-deleted')
+    }
+
+    const storage: StorageTier = this._model.$storage || 'd1'
+
+    // Only D1 supports soft deletes
+    if (storage !== 'd1') {
+      throw new Error('Soft deletes and restore() only work with D1 storage')
+    }
+
+    const d1 = db as D1Database
+    const now = Date.now()
+
+    // Set deletedAt to null and update updatedAt
+    ;(this._data as Record<string, unknown>)['deletedAt'] = null
+    if ('updatedAt' in this._model.$schema) {
+      ;(this._data as Record<string, unknown>)['updatedAt'] = now
+    }
+
+    // Transform to snake_case for DB
+    const dbData: Record<string, unknown> = { deleted_at: null }
+    if ('updatedAt' in this._model.$schema) {
+      dbData.updated_at = now
+    }
+
+    const fields = Object.keys(dbData)
+    const values = fields.map((f) => dbData[f])
+    const setClause = fields.map((f) => `${escapeIdentifier(f)} = ?`).join(', ')
+
+    const sql = `UPDATE ${escapeIdentifier(this._model.$tableName)} SET ${setClause} WHERE id = ?`
+    const stmt = d1.prepare(sql).bind(...values, this._data.id)
+    await stmt.run()
+
+    // Update original data
+    this._original = { ...this._data }
+
+    // Invalidate cache if configured and KV provided
+    if (this._model.$cacheConfig?.enabled && kv) {
+      const pkField = getPkField(this._model)
+      const id = this._data[pkField]
+      if (id) {
+        const cacheKey = `${this._model.$tableName}:${String(id)}`
+        await kv.delete(cacheKey)
+      }
+    }
+
+    return this
+  }
+
+  /**
+   * Permanently delete this record from database (bypass soft deletes)
+   * Always performs a hard DELETE even if soft deletes are enabled
+   */
+  async forceDelete(db: StorageBinding, kv?: KVNamespace): Promise<boolean> {
+    const storage: StorageTier = this._model.$storage || 'd1'
+
+    // KV storage hard delete
+    if (storage === 'kv') {
+      if (!isKVNamespace(db)) throw new Error('Invalid DB binding for KV model')
+      const pkField = getPkField(this._model)
+      const id = this._data[pkField]
+      if (id) {
+        await new KVAdapter(this._model, db).delete(String(id))
+        return true
+      }
+      return false
+    }
+
+    // DO storage hard delete
+    if (storage === 'do') {
+      if (!isDurableObjectStorage(db)) throw new Error('Invalid DB binding for DO model')
+      const pkField = getPkField(this._model)
+      const id = this._data[pkField]
+      if (id) {
+        await new DOAdapter(this._model, db).delete(String(id))
+        return true
+      }
+      return false
+    }
+
+    // D1 hard delete (ignores soft deletes setting)
     const d1 = db as D1Database
     const sql = `DELETE FROM ${escapeIdentifier(this._model.$tableName)} WHERE id = ?`
     const stmt = d1.prepare(sql).bind(this._data.id)

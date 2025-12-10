@@ -77,6 +77,25 @@ export function defineModel<T extends SchemaDefinition>(
     console.warn(`[EdgeRecord] Model '${tableName}' storage warnings:`, tierResult.warnings)
   }
 
+  // Validate soft deletes configuration
+  if (options?.softDeletes) {
+    if (!('deletedAt' in schema)) {
+      throw new Error(
+        `[EdgeRecord] Model '${tableName}' has softDeletes: true but is missing 'deletedAt' field in schema. ` +
+          `Add deletedAt: field.datetime().nullable() to your schema.`
+      )
+    }
+
+    // Log index recommendation in development
+    if (process.env.NODE_ENV !== 'production') {
+      console.info(
+        `[EdgeRecord] Model '${tableName}' has soft deletes enabled. ` +
+          `For optimal query performance, create a partial index:\n` +
+          `  CREATE INDEX idx_${tableName}_not_deleted ON ${tableName}(id) WHERE deleted_at IS NULL;`
+      )
+    }
+  }
+
   // Create final model with all properties
   const model = Object.defineProperties(intermediateModel, {
     $zodSchema: {
@@ -99,6 +118,11 @@ export function defineModel<T extends SchemaDefinition>(
     },
     $cacheConfig: {
       value: options?.cache,
+      enumerable: true,
+      writable: false,
+    },
+    $softDeletes: {
+      value: options?.softDeletes ?? false,
       enumerable: true,
       writable: false,
     },
