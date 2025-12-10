@@ -84,10 +84,58 @@ export class CacheLayer<T extends SchemaDefinition> {
   /**
    * Invalidate cache entry
    *
-   * Call this after updates or deletes to maintain consistency
+   * Call this after updates or deletes to maintain consistency.
+   * Respects the configured invalidation strategy.
    */
   async invalidate(id: string | number): Promise<void> {
-    await this.kvAdapter.delete(String(id))
+    const strategy = this.options.invalidationStrategy || 'immediate'
+
+    if (strategy === 'immediate') {
+      await this.kvAdapter.delete(String(id))
+    }
+    // 'lazy' and 'none' strategies don't invalidate
+  }
+
+  /**
+   * Write-through: Update both D1 and KV simultaneously
+   *
+   * Ensures cache is immediately populated after write.
+   * Used when writeThrough option is enabled.
+   *
+   * @param id Record ID
+   * @param data Partial data to update
+   */
+  async writeThrough(id: string | number, data: Partial<InferSchema<T>>): Promise<void> {
+    const dbData = this.transformToDbFormat(data)
+    const fields = Object.keys(dbData).filter((k) => k !== 'id')
+    const values = fields.map((k) => dbData[k])
+
+    // Build SET clause for UPDATE
+    const setClause = fields.map((f) => `${escapeIdentifier(f)} = ?`).join(', ')
+    const sql = `UPDATE ${this.escapedTableName} SET ${setClause} WHERE id = ?`
+
+    // Write to both D1 and KV simultaneously
+    await Promise.all([
+      this.sourceDb
+        .prepare(sql)
+        .bind(...values, id)
+        .run(),
+      this.kvAdapter.put(String(id), data),
+    ])
+  }
+
+  /**
+   * Transform data to snake_case DB format
+   * @private
+   */
+  private transformToDbFormat(data: Partial<InferSchema<T>>): Record<string, unknown> {
+    const result: Record<string, unknown> = {}
+    for (const key in data) {
+      // Convert camelCase to snake_case
+      const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+      result[snakeKey] = data[key]
+    }
+    return result
   }
 
   /**

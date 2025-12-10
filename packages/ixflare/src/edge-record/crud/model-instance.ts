@@ -271,34 +271,53 @@ export class ModelInstance<T extends SchemaDefinition> {
 
   /**
    * Update fields and save to database
+   *
+   * Automatically invalidates cache if caching is enabled,
+   * respecting the configured invalidation strategy.
    */
-  /**
-   * Update fields and save to database
-   */
-  async update(data: Partial<InferSchema<T>>, db: StorageBinding, kv?: KVNamespace): Promise<this> {
+  async update(data: Partial<InferSchema<T>>, db: StorageBinding): Promise<this> {
     // Merge data first
     Object.assign(this._data, data)
     // Save handles routing and dirty tracking
     await this.save(db)
 
-    // Invalidate cache if configured and KV provided
-    if (this._model.$cacheConfig?.enabled && kv) {
-      const pkField = getPkField(this._model)
-      const id = this._data[pkField]
-      if (id) {
-        const cacheKey = `${this._model.$tableName}:${String(id)}`
-        await kv.delete(cacheKey)
-      }
-    }
+    // Automatic cache invalidation if configured
+    await this.invalidateCacheIfNeeded()
 
     return this
   }
 
   /**
-   * Delete this record from database
-   * If soft deletes are enabled, sets deletedAt timestamp instead of removing the record
+   * Invalidate cache entry for this instance if caching is enabled
+   * @private
    */
-  async delete(db: StorageBinding, kv?: KVNamespace): Promise<boolean> {
+  private async invalidateCacheIfNeeded(): Promise<void> {
+    const cacheConfig = this._model.$cacheConfig
+    if (!cacheConfig?.enabled || !cacheConfig.kv) {
+      return
+    }
+
+    // Respect invalidation strategy
+    const strategy = cacheConfig.invalidationStrategy || 'immediate'
+    if (strategy !== 'immediate') {
+      return // 'lazy' or 'none' don't invalidate
+    }
+
+    const pkField = getPkField(this._model)
+    const id = this._data[pkField]
+    if (id) {
+      const cacheKey = `${this._model.$tableName}:${String(id)}`
+      await cacheConfig.kv.delete(cacheKey)
+    }
+  }
+
+  /**
+   * Delete this record from database
+   *
+   * If soft deletes are enabled, sets deletedAt timestamp instead of removing the record.
+   * Automatically invalidates cache if caching is enabled.
+   */
+  async delete(db: StorageBinding): Promise<boolean> {
     const storage: StorageTier = this._model.$storage || 'd1'
 
     // Check if soft deletes enabled for D1 storage
@@ -328,14 +347,9 @@ export class ModelInstance<T extends SchemaDefinition> {
 
       const wasDeleted = result.meta.changes > 0
 
-      // Invalidate cache if configured and KV provided
-      if (wasDeleted && this._model.$cacheConfig?.enabled && kv) {
-        const pkField = getPkField(this._model)
-        const id = this._data[pkField]
-        if (id) {
-          const cacheKey = `${this._model.$tableName}:${String(id)}`
-          await kv.delete(cacheKey)
-        }
+      // Automatic cache invalidation
+      if (wasDeleted) {
+        await this.invalidateCacheIfNeeded()
       }
 
       return wasDeleted
@@ -373,14 +387,9 @@ export class ModelInstance<T extends SchemaDefinition> {
 
     const wasDeleted = result.meta.changes > 0
 
-    // Invalidate cache if configured and KV provided
-    if (wasDeleted && this._model.$cacheConfig?.enabled && kv) {
-      const pkField = getPkField(this._model)
-      const id = this._data[pkField]
-      if (id) {
-        const cacheKey = `${this._model.$tableName}:${String(id)}`
-        await kv.delete(cacheKey)
-      }
+    // Automatic cache invalidation
+    if (wasDeleted) {
+      await this.invalidateCacheIfNeeded()
     }
 
     return wasDeleted
@@ -388,10 +397,13 @@ export class ModelInstance<T extends SchemaDefinition> {
 
   /**
    * Restore a soft-deleted record (sets deletedAt to null)
-   * Only works for models with soft deletes enabled
+   *
+   * Only works for models with soft deletes enabled.
+   * Automatically invalidates cache if caching is enabled.
+   *
    * @throws Error if soft deletes are not enabled or record is not soft-deleted
    */
-  async restore(db: StorageBinding, kv?: KVNamespace): Promise<this> {
+  async restore(db: StorageBinding): Promise<this> {
     // Validate soft deletes are enabled
     if (!this._model.$softDeletes) {
       throw new Error(
@@ -438,24 +450,19 @@ export class ModelInstance<T extends SchemaDefinition> {
     // Update original data
     this._original = { ...this._data }
 
-    // Invalidate cache if configured and KV provided
-    if (this._model.$cacheConfig?.enabled && kv) {
-      const pkField = getPkField(this._model)
-      const id = this._data[pkField]
-      if (id) {
-        const cacheKey = `${this._model.$tableName}:${String(id)}`
-        await kv.delete(cacheKey)
-      }
-    }
+    // Automatic cache invalidation
+    await this.invalidateCacheIfNeeded()
 
     return this
   }
 
   /**
    * Permanently delete this record from database (bypass soft deletes)
-   * Always performs a hard DELETE even if soft deletes are enabled
+   *
+   * Always performs a hard DELETE even if soft deletes are enabled.
+   * Automatically invalidates cache if caching is enabled.
    */
-  async forceDelete(db: StorageBinding, kv?: KVNamespace): Promise<boolean> {
+  async forceDelete(db: StorageBinding): Promise<boolean> {
     const storage: StorageTier = this._model.$storage || 'd1'
 
     // KV storage hard delete
@@ -465,6 +472,7 @@ export class ModelInstance<T extends SchemaDefinition> {
       const id = this._data[pkField]
       if (id) {
         await new KVAdapter(this._model, db).delete(String(id))
+        await this.invalidateCacheIfNeeded()
         return true
       }
       return false
@@ -477,6 +485,7 @@ export class ModelInstance<T extends SchemaDefinition> {
       const id = this._data[pkField]
       if (id) {
         await new DOAdapter(this._model, db).delete(String(id))
+        await this.invalidateCacheIfNeeded()
         return true
       }
       return false
@@ -490,14 +499,9 @@ export class ModelInstance<T extends SchemaDefinition> {
 
     const wasDeleted = result.meta.changes > 0
 
-    // Invalidate cache if configured and KV provided
-    if (wasDeleted && this._model.$cacheConfig?.enabled && kv) {
-      const pkField = getPkField(this._model)
-      const id = this._data[pkField]
-      if (id) {
-        const cacheKey = `${this._model.$tableName}:${String(id)}`
-        await kv.delete(cacheKey)
-      }
+    // Automatic cache invalidation
+    if (wasDeleted) {
+      await this.invalidateCacheIfNeeded()
     }
 
     return wasDeleted

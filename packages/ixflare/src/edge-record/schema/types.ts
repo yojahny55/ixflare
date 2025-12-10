@@ -6,6 +6,7 @@
 import type { z } from 'zod'
 import type { FieldBuilder } from './field'
 import type { StorageTier, StorageOptions, CacheOptions } from '@/edge-record/storage/types'
+import type { ConsistencyLevel } from '@/edge-record/consistency/types'
 
 /**
  * Schema definition - a record of field names to FieldBuilder instances
@@ -44,6 +45,9 @@ export interface ModelOptions extends StorageOptions {
 
   /** Enable soft deletes (requires deletedAt field in schema) */
   softDeletes?: boolean
+
+  /** Consistency level for multi-tier data operations */
+  consistency?: ConsistencyLevel
 }
 
 /**
@@ -67,4 +71,6 @@ export interface Model<TSchema extends SchemaDefinition> {
   $cacheConfig?: CacheOptions
   /** Soft deletes enabled flag */
   $softDeletes?: boolean
+  /** Consistency level for this model */
+  $consistency?: ConsistencyLevel
 }

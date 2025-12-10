@@ -72,6 +72,8 @@ export type UpdateInput<T extends SchemaDefinition> = Partial<Omit<InferSchema<T
 /**
  * Create a new record in the database
  *
+ * Automatically handles cache population if write-through caching is enabled.
+ *
  * @template T The schema definition type
  * @param model The model definition
  * @param data The data to insert (excluding id, createdAt, updatedAt)
@@ -96,6 +98,24 @@ export async function create<T extends SchemaDefinition>(
 
   // Save will handle INSERT, timestamps, and case transformation
   await instance.save(db)
+
+  // Write-through caching: populate cache immediately if enabled
+  if (model.$cacheConfig?.enabled && model.$cacheConfig.writeThrough && model.$cacheConfig.kv) {
+    const id = (instance as unknown as Record<string, unknown>)['id']
+    if (id) {
+      const cacheKey = `${model.$tableName}:${String(id)}`
+      const instanceData = instance.toJSON()
+      // Transform to snake_case for KV storage
+      const snakeCaseData: Record<string, unknown> = {}
+      for (const key in instanceData) {
+        const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+        snakeCaseData[snakeKey] = instanceData[key as keyof InferSchema<T>]
+      }
+      await model.$cacheConfig.kv.put(cacheKey, JSON.stringify(snakeCaseData), {
+        expirationTtl: model.$cacheConfig.ttl || 300,
+      })
+    }
+  }
 
   return instance
 }

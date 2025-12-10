@@ -85,6 +85,21 @@ export type {
   StorageBinding,
 } from './storage'
 
+// Consistency exports (Story 3.12)
+export {
+  StrongConsistencyAdapter,
+  EventualConsistencyAdapter,
+  ConsistencyCoordinator,
+} from './consistency'
+export type {
+  InvalidationStrategy,
+  WriteThroughOptions,
+  CoordinatorOptions,
+  ExtendedCacheOptions,
+  SyncStatus,
+} from './consistency'
+export type { ConsistencyLevel as ConsistencyLevelType } from './consistency'
+
 // Transaction exports (Story 3.8)
 export { transaction } from './transaction'
 export type {

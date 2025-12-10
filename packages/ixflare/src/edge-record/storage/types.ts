@@ -1,6 +1,14 @@
+import type {
+  ConsistencyLevel as ConsistencyLevelType,
+  InvalidationStrategy,
+} from '@/edge-record/consistency/types'
+
 export type StorageTier = 'kv' | 'd1' | 'do'
 
-export type ConsistencyLevel = 'eventual' | 'strong'
+/**
+ * @deprecated Use ConsistencyLevel from '@/edge-record/consistency/types' instead
+ */
+export type ConsistencyLevel = ConsistencyLevelType
 
 /**
  * Storage binding type - the actual Cloudflare binding passed at runtime
@@ -39,7 +47,7 @@ export interface StorageOptions {
   /** TTL in seconds for KV storage (auto-expire) */
   ttl?: number
   /** Consistency level - 'strong' triggers DO selection */
-  consistency?: ConsistencyLevel
+  consistency?: ConsistencyLevelType
 }
 
 export interface CacheOptions {
@@ -55,6 +63,10 @@ export interface CacheOptions {
   strategy?: 'read-heavy' | 'write-heavy' | 'balanced'
   /** KV namespace for caching (used for cache invalidation in transactions) */
   kv?: KVNamespace
+  /** Cache invalidation strategy (default: 'immediate') */
+  invalidationStrategy?: InvalidationStrategy
+  /** Write-through caching (populate cache immediately on writes) */
+  writeThrough?: boolean
 }
 
 export interface ExtendedModelOptions extends StorageOptions {

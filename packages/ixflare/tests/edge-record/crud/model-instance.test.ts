@@ -345,6 +345,8 @@ describe('ModelInstance', () => {
     }
 
     it('should invalidate cache on update() when cache enabled and KV provided - AC4', async () => {
+      const kv = new MockKV()
+
       const CachedUser = defineModel(
         'users_cache_inv_test',
         {
@@ -358,31 +360,32 @@ describe('ModelInstance', () => {
           cache: {
             enabled: true,
             ttl: 300,
+            kv: kv as unknown as KVNamespace, // Configure KV in model for automatic invalidation
           },
         }
       )
-
-      const kv = new MockKV()
 
       // Pre-populate cache
       const cacheKey = 'users_cache_inv_test:1'
       await kv.put(cacheKey, JSON.stringify({ id: 1, name: 'Old Name' }))
       expect(kv.has(cacheKey)).toBe(true)
 
-      // Create instance and update with KV
+      // Create instance and update (automatic invalidation)
       const instance = new ModelInstance(
         CachedUser,
         { id: 1, email: 'test@example.com', name: 'Test' },
         false
       )
 
-      await instance.update({ name: 'New Name' }, db, kv as unknown as KVNamespace)
+      await instance.update({ name: 'New Name' }, db)
 
       // Cache should be invalidated
       expect(kv.has(cacheKey)).toBe(false)
     })
 
     it('should invalidate cache on delete() when cache enabled and KV provided - AC5', async () => {
+      const kv = new MockKV()
+
       const CachedUser = defineModel(
         'users_cache_del_test',
         {
@@ -396,11 +399,10 @@ describe('ModelInstance', () => {
           cache: {
             enabled: true,
             ttl: 300,
+            kv: kv as unknown as KVNamespace, // Configure KV in model for automatic invalidation
           },
         }
       )
-
-      const kv = new MockKV()
 
       // First, create the record in the database so delete returns changes > 0
       const createInstance = new ModelInstance(
@@ -416,8 +418,8 @@ describe('ModelInstance', () => {
       await kv.put(cacheKey, JSON.stringify({ id, name: 'Cached' }))
       expect(kv.has(cacheKey)).toBe(true)
 
-      // Delete with KV
-      await createInstance.delete(db, kv as unknown as KVNamespace)
+      // Delete (automatic invalidation)
+      await createInstance.delete(db)
 
       // Cache should be invalidated
       expect(kv.has(cacheKey)).toBe(false)
@@ -443,7 +445,7 @@ describe('ModelInstance', () => {
         false
       )
 
-      await instance.update({ name: 'New Name' }, db, kv as unknown as KVNamespace)
+      await instance.update({ name: 'New Name' }, db)
 
       // Cache should still exist (no invalidation because cache not enabled)
       expect(kv.has(cacheKey)).toBe(true)

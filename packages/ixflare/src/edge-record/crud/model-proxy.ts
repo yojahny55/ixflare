@@ -224,6 +224,62 @@ export interface ModelCrudMethods<T extends SchemaDefinition> {
     options: CursorPaginationOptions,
     db: D1Database
   ): Promise<CursorPaginatedResult<ModelInstance<T>>>
+
+  /**
+   * Atomically increment a numeric field
+   *
+   * Only supported for models with strong consistency (DO storage).
+   * Use for counters, inventory quantities, etc.
+   *
+   * @param id Record ID
+   * @param field Field name to increment
+   * @param amount Amount to increment by (default: 1)
+   * @param db DurableObjectStorage binding
+   * @returns New value after increment
+   *
+   * @example
+   * ```typescript
+   * // Define model with strong consistency
+   * export const Inventory = defineModel('inventory', {
+   *   productId: field.integer().primaryKey(),
+   *   quantity: field.integer(),
+   * }, { consistency: 'strong' })
+   *
+   * // Atomic increment
+   * const newQty = await Inventory.increment('product-123', 'quantity', 5, doStorage)
+   * ```
+   */
+  increment(
+    id: string,
+    field: keyof InferSchema<T>,
+    amount: number,
+    db: DurableObjectStorage
+  ): Promise<number>
+
+  /**
+   * Atomically decrement a numeric field
+   *
+   * Only supported for models with strong consistency (DO storage).
+   * Use for counters, inventory quantities, etc.
+   *
+   * @param id Record ID
+   * @param field Field name to decrement
+   * @param amount Amount to decrement by (default: 1)
+   * @param db DurableObjectStorage binding
+   * @returns New value after decrement
+   *
+   * @example
+   * ```typescript
+   * // Atomic decrement
+   * const newQty = await Inventory.decrement('product-123', 'quantity', 1, doStorage)
+   * ```
+   */
+  decrement(
+    id: string,
+    field: keyof InferSchema<T>,
+    amount: number,
+    db: DurableObjectStorage
+  ): Promise<number>
 }
 
 /**
@@ -647,6 +703,58 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
 
       const qb = new QueryBuilder(model)
       return qb.cursorPaginate(options, db)
+    },
+
+    async increment(
+      id: string,
+      field: keyof InferSchema<T>,
+      amount: number,
+      db: DurableObjectStorage
+    ): Promise<number> {
+      // Validate model has strong consistency
+      if (model.$consistency !== 'strong') {
+        throw new Error(
+          `increment() requires strong consistency. Model '${model.$tableName}' ` +
+            `has consistency='${model.$consistency || 'balanced'}'. ` +
+            `Set consistency: 'strong' in model options.`
+        )
+      }
+
+      if (!isDurableObjectStorage(db)) {
+        throw new Error(
+          `increment() requires DurableObjectStorage binding. ` +
+            `Model '${model.$tableName}' expects DO storage.`
+        )
+      }
+
+      const adapter = new DOAdapter(model, db)
+      return adapter.increment(id, field, amount)
+    },
+
+    async decrement(
+      id: string,
+      field: keyof InferSchema<T>,
+      amount: number,
+      db: DurableObjectStorage
+    ): Promise<number> {
+      // Validate model has strong consistency
+      if (model.$consistency !== 'strong') {
+        throw new Error(
+          `decrement() requires strong consistency. Model '${model.$tableName}' ` +
+            `has consistency='${model.$consistency || 'balanced'}'. ` +
+            `Set consistency: 'strong' in model options.`
+        )
+      }
+
+      if (!isDurableObjectStorage(db)) {
+        throw new Error(
+          `decrement() requires DurableObjectStorage binding. ` +
+            `Model '${model.$tableName}' expects DO storage.`
+        )
+      }
+
+      const adapter = new DOAdapter(model, db)
+      return adapter.increment(id, field, -amount)
     },
   }
 
