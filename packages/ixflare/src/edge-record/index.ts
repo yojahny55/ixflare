@@ -121,6 +121,21 @@ export type {
   SeedResult,
 } from './seed'
 
+// Pagination exports (Story 3.11)
+export { encodeCursor, decodeCursor, validateCursor } from './pagination'
+export {
+  MAX_PAGE_SIZE,
+  DEFAULT_PAGE_SIZE,
+  type PaginationOptions,
+  type PaginatedResult,
+  type PaginationMeta,
+  type PaginationLinks,
+  type CursorPaginationOptions,
+  type CursorPaginatedResult,
+  type CursorPaginationMeta,
+  type Cursor,
+} from './pagination'
+
 // Legacy exports (will be refactored in later stories)
 export { Model as LegacyModel } from './model'
 export type { ModelDefinition, ModelSchema, QueryOptions } from './types'

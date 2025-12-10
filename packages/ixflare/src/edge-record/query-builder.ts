@@ -33,7 +33,21 @@ import { ModelInstance } from './crud/model-instance'
 import { toSnakeCase } from './crud/case-transform'
 import { escapeIdentifier } from './schema/type-mapping'
 import { EagerLoader, type ModelInstanceWithRelations } from './relations/eager-loader'
-import { NotFoundError } from './crud/errors'
+import { NotFoundError, ValidationError } from './crud/errors'
+import type {
+  PaginationOptions,
+  PaginatedResult,
+  CursorPaginationOptions,
+  CursorPaginatedResult,
+  Cursor,
+} from './pagination/types'
+import {
+  MAX_PAGE_SIZE,
+  DEFAULT_PAGE_SIZE,
+  encodeCursor,
+  decodeCursor,
+  validateCursor,
+} from './pagination'
 
 /**
  * D1 parameter limit - maximum bound parameters per query
@@ -872,6 +886,201 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
       this._includeTrashed,
       this._onlyTrashed
     )
+  }
+
+  /**
+   * Paginate results using offset-based pagination
+   *
+   * Returns paginated results with metadata and navigation links.
+   * Respects WHERE conditions, soft deletes, and eager loading.
+   * perPage is automatically capped at MAX_PAGE_SIZE (100) to prevent abuse.
+   *
+   * @param options - Pagination options (page number and perPage size)
+   * @param db - D1Database instance
+   * @returns Paginated result with data, meta, and links
+   *
+   * @example
+   * ```typescript
+   * // Basic pagination
+   * const result = await User.paginate({ page: 2, perPage: 20 }, db)
+   * // Returns: { data: User[], meta: {...}, links: {...} }
+   *
+   * // With filters
+   * const admins = await User
+   *   .where({ role: 'admin' })
+   *   .orderBy('createdAt', 'desc')
+   *   .paginate({ page: 1, perPage: 50 }, db)
+   *
+   * // With eager loading
+   * const posts = await Post
+   *   .with('author', 'tags')
+   *   .paginate({ page: 1, perPage: 10 }, db)
+   * ```
+   */
+  async paginate(
+    options: PaginationOptions,
+    db: D1Database
+  ): Promise<PaginatedResult<ModelInstance<T>>> {
+    // Normalize and validate page number (1-indexed)
+    const page = Math.max(1, options.page || 1)
+
+    // Normalize and cap perPage
+    const perPage = Math.min(
+      MAX_PAGE_SIZE,
+      Math.max(1, options.perPage || DEFAULT_PAGE_SIZE)
+    )
+
+    // Get total count (respects WHERE conditions and soft delete filter)
+    const total = await this.count(db)
+
+    // Calculate pagination metadata
+    const lastPage = Math.max(1, Math.ceil(total / perPage))
+    const offset = (page - 1) * perPage
+    const from = total > 0 ? offset + 1 : 0
+    const to = Math.min(offset + perPage, total)
+
+    // Execute paginated query
+    this.limitValue = perPage
+    this.offsetValue = offset
+    const data = await this.all(db)
+
+    // Generate navigation links
+    const links = {
+      first: '?page=1',
+      prev: page > 1 ? `?page=${page - 1}` : null,
+      next: page < lastPage ? `?page=${page + 1}` : null,
+      last: `?page=${lastPage}`,
+    }
+
+    return {
+      data,
+      meta: {
+        total,
+        perPage,
+        currentPage: page,
+        lastPage,
+        from,
+        to,
+      },
+      links,
+    }
+  }
+
+  /**
+   * Paginate results using cursor-based pagination (keyset pagination)
+   *
+   * More efficient than offset pagination for large datasets as it doesn't scan skipped rows.
+   * Requires orderBy() to be set. Respects WHERE conditions, soft deletes, and eager loading.
+   *
+   * @param options - Cursor pagination options (cursor and limit)
+   * @param db - D1Database instance
+   * @returns Cursor-paginated result with data and meta
+   * @throws {ValidationError} If orderBy is not set or cursor is invalid
+   *
+   * @example
+   * ```typescript
+   * // First page
+   * const result = await Post
+   *   .orderBy('createdAt', 'desc')
+   *   .cursorPaginate({ limit: 20 }, db)
+   *
+   * // Next page using cursor
+   * const nextPage = await Post
+   *   .orderBy('createdAt', 'desc')
+   *   .cursorPaginate({ cursor: result.meta.nextCursor, limit: 20 }, db)
+   *
+   * // With filters and eager loading
+   * const posts = await Post
+   *   .where({ status: 'published' })
+   *   .with('author')
+   *   .orderBy('createdAt', 'desc')
+   *   .cursorPaginate({ limit: 20 }, db)
+   * ```
+   */
+  async cursorPaginate(
+    options: CursorPaginationOptions,
+    db: D1Database
+  ): Promise<CursorPaginatedResult<ModelInstance<T>>> {
+    // Require orderBy for cursor pagination
+    if (!this.orderByField) {
+      throw new ValidationError(
+        'PAGINATION.ORDER_REQUIRED',
+        'Cursor pagination requires orderBy() to be set'
+      )
+    }
+
+    // Normalize and cap limit
+    const limit = Math.min(MAX_PAGE_SIZE, Math.max(1, options.limit || DEFAULT_PAGE_SIZE))
+
+    // Decode cursor and add keyset condition if provided
+    if (options.cursor) {
+      const cursor = decodeCursor(options.cursor)
+
+      // Validate cursor has expected fields
+      validateCursor(cursor, this.orderByField)
+
+      // Add keyset condition: WHERE (orderField, id) > (cursorValue, cursorId)
+      // For DESC: WHERE (orderField, id) < (cursorValue, cursorId)
+      const op = this.orderDirection === 'asc' ? '>' : '<'
+      const cursorValue = cursor[this.orderByField]
+      const cursorId = cursor.id
+
+      // Build compound keyset condition using OR groups
+      // For ASC:  (orderField > cursorValue) OR (orderField = cursorValue AND id > cursorId)
+      // For DESC: (orderField < cursorValue) OR (orderField = cursorValue AND id < cursorId)
+
+      // Add to current group or create new one if needed
+      if (this.andGroups.length === 0 || this.currentGroup.length > 0) {
+        this.andGroups.push([])
+      }
+
+      // First OR group: orderField > cursorValue (or < for DESC)
+      this.currentGroup.push({ field: this.orderByField, operator: op, value: cursorValue })
+
+      // Second OR group: orderField = cursorValue AND id > cursorId
+      this.andGroups.push([])
+      this.currentGroup.push({
+        field: this.orderByField,
+        operator: '=',
+        value: cursorValue,
+      })
+      this.currentGroup.push({ field: 'id', operator: op, value: cursorId })
+    }
+
+    // Fetch limit + 1 to determine hasMore
+    this.limitValue = limit + 1
+    const results = await this.all(db)
+
+    // Determine if more records exist
+    const hasMore = results.length > limit
+    const data = hasMore ? results.slice(0, limit) : results
+
+    // Generate next cursor from last item
+    const nextCursor =
+      hasMore && data.length > 0
+        ? encodeCursor({
+            [this.orderByField]: data[data.length - 1][this.orderByField as keyof ModelInstance<T>],
+            id: data[data.length - 1].id,
+          } as Cursor)
+        : null
+
+    // Generate previous cursor from first item (for bi-directional navigation)
+    const prevCursor =
+      data.length > 0 && options.cursor
+        ? encodeCursor({
+            [this.orderByField]: data[0][this.orderByField as keyof ModelInstance<T>],
+            id: data[0].id,
+          } as Cursor)
+        : null
+
+    return {
+      data,
+      meta: {
+        hasMore,
+        nextCursor,
+        prevCursor,
+      },
+    }
   }
 
   /**

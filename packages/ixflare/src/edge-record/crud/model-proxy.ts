@@ -15,6 +15,12 @@ import { CacheLayer } from '@/edge-record/storage/cache-layer'
 import { isD1Database, isKVNamespace, isDurableObjectStorage } from '@/edge-record/storage/types'
 import { ModelInstance as ModelInstanceClass } from '@/edge-record/crud/model-instance'
 import { NotFoundError } from '@/edge-record/crud/errors'
+import type {
+  PaginationOptions,
+  PaginatedResult,
+  CursorPaginationOptions,
+  CursorPaginatedResult,
+} from '@/edge-record/pagination/types'
 
 /**
  * CRUD methods interface added to Model
@@ -167,6 +173,37 @@ export interface ModelCrudMethods<T extends SchemaDefinition> {
    * @param kv KV namespace for cache
    */
   warmCache(ids: (string | number)[], db: D1Database, kv: KVNamespace): Promise<void>
+
+  /**
+   * Paginate results using offset-based pagination (D1 only)
+   *
+   * @param options Pagination options (page number and perPage size)
+   * @param db D1Database instance
+   *
+   * @example
+   * ```typescript
+   * const result = await User.paginate({ page: 2, perPage: 20 }, db)
+   * ```
+   */
+  paginate(options: PaginationOptions, db: D1Database): Promise<PaginatedResult<ModelInstance<T>>>
+
+  /**
+   * Paginate results using cursor-based pagination (D1 only)
+   *
+   * @param options Cursor pagination options (cursor and limit)
+   * @param db D1Database instance
+   *
+   * @example
+   * ```typescript
+   * const result = await Post
+   *   .orderBy('createdAt', 'desc')
+   *   .cursorPaginate({ limit: 20 }, db)
+   * ```
+   */
+  cursorPaginate(
+    options: CursorPaginationOptions,
+    db: D1Database
+  ): Promise<CursorPaginatedResult<ModelInstance<T>>>
 }
 
 /**
@@ -549,6 +586,36 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
 
       const cacheLayer = new CacheLayer(model, kv, db, model.$cacheConfig)
       await cacheLayer.warm(ids)
+    },
+
+    async paginate(
+      options: PaginationOptions,
+      db: D1Database
+    ): Promise<PaginatedResult<ModelInstance<T>>> {
+      if (model.$storage !== 'd1') {
+        console.warn(
+          `[EdgeRecord] paginate() only works with D1 storage. ` +
+            `Model '${model.$tableName}' uses '${model.$storage}' storage.`
+        )
+      }
+
+      const qb = new QueryBuilder(model)
+      return qb.paginate(options, db)
+    },
+
+    async cursorPaginate(
+      options: CursorPaginationOptions,
+      db: D1Database
+    ): Promise<CursorPaginatedResult<ModelInstance<T>>> {
+      if (model.$storage !== 'd1') {
+        console.warn(
+          `[EdgeRecord] cursorPaginate() only works with D1 storage. ` +
+            `Model '${model.$tableName}' uses '${model.$storage}' storage.`
+        )
+      }
+
+      const qb = new QueryBuilder(model)
+      return qb.cursorPaginate(options, db)
     },
   }
 
