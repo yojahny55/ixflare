@@ -12,7 +12,9 @@ export default defineConfig({
   clean: true,
   splitting: true,
   treeshake: true,
-  external: [],
+  // React must be external - it's a peer dependency loaded by the consuming app
+  // This prevents bundling React into ixflare/ssr (was 1.3MB, now ~8KB)
+  external: ['react', 'react-dom', 'react-dom/server'],
   outExtension({ format }) {
     return {
       js: format === 'esm' ? '.mjs' : '.cjs',

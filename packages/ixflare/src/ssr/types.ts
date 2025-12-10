@@ -6,7 +6,7 @@
 export interface RenderOptions {
   /** Enable streaming SSR */
   streaming?: boolean
-  /** Data to inject for hydration */
+  /** Data to inject for hydration (will be safely escaped) */
   bootstrapData?: unknown
   /** Abort signal for cancellation */
   abortSignal?: AbortSignal
@@ -14,6 +14,12 @@ export interface RenderOptions {
   bootstrapScripts?: string[]
   /** Error handler for rendering errors */
   onError?: (error: unknown) => void
+  /** Document title for the HTML page */
+  title?: string
+  /** Additional meta tags to include in head */
+  meta?: Record<string, string>
+  /** Language attribute for html element (default: 'en') */
+  lang?: string
 }
 
 export interface RenderResult {

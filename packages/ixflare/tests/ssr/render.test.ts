@@ -5,7 +5,6 @@
 
 import { describe, it, expect } from 'vitest'
 import { renderToString, renderToStream } from '@/ssr/render'
-import type { RenderOptions } from '@/ssr/types'
 import { createElement } from 'react'
 
 describe('renderToString', () => {
@@ -23,8 +22,9 @@ describe('renderToString', () => {
     const html = await renderToString(createElement(Component), {})
 
     expect(html).toMatch(/^<!DOCTYPE html>/)
-    expect(html).toContain('<html')
+    expect(html).toContain('<html lang="en">')
     expect(html).toContain('</html>')
+    expect(html).toContain('<meta name="viewport"')
   })
 
   it('should render async Server Components', async () => {
@@ -46,8 +46,61 @@ describe('renderToString', () => {
     // Bootstrap data should be injected as a script tag
     expect(html).toContain('<script')
     expect(html).toContain('__BOOTSTRAP_DATA__')
-    expect(html).toContain('"userId":"123"')
-    expect(html).toContain('"theme":"dark"')
+    expect(html).toContain('userId')
+    expect(html).toContain('123')
+    expect(html).toContain('theme')
+    expect(html).toContain('dark')
+  })
+
+  it('should safely escape bootstrap data containing script tags (XSS prevention)', async () => {
+    const Component = () => createElement('div', null, 'Test')
+    const maliciousData = {
+      payload: '</script><script>alert("xss")</script>',
+      nested: { attack: '<img onerror="alert(1)">' }
+    }
+
+    const html = await renderToString(createElement(Component), { bootstrapData: maliciousData })
+
+    // Should NOT contain raw script closing tags
+    expect(html).not.toContain('</script><script>')
+    expect(html).not.toContain('<img onerror')
+    // Should contain escaped versions
+    expect(html).toContain('\\u003c')
+    expect(html).toContain('\\u003e')
+  })
+
+  it('should include title when provided', async () => {
+    const Component = () => createElement('div', null, 'Test')
+    const html = await renderToString(createElement(Component), { title: 'My Page Title' })
+
+    expect(html).toContain('<title>My Page Title</title>')
+  })
+
+  it('should escape HTML in title to prevent injection', async () => {
+    const Component = () => createElement('div', null, 'Test')
+    const html = await renderToString(createElement(Component), {
+      title: '<script>alert("xss")</script>'
+    })
+
+    expect(html).not.toContain('<script>alert')
+    expect(html).toContain('&lt;script&gt;')
+  })
+
+  it('should include custom meta tags', async () => {
+    const Component = () => createElement('div', null, 'Test')
+    const html = await renderToString(createElement(Component), {
+      meta: { description: 'My description', author: 'Test Author' }
+    })
+
+    expect(html).toContain('<meta name="description" content="My description"/>')
+    expect(html).toContain('<meta name="author" content="Test Author"/>')
+  })
+
+  it('should support custom lang attribute', async () => {
+    const Component = () => createElement('div', null, 'Test')
+    const html = await renderToString(createElement(Component), { lang: 'es' })
+
+    expect(html).toContain('<html lang="es">')
   })
 
   it('should handle render errors gracefully', async () => {
@@ -100,6 +153,8 @@ describe('renderToStream', () => {
     }
 
     expect(html).toContain('<!DOCTYPE html>')
+    expect(html).toContain('<html lang="en">')
+    expect(html).toContain('<meta name="viewport"')
     expect(html).toContain('Streaming Test')
   })
 
@@ -139,9 +194,12 @@ describe('renderToStream', () => {
     }
   }, 1000)
 
-  it('should stream bootstrap data', async () => {
+  it('should stream bootstrap data with XSS protection', async () => {
     const Component = () => createElement('div', null, 'Test')
-    const bootstrapData = { key: 'value' }
+    const bootstrapData = {
+      key: 'value',
+      dangerous: '</script><script>evil()</script>'
+    }
 
     const stream = renderToStream(createElement(Component), { bootstrapData })
     const reader = stream.getReader()
@@ -155,6 +213,26 @@ describe('renderToStream', () => {
     }
 
     expect(html).toContain('__BOOTSTRAP_DATA__')
-    expect(html).toContain('"key":"value"')
+    expect(html).toContain('key')
+    expect(html).toContain('value')
+    // Should be escaped
+    expect(html).not.toContain('</script><script>')
+    expect(html).toContain('\\u003c')
+  })
+
+  it('should include title in streamed output', async () => {
+    const Component = () => createElement('div', null, 'Test')
+    const stream = renderToStream(createElement(Component), { title: 'Stream Title' })
+    const reader = stream.getReader()
+    const decoder = new TextDecoder()
+    let html = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      html += decoder.decode(value, { stream: true })
+    }
+
+    expect(html).toContain('<title>Stream Title</title>')
   })
 })
