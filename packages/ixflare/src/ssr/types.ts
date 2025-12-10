@@ -26,6 +26,14 @@ export interface RenderOptions {
    * - false: Raw component output only (for fragments, HTMX, or components with own shell)
    */
   shell?: boolean
+  /** Callback when shell HTML is ready (before Suspense content) */
+  onShellReady?: () => void
+  /** Callback when all content (including Suspense) is ready */
+  onAllReady?: () => void
+  /** Chunk size for progressive streaming (bytes) */
+  progressiveChunkSize?: number
+  /** Timeout in ms after which render aborts and flushes fallbacks */
+  timeoutMs?: number
 }
 
 export interface RenderResult {

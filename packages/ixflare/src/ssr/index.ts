@@ -11,6 +11,13 @@ export { renderToString, renderToStream } from './render'
 export { createIsland, hydrateIsland } from './islands'
 export { renderLayoutChain, renderWithoutLayouts } from './layout-renderer'
 export { useLayoutData, LayoutContextProvider } from '@/core/layout'
+export {
+  createStreamingResponse,
+  streamWithShellCallback,
+  createTimeoutController,
+  withTimeout,
+  createSuspenseFallback
+} from './streaming'
 export type {
   RenderOptions,
   RenderResult,

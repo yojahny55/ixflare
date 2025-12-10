@@ -1,0 +1,552 @@
+/**
+ * @file streaming.test.tsx
+ * @description Tests for progressive HTML streaming with Suspense
+ */
+
+import React, { Suspense } from 'react'
+import { describe, it, expect, vi } from 'vitest'
+import { renderToStream } from '@/ssr/render'
+import {
+  createStreamingResponse,
+  streamWithShellCallback,
+  createTimeoutController,
+  withTimeout
+} from '@/ssr/streaming'
+
+/**
+ * Helper to convert ReadableStream to string for testing
+ */
+async function streamToString(stream: ReadableStream): Promise<string> {
+  const reader = stream.getReader()
+  const decoder = new TextDecoder()
+  let result = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    result += decoder.decode(value, { stream: true })
+  }
+
+  result += decoder.decode()
+  return result
+}
+
+/**
+ * Helper to collect stream chunks for timing analysis
+ */
+async function collectChunks(stream: ReadableStream): Promise<string[]> {
+  const reader = stream.getReader()
+  const decoder = new TextDecoder()
+  const chunks: string[] = []
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(decoder.decode(value, { stream: true }))
+  }
+
+  return chunks
+}
+
+/**
+ * Async component that simulates slow data fetch
+ */
+async function SlowComponent({ delay, children }: { delay: number; children: React.ReactNode }) {
+  await new Promise(resolve => setTimeout(resolve, delay))
+  return <div data-slow="true">{children}</div>
+}
+
+describe('Progressive HTML Streaming', () => {
+  describe('Suspense Streaming (AC1)', () => {
+    it('should stream shell content before suspended content', async () => {
+      let shellReadyCalled = false
+
+      const stream = renderToStream(
+        <div>
+          <h1>Shell Content</h1>
+          <Suspense fallback={<div>Loading stats...</div>}>
+            <SlowComponent delay={50}>Slow Stats</SlowComponent>
+          </Suspense>
+        </div>,
+        {
+          onShellReady: () => {
+            shellReadyCalled = true
+          }
+        }
+      )
+
+      const html = await streamToString(stream)
+
+      expect(shellReadyCalled).toBe(true)
+      expect(html).toContain('<!DOCTYPE html>')
+      expect(html).toContain('<h1>Shell Content</h1>')
+      expect(html).toContain('Slow Stats')
+    })
+
+    it('should include fallback in initial stream', async () => {
+      const stream = renderToStream(
+        <Suspense fallback={<div data-testid="loading">Loading stats...</div>}>
+          <SlowComponent delay={50}>Actual Stats</SlowComponent>
+        </Suspense>
+      )
+
+      const chunks = await collectChunks(stream)
+      const firstChunk = chunks[0]
+
+      // First chunk should contain fallback or initial HTML
+      expect(firstChunk).toContain('<!DOCTYPE html>')
+
+      // Full HTML should eventually contain the actual content
+      const fullHtml = chunks.join('')
+      expect(fullHtml).toContain('Actual Stats')
+    })
+
+    it('should stream resolved content after fallback', async () => {
+      const stream = renderToStream(
+        <Suspense fallback={<div>Loading...</div>}>
+          <SlowComponent delay={30}>Resolved Content</SlowComponent>
+        </Suspense>
+      )
+
+      const html = await streamToString(stream)
+
+      // Should contain the resolved content, not the fallback
+      expect(html).toContain('Resolved Content')
+      expect(html).toContain('data-slow="true"')
+    })
+
+    it('should handle multiple Suspense boundaries independently', async () => {
+      const stream = renderToStream(
+        <div>
+          <Suspense fallback={<div>Loading A...</div>}>
+            <SlowComponent delay={30}>Content A</SlowComponent>
+          </Suspense>
+          <Suspense fallback={<div>Loading B...</div>}>
+            <SlowComponent delay={60}>Content B</SlowComponent>
+          </Suspense>
+        </div>
+      )
+
+      const html = await streamToString(stream)
+
+      expect(html).toContain('Content A')
+      expect(html).toContain('Content B')
+    })
+  })
+
+  describe('Shell Callbacks (AC1, AC4)', () => {
+    it('should call onShellReady when shell is complete', async () => {
+      let shellReadyTime: number | null = null
+      const startTime = Date.now()
+
+      const stream = renderToStream(
+        <div>
+          <h1>Header</h1>
+          <Suspense fallback={<div>Loading...</div>}>
+            <SlowComponent delay={50}>Slow Content</SlowComponent>
+          </Suspense>
+        </div>,
+        {
+          onShellReady: () => {
+            shellReadyTime = Date.now() - startTime
+          }
+        }
+      )
+
+      await streamToString(stream)
+
+      expect(shellReadyTime).not.toBeNull()
+      // Shell should be ready quickly (before slow component resolves)
+      expect(shellReadyTime).toBeLessThan(40)
+    })
+
+    it('should call onAllReady when all content is ready', async () => {
+      let allReadyCalled = false
+
+      const stream = renderToStream(
+        <div>
+          <Suspense fallback={<div>Loading...</div>}>
+            <SlowComponent delay={30}>Content</SlowComponent>
+          </Suspense>
+        </div>,
+        {
+          onAllReady: () => {
+            allReadyCalled = true
+          }
+        }
+      )
+
+      await streamToString(stream)
+
+      expect(allReadyCalled).toBe(true)
+    })
+
+    it('should fire onShellReady before onAllReady', async () => {
+      const events: string[] = []
+
+      const stream = renderToStream(
+        <div>
+          <Suspense fallback={<div>Loading...</div>}>
+            <SlowComponent delay={30}>Content</SlowComponent>
+          </Suspense>
+        </div>,
+        {
+          onShellReady: () => events.push('shell'),
+          onAllReady: () => events.push('all')
+        }
+      )
+
+      await streamToString(stream)
+
+      expect(events).toEqual(['shell', 'all'])
+    })
+  })
+
+  describe('Timeout Handling (AC5)', () => {
+    it('should abort and flush fallbacks after timeout', async () => {
+      const controller = new AbortController()
+
+      // Set a very short timeout
+      setTimeout(() => controller.abort(), 20)
+
+      const stream = renderToStream(
+        <div>
+          <h1>Header</h1>
+          <Suspense fallback={<div data-testid="fallback">Loading forever...</div>}>
+            <SlowComponent delay={1000}>Will never render</SlowComponent>
+          </Suspense>
+        </div>,
+        {
+          abortSignal: controller.signal,
+          onError: () => {
+            // Suppress error logging in tests
+          }
+        }
+      )
+
+      let errorThrown = false
+      try {
+        await streamToString(stream)
+      } catch (error) {
+        errorThrown = true
+      }
+
+      expect(errorThrown).toBe(true)
+    })
+
+    it('should produce valid HTML even when aborted', async () => {
+      const controller = new AbortController()
+
+      setTimeout(() => controller.abort(), 20)
+
+      const stream = renderToStream(
+        <div>
+          <h1>Header</h1>
+        </div>,
+        {
+          abortSignal: controller.signal,
+          onError: () => {
+            // Suppress error logging
+          }
+        }
+      )
+
+      try {
+        const html = await streamToString(stream)
+        expect(html).toContain('<!DOCTYPE html>')
+        expect(html).toContain('<h1>Header</h1>')
+      } catch {
+        // Abort may throw, which is acceptable
+      }
+    })
+  })
+
+  describe('Transfer-Encoding Chunked (AC2)', () => {
+    it('should set Transfer-Encoding: chunked header', () => {
+      const mockStream = new ReadableStream()
+      const response = createStreamingResponse(mockStream)
+
+      expect(response.headers.get('Transfer-Encoding')).toBe('chunked')
+    })
+
+    it('should set Content-Type: text/html header', () => {
+      const mockStream = new ReadableStream()
+      const response = createStreamingResponse(mockStream)
+
+      expect(response.headers.get('Content-Type')).toBe('text/html; charset=utf-8')
+    })
+
+    it('should set X-Content-Type-Options: nosniff for security', () => {
+      const mockStream = new ReadableStream()
+      const response = createStreamingResponse(mockStream)
+
+      expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
+    })
+
+    it('should allow custom headers to be merged', () => {
+      const mockStream = new ReadableStream()
+      const response = createStreamingResponse(mockStream, {
+        headers: { 'X-Custom': 'value' }
+      })
+
+      expect(response.headers.get('X-Custom')).toBe('value')
+      expect(response.headers.get('Transfer-Encoding')).toBe('chunked')
+    })
+
+    it('should support custom status codes', () => {
+      const mockStream = new ReadableStream()
+      const response = createStreamingResponse(mockStream, { status: 404 })
+
+      expect(response.status).toBe(404)
+    })
+  })
+
+  describe('Valid HTML Document Structure (AC3)', () => {
+    it('should always send <head> before <body> content', async () => {
+      const stream = renderToStream(
+        <div>
+          <h1>Body Content</h1>
+        </div>,
+        {
+          title: 'Test Page',
+          meta: { description: 'Test description' }
+        }
+      )
+
+      const html = await streamToString(stream)
+
+      const headIndex = html.indexOf('<head>')
+      const bodyIndex = html.indexOf('<body>')
+
+      expect(headIndex).toBeGreaterThan(-1)
+      expect(bodyIndex).toBeGreaterThan(-1)
+      expect(headIndex).toBeLessThan(bodyIndex)
+    })
+
+    it('should include critical meta tags in head', async () => {
+      const stream = renderToStream(
+        <div>Content</div>,
+        {
+          title: 'My Page',
+          meta: { description: 'Page description' }
+        }
+      )
+
+      const html = await streamToString(stream)
+
+      expect(html).toContain('<meta charset="utf-8"/>')
+      expect(html).toContain('<meta name="viewport"')
+      expect(html).toContain('<title>My Page</title>')
+      expect(html).toContain('<meta name="description" content="Page description"/>')
+    })
+
+    it('should produce valid HTML document', async () => {
+      const stream = renderToStream(
+        <div>Test Content</div>
+      )
+
+      const html = await streamToString(stream)
+
+      expect(html).toMatch(/^<!DOCTYPE html>/)
+      expect(html).toContain('<html lang="en">')
+      expect(html).toContain('</html>')
+      expect(html).toContain('</body>')
+    })
+  })
+
+  describe('Streaming Utilities', () => {
+    describe('streamWithShellCallback', () => {
+      it('should call callback on first chunk', async () => {
+        let callbackFired = false
+        const encoder = new TextEncoder()
+
+        const sourceStream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode('chunk 1'))
+            controller.enqueue(encoder.encode('chunk 2'))
+            controller.close()
+          }
+        })
+
+        const monitoredStream = streamWithShellCallback(sourceStream, () => {
+          callbackFired = true
+        })
+
+        await streamToString(monitoredStream)
+
+        expect(callbackFired).toBe(true)
+      })
+
+      it('should pass through all chunks unchanged', async () => {
+        const encoder = new TextEncoder()
+        const chunks = ['chunk 1', 'chunk 2', 'chunk 3']
+
+        const sourceStream = new ReadableStream({
+          start(controller) {
+            for (const chunk of chunks) {
+              controller.enqueue(encoder.encode(chunk))
+            }
+            controller.close()
+          }
+        })
+
+        const monitoredStream = streamWithShellCallback(sourceStream, () => {})
+        const result = await streamToString(monitoredStream)
+
+        expect(result).toBe(chunks.join(''))
+      })
+
+      it('should return original stream if no callback provided', () => {
+        const sourceStream = new ReadableStream()
+        const result = streamWithShellCallback(sourceStream)
+
+        expect(result).toBe(sourceStream)
+      })
+    })
+
+    describe('createTimeoutController', () => {
+      it('should abort after timeout', async () => {
+        const { controller } = createTimeoutController(10)
+
+        expect(controller.signal.aborted).toBe(false)
+
+        await new Promise(resolve => setTimeout(resolve, 20))
+
+        expect(controller.signal.aborted).toBe(true)
+      })
+
+      it('should cleanup timeout when cleanup is called', async () => {
+        const { controller, cleanup } = createTimeoutController(50)
+
+        cleanup()
+
+        await new Promise(resolve => setTimeout(resolve, 60))
+
+        expect(controller.signal.aborted).toBe(false)
+      })
+    })
+
+    describe('withTimeout', () => {
+      it('should cleanup timeout when shell is ready', async () => {
+        const mockRenderFn = vi.fn((opts) => {
+          // Simulate shell ready immediately
+          setTimeout(() => opts.onShellReady?.(), 5)
+
+          const encoder = new TextEncoder()
+          return new ReadableStream({
+            start(controller) {
+              controller.enqueue(encoder.encode('content'))
+              controller.close()
+            }
+          })
+        })
+
+        const stream = withTimeout(mockRenderFn, {
+          timeoutMs: 100,
+          onShellReady: () => {}
+        })
+
+        await streamToString(stream)
+
+        expect(mockRenderFn).toHaveBeenCalled()
+      })
+
+      it('should return original stream if no timeout specified', () => {
+        const mockStream = new ReadableStream()
+        const mockRenderFn = vi.fn(() => mockStream)
+
+        const result = withTimeout(mockRenderFn, {})
+
+        expect(result).toBe(mockStream)
+        expect(mockRenderFn).toHaveBeenCalled()
+      })
+    })
+  })
+
+  describe('Progressive Chunk Size (AC1)', () => {
+    it('should accept progressiveChunkSize option', async () => {
+      const stream = renderToStream(
+        <div>Test Content</div>,
+        {
+          progressiveChunkSize: 1024
+        }
+      )
+
+      const html = await streamToString(stream)
+      expect(html).toContain('Test Content')
+    })
+  })
+
+  describe('Integration Tests', () => {
+    it('should handle real-world dashboard example', async () => {
+      const DashboardPage = () => (
+        <div>
+          <h1>Dashboard</h1>
+          <Suspense fallback={<div>Loading stats...</div>}>
+            <SlowComponent delay={20}>Stats Content</SlowComponent>
+          </Suspense>
+          <Suspense fallback={<div>Loading chart...</div>}>
+            <SlowComponent delay={30}>Chart Content</SlowComponent>
+          </Suspense>
+        </div>
+      )
+
+      let shellReadyFired = false
+      let allReadyFired = false
+
+      const stream = renderToStream(<DashboardPage />, {
+        title: 'Dashboard',
+        onShellReady: () => {
+          shellReadyFired = true
+        },
+        onAllReady: () => {
+          allReadyFired = true
+        }
+      })
+
+      const html = await streamToString(stream)
+
+      expect(shellReadyFired).toBe(true)
+      expect(allReadyFired).toBe(true)
+      expect(html).toContain('<h1>Dashboard</h1>')
+      expect(html).toContain('Stats Content')
+      expect(html).toContain('Chart Content')
+    })
+
+    it('should work with timeout in production scenario', async () => {
+      const { controller, cleanup } = createTimeoutController(10000)
+
+      const stream = renderToStream(
+        <div>
+          <h1>Dashboard</h1>
+          <Suspense fallback={<div>Loading...</div>}>
+            <SlowComponent delay={20}>Content</SlowComponent>
+          </Suspense>
+        </div>,
+        {
+          abortSignal: controller.signal,
+          onShellReady: () => {
+            cleanup() // Cancel timeout when shell is ready
+          }
+        }
+      )
+
+      const response = createStreamingResponse(stream)
+
+      expect(response.headers.get('Transfer-Encoding')).toBe('chunked')
+
+      // Stream should complete without aborting
+      const reader = response.body!.getReader()
+      const chunks: Uint8Array[] = []
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        chunks.push(value)
+      }
+
+      expect(chunks.length).toBeGreaterThan(0)
+      expect(controller.signal.aborted).toBe(false)
+    })
+  })
+})

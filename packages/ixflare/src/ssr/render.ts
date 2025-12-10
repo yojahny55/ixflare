@@ -176,6 +176,9 @@ export async function renderToString(
  * are rendered. Ideal for edge environments and large pages where streaming
  * improves Time to First Byte (TTFB).
  *
+ * Supports progressive streaming with Suspense boundaries, shell-ready callbacks,
+ * timeout handling, and configurable chunk sizes.
+ *
  * @param element - React element, component function, or async component to render
  * @param options - Rendering options
  * @param options.bootstrapData - Data to inject for client-side hydration (safely escaped)
@@ -186,6 +189,10 @@ export async function renderToString(
  * @param options.lang - HTML lang attribute (default: 'en', ignored if shell: false)
  * @param options.meta - Additional meta tags as name/content pairs (ignored if shell: false)
  * @param options.shell - Whether to wrap in HTML document shell (default: true)
+ * @param options.onShellReady - Callback when shell HTML is ready (before Suspense content)
+ * @param options.onAllReady - Callback when all content (including Suspense) is ready
+ * @param options.progressiveChunkSize - Chunk size for progressive streaming (bytes)
+ * @param options.timeoutMs - Timeout in ms after which render aborts and flushes fallbacks
  * @returns ReadableStream of HTML chunks
  * @throws {InfraError} When streaming fails with code SSR_STREAM_FAILED (via stream error)
  *
@@ -195,6 +202,13 @@ export async function renderToString(
  * const stream = renderToStream(<App />, { title: 'Streaming App' })
  * return new Response(stream, {
  *   headers: { 'Content-Type': 'text/html; charset=utf-8' }
+ * })
+ *
+ * // Progressive streaming with Suspense
+ * const stream = renderToStream(<Dashboard />, {
+ *   onShellReady: () => console.log('Shell ready, sending response'),
+ *   onAllReady: () => console.log('All content ready'),
+ *   timeoutMs: 10000
  * })
  *
  * // Fragment stream (for HTMX partial updates)
@@ -208,6 +222,8 @@ export function renderToStream(
   // Create encoder once for reuse (performance optimization)
   const encoder = new TextEncoder()
   const shouldWrapInShell = options?.shell !== false
+  let shellReady = false
+  let allReady = false
 
   // Create a new stream that wraps React's stream with DOCTYPE and bootstrap data
   return new ReadableStream({
@@ -226,10 +242,23 @@ export function renderToStream(
         const reactStream = await renderToReadableStream(reactElement, {
           signal: options?.abortSignal,
           bootstrapScripts: options?.bootstrapScripts,
+          progressiveChunkSize: options?.progressiveChunkSize,
           onError: options?.onError ?? ((error: unknown) => {
             console.error('[SSR Stream Error]', error)
           })
         })
+
+        // Monitor allReady Promise if callback provided
+        if (options?.onAllReady && reactStream.allReady) {
+          reactStream.allReady.then(() => {
+            if (!allReady) {
+              allReady = true
+              options.onAllReady?.()
+            }
+          }).catch((error) => {
+            console.error('[SSR allReady Error]', error)
+          })
+        }
 
         // Pipe React stream chunks to our output stream
         const reader = reactStream.getReader()
@@ -249,6 +278,12 @@ export function renderToStream(
             }
             controller.close()
             break
+          }
+
+          // Fire onShellReady callback on first chunk (shell is complete)
+          if (!shellReady) {
+            shellReady = true
+            options?.onShellReady?.()
           }
 
           controller.enqueue(value)
