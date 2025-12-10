@@ -256,7 +256,12 @@ export function renderToStream(
               options.onAllReady?.()
             }
           }).catch((error) => {
-            console.error('[SSR allReady Error]', error)
+            // Forward allReady errors to user's error handler if provided
+            if (options?.onError) {
+              options.onError(error)
+            } else {
+              console.error('[SSR allReady Error]', error)
+            }
           })
         }
 
@@ -288,8 +293,12 @@ export function renderToStream(
 
           controller.enqueue(value)
 
-          // Check if aborted mid-stream
+          // Check if aborted mid-stream - ensure valid HTML before erroring
           if (options?.abortSignal?.aborted) {
+            // Write closing tags to ensure valid HTML structure even on abort
+            if (shouldWrapInShell) {
+              controller.enqueue(encoder.encode(HTML_CLOSE))
+            }
             controller.error(new Error('Render aborted'))
             break
           }
