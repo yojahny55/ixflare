@@ -970,7 +970,8 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
     const offset = (page - 1) * perPage
 
     // Execute paginated query - use limit/offset methods to preserve immutability pattern
-    const data = await this.limit(perPage).offset(offset).all(db)
+    // Cast to ModelInstance[] since pagination always returns full model instances
+    const data = (await this.limit(perPage).offset(offset).all(db)) as ModelInstance<T>[]
 
     // Calculate from/to based on actual data returned (handles beyond lastPage case)
     const from = data.length > 0 ? offset + 1 : 0
@@ -1075,13 +1076,14 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
     }
 
     // Fetch limit + 1 to determine hasMore (skip eager loading for efficiency)
+    // Cast to ModelInstance[] since cursor pagination always returns full model instances
     this.limitValue = limit + 1
     this.skipEagerLoading = true
-    const rawResults = await this.all(db)
+    const rawResults = (await this.all(db)) as ModelInstance<T>[]
 
     // Determine if more records exist
     const hasMore = rawResults.length > limit
-    let data = hasMore ? rawResults.slice(0, limit) : rawResults
+    let data: ModelInstance<T>[] = hasMore ? rawResults.slice(0, limit) : rawResults
 
     // For backward pagination, reverse results to restore original order
     if (isBackward) {
