@@ -958,10 +958,7 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
     const page = Math.max(1, options.page || 1)
 
     // Normalize and cap perPage
-    const perPage = Math.min(
-      MAX_PAGE_SIZE,
-      Math.max(1, options.perPage || DEFAULT_PAGE_SIZE)
-    )
+    const perPage = Math.min(MAX_PAGE_SIZE, Math.max(1, options.perPage || DEFAULT_PAGE_SIZE))
 
     // Get total count (respects WHERE conditions and soft delete filter)
     // Note: count() and all() both call buildWhereClause() - overhead is minimal
@@ -1123,7 +1120,7 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
       meta: {
         hasMore: isBackward ? Boolean(options.cursor) : hasMore,
         nextCursor: isBackward ? (hasMore ? nextCursor : null) : nextCursor,
-        prevCursor: isBackward ? prevCursor : (options.cursor ? prevCursor : null),
+        prevCursor: isBackward ? prevCursor : options.cursor ? prevCursor : null,
       },
     }
   }
@@ -1133,10 +1130,7 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
    * Used by cursorPaginate to load relations only on final data set
    * @internal
    */
-  private async loadEagerRelations(
-    instances: ModelInstance<T>[],
-    db: D1Database
-  ): Promise<void> {
+  private async loadEagerRelations(instances: ModelInstance<T>[], db: D1Database): Promise<void> {
     const loader = new EagerLoader(this.model, this.eagerRelations)
     await loader.load(instances as ModelInstanceWithRelations<T>[], db)
   }
@@ -1149,7 +1143,7 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
    */
   private buildWhereClause(): string {
     // Clone andGroups to avoid mutating original
-    let filteredGroups = this.andGroups.map((group) => [...group])
+    const filteredGroups = this.andGroups.map((group) => [...group])
 
     // Apply soft delete global scope filter
     if (this.model.$softDeletes && !this._includeTrashed) {

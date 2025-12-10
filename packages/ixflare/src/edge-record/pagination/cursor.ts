@@ -3,7 +3,7 @@
  */
 
 import type { Cursor } from './types'
-import { ValidationError } from '../crud/errors'
+import { ValidationError } from '@/edge-record/crud/errors'
 
 /**
  * Encodes a cursor object to a Base64 URL-safe string

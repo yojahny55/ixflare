@@ -97,7 +97,9 @@ describe('Pagination', () => {
     })
 
     it('should paginate results with correct metadata', async () => {
-      const result = await User.where({}).orderBy('id', 'asc').paginate({ page: 2, perPage: 20 }, db)
+      const result = await User.where({})
+        .orderBy('id', 'asc')
+        .paginate({ page: 2, perPage: 20 }, db)
 
       expect(result.data).toHaveLength(20)
       expect(result.meta).toEqual({
@@ -117,7 +119,9 @@ describe('Pagination', () => {
     })
 
     it('should handle first page correctly', async () => {
-      const result = await User.where({}).orderBy('id', 'asc').paginate({ page: 1, perPage: 20 }, db)
+      const result = await User.where({})
+        .orderBy('id', 'asc')
+        .paginate({ page: 1, perPage: 20 }, db)
 
       expect(result.meta.currentPage).toBe(1)
       expect(result.meta.from).toBe(1)
@@ -127,7 +131,9 @@ describe('Pagination', () => {
     })
 
     it('should handle last page correctly', async () => {
-      const result = await User.where({}).orderBy('id', 'asc').paginate({ page: 8, perPage: 20 }, db)
+      const result = await User.where({})
+        .orderBy('id', 'asc')
+        .paginate({ page: 8, perPage: 20 }, db)
 
       expect(result.data).toHaveLength(16) // 156 - 140 = 16 remaining
       expect(result.meta.currentPage).toBe(8)
@@ -138,7 +144,9 @@ describe('Pagination', () => {
     })
 
     it('should handle page beyond lastPage', async () => {
-      const result = await User.where({}).orderBy('id', 'asc').paginate({ page: 100, perPage: 20 }, db)
+      const result = await User.where({})
+        .orderBy('id', 'asc')
+        .paginate({ page: 100, perPage: 20 }, db)
 
       expect(result.data).toHaveLength(0)
       expect(result.meta.from).toBe(0)
@@ -232,9 +240,7 @@ describe('Pagination', () => {
 
     it('should paginate forward using nextCursor', async () => {
       // Use id ordering since all posts have same createdAt (created in fast loop)
-      const page1 = await Post.where({})
-        .orderBy('id', 'desc')
-        .cursorPaginate({ limit: 20 }, db)
+      const page1 = await Post.where({}).orderBy('id', 'desc').cursorPaginate({ limit: 20 }, db)
 
       expect(page1.meta.nextCursor).toBeTruthy()
 
@@ -309,9 +315,7 @@ describe('Pagination', () => {
 
     it('should paginate backward using prevCursor', async () => {
       // Navigate forward to page 2 first
-      const page1 = await Post.where({})
-        .orderBy('id', 'asc')
-        .cursorPaginate({ limit: 20 }, db)
+      const page1 = await Post.where({}).orderBy('id', 'asc').cursorPaginate({ limit: 20 }, db)
 
       const page2 = await Post.where({})
         .orderBy('id', 'asc')
@@ -332,9 +336,7 @@ describe('Pagination', () => {
 
     it('should handle backward pagination on first page', async () => {
       // First page with no cursor
-      const page1 = await Post.where({})
-        .orderBy('id', 'asc')
-        .cursorPaginate({ limit: 20 }, db)
+      const page1 = await Post.where({}).orderBy('id', 'asc').cursorPaginate({ limit: 20 }, db)
 
       // Try to go backward from first page - should return empty or first page
       if (page1.meta.prevCursor) {

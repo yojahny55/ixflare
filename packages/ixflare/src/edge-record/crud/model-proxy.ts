@@ -387,10 +387,7 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
       }
     },
 
-    orderBy(
-      field: keyof InferSchema<T>,
-      direction: 'asc' | 'desc' = 'asc'
-    ): QueryBuilder<T> {
+    orderBy(field: keyof InferSchema<T>, direction: 'asc' | 'desc' = 'asc'): QueryBuilder<T> {
       if (model.$storage !== 'd1') {
         console.warn(
           `[EdgeRecord] orderBy() only works with D1 storage. ` +
