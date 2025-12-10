@@ -94,6 +94,16 @@ export interface ModelCrudMethods<T extends SchemaDefinition> {
   ): QueryBuilder<T>
 
   /**
+   * Order results by a field (D1 only)
+   *
+   * @example
+   * ```typescript
+   * const users = await User.orderBy('createdAt', 'desc').all(db)
+   * ```
+   */
+  orderBy(field: keyof InferSchema<T>, direction?: 'asc' | 'desc'): QueryBuilder<T>
+
+  /**
    * Eager load relationships (D1 only)
    *
    * @example
@@ -190,12 +200,22 @@ export interface ModelCrudMethods<T extends SchemaDefinition> {
   /**
    * Paginate results using cursor-based pagination (D1 only)
    *
+   * NOTE: Cursor pagination requires orderBy() - use Model.orderBy(...).cursorPaginate()
+   * The static shortcut is provided for consistency but orderBy must be chained.
+   *
    * @param options Cursor pagination options (cursor and limit)
    * @param db D1Database instance
    *
    * @example
    * ```typescript
+   * // Cursor pagination requires orderBy to be set
    * const result = await Post
+   *   .orderBy('createdAt', 'desc')
+   *   .cursorPaginate({ limit: 20 }, db)
+   *
+   * // With WHERE conditions
+   * const published = await Post
+   *   .where({ status: 'published' })
    *   .orderBy('createdAt', 'desc')
    *   .cursorPaginate({ limit: 20 }, db)
    * ```
@@ -365,6 +385,20 @@ export function createModelProxy<T extends SchemaDefinition>(model: Model<T>): M
       } else {
         return qb
       }
+    },
+
+    orderBy(
+      field: keyof InferSchema<T>,
+      direction: 'asc' | 'desc' = 'asc'
+    ): QueryBuilder<T> {
+      if (model.$storage !== 'd1') {
+        console.warn(
+          `[EdgeRecord] orderBy() only works with D1 storage. ` +
+            `Model '${model.$tableName}' uses '${model.$storage}' storage.`
+        )
+      }
+      const qb = new QueryBuilder(model)
+      return qb.orderBy(field, direction)
     },
 
     with(...relations: string[]): QueryBuilder<T> {

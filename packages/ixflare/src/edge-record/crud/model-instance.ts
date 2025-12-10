@@ -43,6 +43,7 @@ function getPkField<T extends SchemaDefinition>(model: Model<T>): keyof InferSch
 /**
  * ModelInstance wraps a database record with instance methods
  * Provides automatic case transformation and dirty tracking
+ * Uses Proxy to expose schema fields as direct properties (e.g., instance.id, instance.name)
  *
  * @template T The schema definition type
  */
@@ -59,6 +60,36 @@ export class ModelInstance<T extends SchemaDefinition> {
     // Transform snake_case DB columns to camelCase for API
     this._data = this.transformFromDb(data) as InferSchema<T>
     this._original = { ...this._data }
+
+    // Return a Proxy that exposes _data properties directly on the instance
+    // This allows accessing instance.id, instance.name, etc. without using .get()
+    return new Proxy(this, {
+      get(target, prop, receiver) {
+        // First check if it's a method/property on the class itself
+        if (prop in target || typeof prop === 'symbol') {
+          return Reflect.get(target, prop, receiver)
+        }
+        // Then check if it's a data field
+        const propStr = String(prop)
+        if (propStr in target._data) {
+          return target._data[propStr as keyof InferSchema<T>]
+        }
+        return undefined
+      },
+      set(target, prop, value) {
+        // Allow setting class properties normally
+        if (prop in target || prop.toString().startsWith('_')) {
+          return Reflect.set(target, prop, value)
+        }
+        // Set data fields
+        const propStr = String(prop)
+        target._data[propStr as keyof InferSchema<T>] = value
+        return true
+      },
+      has(target, prop) {
+        return prop in target || String(prop) in target._data
+      },
+    })
   }
 
   /**

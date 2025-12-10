@@ -231,18 +231,20 @@ describe('Pagination', () => {
     })
 
     it('should paginate forward using nextCursor', async () => {
+      // Use id ordering since all posts have same createdAt (created in fast loop)
       const page1 = await Post.where({})
-        .orderBy('createdAt', 'desc')
+        .orderBy('id', 'desc')
         .cursorPaginate({ limit: 20 }, db)
 
       expect(page1.meta.nextCursor).toBeTruthy()
 
       const page2 = await Post.where({})
-        .orderBy('createdAt', 'desc')
+        .orderBy('id', 'desc')
         .cursorPaginate({ cursor: page1.meta.nextCursor!, limit: 20 }, db)
 
       expect(page2.data).toHaveLength(20)
       expect(page2.meta.hasMore).toBe(true)
+      // Page 2 should start with different IDs than page 1 (keyset pagination)
       expect(page2.data[0].id).not.toBe(page1.data[0].id)
     })
 
@@ -297,7 +299,8 @@ describe('Pagination', () => {
       ).rejects.toThrow("Cursor must contain 'createdAt' field")
     })
 
-    it('should work with static Model.cursorPaginate() shortcut', async () => {
+    it('should work with static Model.orderBy() shortcut', async () => {
+      // Model.orderBy() creates a QueryBuilder with ordering, then cursorPaginate
       const result = await Post.orderBy('createdAt', 'desc').cursorPaginate({ limit: 20 }, db)
 
       expect(result.data).toHaveLength(20)
@@ -330,7 +333,8 @@ describe('Pagination', () => {
         .paginate({ page: 1, perPage: 20 }, db)
 
       expect(result.meta.total).toBe(20) // Only non-deleted
-      expect(result.data.every((u) => u.deletedAt === null)).toBe(true)
+      // Use == null to match both null and undefined (field may not exist for non-deleted records)
+      expect(result.data.every((u) => u.deletedAt == null)).toBe(true)
     })
 
     it('should include soft-deleted with withTrashed()', async () => {
@@ -355,7 +359,8 @@ describe('Pagination', () => {
         .orderBy('createdAt', 'desc')
         .cursorPaginate({ limit: 10 }, db)
 
-      expect(result.data.every((u) => u.deletedAt === null)).toBe(true)
+      // Use == null to match both null and undefined
+      expect(result.data.every((u) => u.deletedAt == null)).toBe(true)
       expect(result.data.length).toBeLessThanOrEqual(10)
     })
 

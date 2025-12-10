@@ -288,17 +288,95 @@ export function createMockD1Database(): D1Database {
             if (query.toUpperCase().includes('WHERE')) {
               const whereMatch = query.match(/WHERE\s+(.+?)(?:\s+GROUP|\s+ORDER|\s+LIMIT|$)/i)
               if (whereMatch) {
-                const conditions = whereMatch[1]
-                // Extract field names and match against bound values
-                const fieldMatches = [...conditions.matchAll(/"([^"]+)"\s*=\s*\?/g)]
-                if (fieldMatches.length > 0) {
-                  records = records.filter((record) => {
-                    return fieldMatches.every((match, index) => {
-                      const fieldName = match[1]
-                      return record[fieldName] === boundValues[index]
+                const fullCondition = whereMatch[1]
+
+                // Track which params have been used for each condition
+                let globalParamIndex = 0
+
+                records = records.filter((record) => {
+                  // Reset param index for each record evaluation
+                  let paramIndex = globalParamIndex
+
+                  // Parse all conditions - handle both AND and OR
+                  // Split by OR first (lower precedence), then AND (higher precedence)
+                  const orGroups = fullCondition.split(/\s+OR\s+/i)
+
+                  const orResult = orGroups.some((group, groupIdx) => {
+                    // For each OR group, reset param index to start of this group's params
+                    // This is needed because OR branches might need same params
+                    let currentParamIdx = paramIndex
+
+                    // Split by AND
+                    const andConditions = group.split(/\s+AND\s+/i)
+
+                    const andResult = andConditions.every((condition) => {
+                      // Remove outer parentheses
+                      let trimmed = condition.trim()
+                      while (trimmed.startsWith('(') && trimmed.endsWith(')')) {
+                        trimmed = trimmed.slice(1, -1).trim()
+                      }
+
+                      // Handle IS NULL
+                      const isNullMatch = trimmed.match(/"?([^"\s]+)"?\s+IS\s+NULL/i)
+                      if (isNullMatch) {
+                        const fieldName = isNullMatch[1]
+                        const val = record[fieldName]
+                        return val === null || val === undefined
+                      }
+
+                      // Handle IS NOT NULL
+                      const isNotNullMatch = trimmed.match(/"?([^"\s]+)"?\s+IS\s+NOT\s+NULL/i)
+                      if (isNotNullMatch) {
+                        const fieldName = isNotNullMatch[1]
+                        const val = record[fieldName]
+                        return val !== null && val !== undefined
+                      }
+
+                      // Handle comparison operators (>, <, >=, <=, !=, =)
+                      const compMatch = trimmed.match(/"?([^"\s]+)"?\s*(>=|<=|!=|<>|>|<|=)\s*\?/)
+                      if (compMatch) {
+                        const fieldName = compMatch[1]
+                        const operator = compMatch[2]
+                        const value = boundValues[currentParamIdx++]
+                        const recordValue = record[fieldName]
+
+                        switch (operator) {
+                          case '=':
+                            return recordValue === value
+                          case '!=':
+                          case '<>':
+                            return recordValue !== value
+                          case '>':
+                            return Number(recordValue) > Number(value)
+                          case '<':
+                            return Number(recordValue) < Number(value)
+                          case '>=':
+                            return Number(recordValue) >= Number(value)
+                          case '<=':
+                            return Number(recordValue) <= Number(value)
+                          default:
+                            return true
+                        }
+                      }
+
+                      // Handle IN operator
+                      const inMatch = trimmed.match(/"?([^"\s]+)"?\s+IN\s*\(([^)]+)\)/i)
+                      if (inMatch) {
+                        const fieldName = inMatch[1]
+                        const placeholders = inMatch[2].split(',').map((p) => p.trim())
+                        const values = placeholders.map(() => boundValues[currentParamIdx++])
+                        return values.includes(record[fieldName])
+                      }
+
+                      // Unknown condition - pass through
+                      return true
                     })
+
+                    return andResult
                   })
-                }
+
+                  return orResult
+                })
               }
             }
 
@@ -486,6 +564,30 @@ export function createMockD1Database(): D1Database {
               }
             }
 
+            // Handle ORDER BY clause
+            const orderMatch = query.match(/ORDER BY\s+"?([^"\s,]+)"?\s*(ASC|DESC)?/i)
+            if (orderMatch) {
+              const orderField = orderMatch[1]
+              const direction = orderMatch[2]?.toUpperCase() === 'DESC' ? -1 : 1
+              records.sort((a, b) => {
+                const aVal = a[orderField]
+                const bVal = b[orderField]
+                if (aVal === bVal) return 0
+                if (aVal === null || aVal === undefined) return 1
+                if (bVal === null || bVal === undefined) return -1
+                return aVal < bVal ? -1 * direction : 1 * direction
+              })
+            }
+
+            // Handle LIMIT and OFFSET clauses
+            const limitMatch = query.match(/LIMIT\s+(\d+)/i)
+            const offsetMatch = query.match(/OFFSET\s+(\d+)/i)
+            if (limitMatch || offsetMatch) {
+              const limit = limitMatch ? parseInt(limitMatch[1], 10) : records.length
+              const offset = offsetMatch ? parseInt(offsetMatch[1], 10) : 0
+              records = records.slice(offset, offset + limit)
+            }
+
             return {
               results: records as T[],
               success: true,
@@ -517,20 +619,73 @@ export function createMockD1Database(): D1Database {
           if (query.toUpperCase().includes('SELECT')) {
             let records = Array.from(store.values())
 
-            // Apply WHERE clause filtering for aggregates
+            // Apply WHERE clause filtering for aggregates (same logic as all())
             if (query.toUpperCase().includes('WHERE')) {
               const whereMatch = query.match(/WHERE\s+(.+?)(?:\s+GROUP|\s+ORDER|\s+LIMIT|$)/i)
               if (whereMatch) {
-                const conditions = whereMatch[1]
-                const fieldMatches = [...conditions.matchAll(/"([^"]+)"\s*=\s*\?/g)]
-                if (fieldMatches.length > 0) {
-                  records = records.filter((record) => {
-                    return fieldMatches.every((match, index) => {
-                      const fieldName = match[1]
-                      return record[fieldName] === boundValues[index]
+                const fullCondition = whereMatch[1]
+
+                records = records.filter((record) => {
+                  let paramIndex = 0
+                  const orGroups = fullCondition.split(/\s+OR\s+/i)
+
+                  return orGroups.some((group) => {
+                    let currentParamIdx = paramIndex
+                    const andConditions = group.split(/\s+AND\s+/i)
+
+                    return andConditions.every((condition) => {
+                      let trimmed = condition.trim()
+                      while (trimmed.startsWith('(') && trimmed.endsWith(')')) {
+                        trimmed = trimmed.slice(1, -1).trim()
+                      }
+
+                      // Handle IS NULL
+                      const isNullMatch = trimmed.match(/"?([^"\s]+)"?\s+IS\s+NULL/i)
+                      if (isNullMatch) {
+                        const fieldName = isNullMatch[1]
+                        const val = record[fieldName]
+                        return val === null || val === undefined
+                      }
+
+                      // Handle IS NOT NULL
+                      const isNotNullMatch = trimmed.match(/"?([^"\s]+)"?\s+IS\s+NOT\s+NULL/i)
+                      if (isNotNullMatch) {
+                        const fieldName = isNotNullMatch[1]
+                        const val = record[fieldName]
+                        return val !== null && val !== undefined
+                      }
+
+                      // Handle comparison operators
+                      const compMatch = trimmed.match(/"?([^"\s]+)"?\s*(>=|<=|!=|<>|>|<|=)\s*\?/)
+                      if (compMatch) {
+                        const fieldName = compMatch[1]
+                        const operator = compMatch[2]
+                        const value = boundValues[currentParamIdx++]
+                        const recordValue = record[fieldName]
+
+                        switch (operator) {
+                          case '=':
+                            return recordValue === value
+                          case '!=':
+                          case '<>':
+                            return recordValue !== value
+                          case '>':
+                            return Number(recordValue) > Number(value)
+                          case '<':
+                            return Number(recordValue) < Number(value)
+                          case '>=':
+                            return Number(recordValue) >= Number(value)
+                          case '<=':
+                            return Number(recordValue) <= Number(value)
+                          default:
+                            return true
+                        }
+                      }
+
+                      return true
                     })
                   })
-                }
+                })
               }
             }
 

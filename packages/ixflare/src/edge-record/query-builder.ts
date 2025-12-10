@@ -197,6 +197,13 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
   private _includeTrashed = false
   /** Flag to only return soft-deleted records (inverts global scope filter) */
   private _onlyTrashed = false
+  /** Cursor pagination keyset conditions (applied separately with proper AND/OR logic) */
+  private cursorConditions?: {
+    orderField: string
+    orderValue: unknown
+    id: number | string
+    direction: '>' | '<'
+  }
 
   constructor(private model: Model<T>) {}
 
@@ -936,13 +943,13 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
     // Calculate pagination metadata
     const lastPage = Math.max(1, Math.ceil(total / perPage))
     const offset = (page - 1) * perPage
-    const from = total > 0 ? offset + 1 : 0
-    const to = Math.min(offset + perPage, total)
 
-    // Execute paginated query
-    this.limitValue = perPage
-    this.offsetValue = offset
-    const data = await this.all(db)
+    // Execute paginated query - use limit/offset methods to preserve immutability pattern
+    const data = await this.limit(perPage).offset(offset).all(db)
+
+    // Calculate from/to based on actual data returned (handles beyond lastPage case)
+    const from = data.length > 0 ? offset + 1 : 0
+    const to = data.length > 0 ? offset + data.length : 0
 
     // Generate navigation links
     const links = {
@@ -1012,39 +1019,21 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
     // Normalize and cap limit
     const limit = Math.min(MAX_PAGE_SIZE, Math.max(1, options.limit || DEFAULT_PAGE_SIZE))
 
-    // Decode cursor and add keyset condition if provided
+    // Decode cursor and store keyset conditions (applied separately in buildWhereClause)
     if (options.cursor) {
       const cursor = decodeCursor(options.cursor)
 
       // Validate cursor has expected fields
       validateCursor(cursor, this.orderByField)
 
-      // Add keyset condition: WHERE (orderField, id) > (cursorValue, cursorId)
-      // For DESC: WHERE (orderField, id) < (cursorValue, cursorId)
-      const op = this.orderDirection === 'asc' ? '>' : '<'
-      const cursorValue = cursor[this.orderByField]
-      const cursorId = cursor.id
-
-      // Build compound keyset condition using OR groups
-      // For ASC:  (orderField > cursorValue) OR (orderField = cursorValue AND id > cursorId)
-      // For DESC: (orderField < cursorValue) OR (orderField = cursorValue AND id < cursorId)
-
-      // Add to current group or create new one if needed
-      if (this.andGroups.length === 0 || this.currentGroup.length > 0) {
-        this.andGroups.push([])
+      // Store cursor conditions for proper keyset pagination
+      // These will be ANDed with existing WHERE conditions in buildWhereClause
+      this.cursorConditions = {
+        orderField: this.orderByField,
+        orderValue: cursor[this.orderByField],
+        id: cursor.id,
+        direction: this.orderDirection === 'asc' ? '>' : '<',
       }
-
-      // First OR group: orderField > cursorValue (or < for DESC)
-      this.currentGroup.push({ field: this.orderByField, operator: op, value: cursorValue })
-
-      // Second OR group: orderField = cursorValue AND id > cursorId
-      this.andGroups.push([])
-      this.currentGroup.push({
-        field: this.orderByField,
-        operator: '=',
-        value: cursorValue,
-      })
-      this.currentGroup.push({ field: 'id', operator: op, value: cursorId })
     }
 
     // Fetch limit + 1 to determine hasMore
@@ -1056,20 +1045,23 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
     const data = hasMore ? results.slice(0, limit) : results
 
     // Generate next cursor from last item
+    // Use .get() to access ModelInstance data since _data is private
+    const lastItem = data[data.length - 1]
     const nextCursor =
       hasMore && data.length > 0
         ? encodeCursor({
-            [this.orderByField]: data[data.length - 1][this.orderByField as keyof ModelInstance<T>],
-            id: data[data.length - 1].id,
+            [this.orderByField]: lastItem.get(this.orderByField as keyof InferSchema<T>),
+            id: lastItem.get('id' as keyof InferSchema<T>) as number | string,
           } as Cursor)
         : null
 
     // Generate previous cursor from first item (for bi-directional navigation)
+    const firstItem = data[0]
     const prevCursor =
       data.length > 0 && options.cursor
         ? encodeCursor({
-            [this.orderByField]: data[0][this.orderByField as keyof ModelInstance<T>],
-            id: data[0].id,
+            [this.orderByField]: firstItem.get(this.orderByField as keyof InferSchema<T>),
+            id: firstItem.get('id' as keyof InferSchema<T>) as number | string,
           } as Cursor)
         : null
 
@@ -1086,14 +1078,15 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
   /**
    * Build WHERE clause from AND groups with OR logic
    * Applies global soft delete filter if model has soft deletes enabled
+   * Applies cursor pagination keyset conditions with proper AND/OR structure
    * @internal
    */
   private buildWhereClause(): string {
+    // Clone andGroups to avoid mutating original
+    let filteredGroups = this.andGroups.map((group) => [...group])
+
     // Apply soft delete global scope filter
     if (this.model.$softDeletes && !this._includeTrashed) {
-      // Clone andGroups to avoid mutating original
-      const filteredGroups = this.andGroups.map((group) => [...group])
-
       // Add soft delete condition to the first group (main WHERE clause)
       if (this._onlyTrashed) {
         // Only show deleted records
@@ -1102,11 +1095,29 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
         // Default: exclude deleted records
         filteredGroups[0].unshift({ field: 'deletedAt', operator: 'IS NULL', value: null })
       }
-
-      return buildWhereClauseFromGroups(filteredGroups)
     }
 
-    return buildWhereClauseFromGroups(this.andGroups)
+    // Build base WHERE clause
+    const baseWhereClause = buildWhereClauseFromGroups(filteredGroups)
+
+    // Add cursor keyset conditions if present
+    // These need special handling: (baseConditions) AND ((orderField > val) OR (orderField = val AND id > cursorId))
+    if (this.cursorConditions) {
+      const { orderField, orderValue, id, direction } = this.cursorConditions
+      const orderDbField = escapeIdentifier(toSnakeCase(orderField))
+
+      // Build keyset condition: (orderField > val) OR (orderField = val AND id > cursorId)
+      const keysetClause = `(${orderDbField} ${direction} ? OR (${orderDbField} = ? AND "id" ${direction} ?))`
+
+      if (baseWhereClause) {
+        // AND the keyset with existing conditions
+        return baseWhereClause + ' AND ' + keysetClause
+      } else {
+        return ' WHERE ' + keysetClause
+      }
+    }
+
+    return baseWhereClause
   }
 
   /**
@@ -1144,6 +1155,16 @@ export class QueryBuilder<T extends SchemaDefinition, Selected = InferSchema<T>>
     const params = this.conditions
       .filter((c) => c.operator !== 'IS NULL' && c.operator !== 'IS NOT NULL')
       .map((c) => c.value)
+
+    // Add cursor keyset condition parameters if present
+    // The keyset clause uses 3 parameters: orderValue, orderValue (for = check), id
+    if (this.cursorConditions) {
+      params.push(
+        this.cursorConditions.orderValue,
+        this.cursorConditions.orderValue,
+        this.cursorConditions.id
+      )
+    }
 
     // Validate total parameter count against D1 limit
     if (params.length > D1_PARAM_LIMIT) {
