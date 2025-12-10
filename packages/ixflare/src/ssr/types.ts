@@ -14,12 +14,18 @@ export interface RenderOptions {
   bootstrapScripts?: string[]
   /** Error handler for rendering errors */
   onError?: (error: unknown) => void
-  /** Document title for the HTML page */
+  /** Document title for the HTML page (ignored if shell: false) */
   title?: string
-  /** Additional meta tags to include in head */
+  /** Additional meta tags to include in head (ignored if shell: false) */
   meta?: Record<string, string>
-  /** Language attribute for html element (default: 'en') */
+  /** Language attribute for html element (default: 'en', ignored if shell: false) */
   lang?: string
+  /**
+   * Whether to wrap output in HTML document shell (<!DOCTYPE html><html>...</html>).
+   * - true (default): Full HTML document with DOCTYPE, head, body
+   * - false: Raw component output only (for fragments, HTMX, or components with own shell)
+   */
+  shell?: boolean
 }
 
 export interface RenderResult {

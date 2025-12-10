@@ -15,6 +15,14 @@ const HTML_CLOSE = '</body></html>'
 /**
  * Safely serialize data for injection into HTML script tags.
  * Escapes characters that could break out of script context (XSS prevention).
+ *
+ * Escapes:
+ * - < > to prevent </script> breakout
+ * - & to prevent HTML entity injection
+ * - ' " to prevent attribute breakout
+ * - U+2028 (Line Separator) and U+2029 (Paragraph Separator) which are valid
+ *   in JSON but treated as newlines in JavaScript, causing syntax errors
+ *
  * @param data - Data to serialize
  * @returns Safe JSON string with escaped HTML-sensitive characters
  */
@@ -25,6 +33,8 @@ function safeJsonStringify(data: unknown): string {
     .replace(/&/g, '\\u0026')
     .replace(/'/g, '\\u0027')
     .replace(/"/g, '\\u0022')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029')
 }
 
 /**
@@ -83,17 +93,25 @@ function buildBootstrapScript(data: unknown): string {
  * @param options.abortSignal - AbortSignal to cancel rendering
  * @param options.bootstrapScripts - Script URLs to include for hydration
  * @param options.onError - Error handler callback for render errors
- * @param options.title - Document title
- * @param options.lang - HTML lang attribute (default: 'en')
- * @param options.meta - Additional meta tags as name/content pairs
- * @returns Promise resolving to complete HTML string with DOCTYPE
+ * @param options.title - Document title (ignored if shell: false)
+ * @param options.lang - HTML lang attribute (default: 'en', ignored if shell: false)
+ * @param options.meta - Additional meta tags as name/content pairs (ignored if shell: false)
+ * @param options.shell - Whether to wrap in HTML document shell (default: true)
+ * @returns Promise resolving to HTML string (with or without DOCTYPE based on shell option)
  * @throws {InfraError} When rendering fails with code SSR_RENDER_FAILED
  *
  * @example
  * ```typescript
+ * // Full document (default)
  * const html = await renderToString(
  *   <HomePage data={posts} />,
  *   { title: 'My App', bootstrapData: { posts } }
+ * )
+ *
+ * // Fragment only (for HTMX or components with own shell)
+ * const fragment = await renderToString(
+ *   <UserCard user={user} />,
+ *   { shell: false }
  * )
  * ```
  */
@@ -128,6 +146,15 @@ export async function renderToString(
     // Add final flush
     html += decoder.decode()
 
+    // Check if shell wrapping is disabled
+    const shouldWrapInShell = options?.shell !== false
+
+    if (!shouldWrapInShell) {
+      // Return raw component output with optional bootstrap data
+      const bootstrapScript = buildBootstrapScript(options?.bootstrapData)
+      return bootstrapScript ? `${html}${bootstrapScript}` : html
+    }
+
     // Build complete HTML document with safe bootstrap data injection
     const htmlHead = buildHtmlHead(options)
     const bootstrapScript = buildBootstrapScript(options?.bootstrapData)
@@ -155,18 +182,23 @@ export async function renderToString(
  * @param options.abortSignal - AbortSignal to cancel rendering mid-stream
  * @param options.bootstrapScripts - Script URLs to include for hydration
  * @param options.onError - Error handler callback for stream errors
- * @param options.title - Document title
- * @param options.lang - HTML lang attribute (default: 'en')
- * @param options.meta - Additional meta tags as name/content pairs
+ * @param options.title - Document title (ignored if shell: false)
+ * @param options.lang - HTML lang attribute (default: 'en', ignored if shell: false)
+ * @param options.meta - Additional meta tags as name/content pairs (ignored if shell: false)
+ * @param options.shell - Whether to wrap in HTML document shell (default: true)
  * @returns ReadableStream of HTML chunks
  * @throws {InfraError} When streaming fails with code SSR_STREAM_FAILED (via stream error)
  *
  * @example
  * ```typescript
+ * // Full document stream (default)
  * const stream = renderToStream(<App />, { title: 'Streaming App' })
  * return new Response(stream, {
  *   headers: { 'Content-Type': 'text/html; charset=utf-8' }
  * })
+ *
+ * // Fragment stream (for HTMX partial updates)
+ * const fragmentStream = renderToStream(<PartialView />, { shell: false })
  * ```
  */
 export function renderToStream(
@@ -175,6 +207,7 @@ export function renderToStream(
 ): ReadableStream {
   // Create encoder once for reuse (performance optimization)
   const encoder = new TextEncoder()
+  const shouldWrapInShell = options?.shell !== false
 
   // Create a new stream that wraps React's stream with DOCTYPE and bootstrap data
   return new ReadableStream({
@@ -183,9 +216,11 @@ export function renderToStream(
         // Handle functional components (including async Server Components)
         const reactElement = typeof element === 'function' ? await element() : element
 
-        // Enqueue HTML document start with head and meta tags
-        const htmlHead = buildHtmlHead(options)
-        controller.enqueue(encoder.encode(`${HTML_DOCTYPE}${htmlHead}`))
+        // Enqueue HTML document start with head and meta tags (if shell enabled)
+        if (shouldWrapInShell) {
+          const htmlHead = buildHtmlHead(options)
+          controller.enqueue(encoder.encode(`${HTML_DOCTYPE}${htmlHead}`))
+        }
 
         // Render React component to stream using React 19's renderToReadableStream
         const reactStream = await renderToReadableStream(reactElement, {
@@ -208,8 +243,10 @@ export function renderToStream(
             if (bootstrapScript) {
               controller.enqueue(encoder.encode(bootstrapScript))
             }
-            // Close HTML document
-            controller.enqueue(encoder.encode(HTML_CLOSE))
+            // Close HTML document (if shell enabled)
+            if (shouldWrapInShell) {
+              controller.enqueue(encoder.encode(HTML_CLOSE))
+            }
             controller.close()
             break
           }
