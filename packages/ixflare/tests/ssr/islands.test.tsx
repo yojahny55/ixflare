@@ -3,7 +3,7 @@
  * @description Tests for islands architecture
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   isIslandComponent,
   serializeIslandProps,
@@ -54,6 +54,29 @@ describe('Islands Architecture', () => {
       expect(isIslandComponent(123)).toBe(false)
       expect(isIslandComponent(true)).toBe(false)
     })
+
+    it('should detect island marker on functional components', () => {
+      // Functional component with island marker attached
+      function Counter() {
+        return null
+      }
+      ;(Counter as unknown as { island: boolean }).island = true
+
+      expect(isIslandComponent(Counter)).toBe(true)
+    })
+
+    it('should detect island marker on arrow function components', () => {
+      const Counter = () => null
+      ;(Counter as unknown as { island: boolean }).island = true
+
+      expect(isIslandComponent(Counter)).toBe(true)
+    })
+
+    it('should return false for function without island marker', () => {
+      const Counter = () => null
+
+      expect(isIslandComponent(Counter)).toBe(false)
+    })
   })
 
   describe('Props Serialization', () => {
@@ -89,6 +112,28 @@ describe('Islands Architecture', () => {
         // Should not contain raw dangerous characters
         expect(json).not.toContain('<script>')
         expect(json).not.toContain('</div>')
+
+        // Should still deserialize correctly
+        const parsed = JSON.parse(json)
+        expect(parsed).toEqual(props)
+      })
+
+      it('should escape single quotes for attribute safety', () => {
+        const props = {
+          singleQuote: "it's a test",
+          both: `it's "quoted"`,
+        }
+
+        const json = serializeIslandProps(props, 'test-island')
+
+        // Should escape single quotes (prevents breakout from data-props='...')
+        expect(json).toContain('\\u0027') // ' (single quote)
+
+        // Should not contain raw single quotes
+        expect(json).not.toContain("'")
+
+        // Double quotes are handled by JSON.stringify with backslash escape
+        // which is safe for double-quoted HTML attributes
 
         // Should still deserialize correctly
         const parsed = JSON.parse(json)
@@ -204,6 +249,36 @@ describe('Islands Architecture', () => {
         expect(() => {
           serializeIslandProps(props, 'test-island')
         }).toThrow(/Set instances cannot be passed to islands/)
+      })
+
+      it('should reject BigInt values with ValidationError', () => {
+        const props = {
+          bigNumber: BigInt(9007199254740991),
+        }
+
+        expect(() => {
+          serializeIslandProps(props, 'test-island')
+        }).toThrow(ValidationError)
+
+        expect(() => {
+          serializeIslandProps(props, 'test-island')
+        }).toThrow(/BigInt cannot be passed to islands/)
+      })
+
+      it('should reject nested BigInt values with ValidationError', () => {
+        const props = {
+          nested: {
+            value: BigInt(12345),
+          },
+        }
+
+        expect(() => {
+          serializeIslandProps(props, 'test-island')
+        }).toThrow(ValidationError)
+
+        expect(() => {
+          serializeIslandProps(props, 'test-island')
+        }).toThrow(/BigInt cannot be passed to islands/)
       })
 
       it('should detect circular references', () => {

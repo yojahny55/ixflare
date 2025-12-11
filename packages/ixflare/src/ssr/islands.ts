@@ -38,12 +38,21 @@ const MAX_PROPS_SIZE = 10 * 1024
  * ```
  */
 export function isIslandComponent(component: unknown): boolean {
-  if (!component || typeof component !== 'object') {
+  if (!component) {
     return false
   }
 
   // Check for island export marker
-  return 'island' in component && component.island !== undefined
+  // Components can be objects (class components, forwardRef, etc.) or functions (functional components)
+  // with an attached 'island' property
+  const type = typeof component
+  if (type !== 'object' && type !== 'function') {
+    return false
+  }
+
+  // TypeScript needs explicit object cast for 'in' operator
+  const comp = component as Record<string, unknown>
+  return 'island' in comp && comp.island !== undefined
 }
 
 /**
@@ -69,6 +78,11 @@ function validateSerializableProps(props: Record<string, unknown>, islandId: str
     // Symbols are not serializable
     if (type === 'symbol') {
       throw new ValidationError(`Island "${islandId}" received non-serializable prop "${path}". Symbols cannot be passed to islands.`)
+    }
+
+    // BigInt is not serializable (JSON.stringify throws TypeError)
+    if (type === 'bigint') {
+      throw new ValidationError(`Island "${islandId}" received non-serializable prop "${path}". BigInt cannot be passed to islands. Convert to number or string.`)
     }
 
     // Check arrays recursively
@@ -177,11 +191,17 @@ export function serializeIslandProps(props: Record<string, unknown>, islandId: s
 
   // Escape HTML-dangerous characters for XSS safety
   // These characters are dangerous when embedded in HTML attributes
-  // Note: JSON.stringify already escapes quotes with \" which is safe
+  //
+  // Note: We escape single quotes but NOT double quotes because:
+  // - JSON.stringify already escapes double quotes inside strings as \"
+  // - The \" is safe in double-quoted HTML attributes: data-props="{\"key\":\"value\"}"
+  // - But single quotes are NOT escaped by JSON, so data-props='{"key":"it's broken"}'
+  //   would break if we don't escape them
   return json
-    .replace(/</g, '\\u003c') // < becomes \u003c
-    .replace(/>/g, '\\u003e') // > becomes \u003e
-    .replace(/&/g, '\\u0026') // & becomes \u0026
+    .replace(/</g, '\\u003c') // < becomes \u003c (prevents </script> breakout)
+    .replace(/>/g, '\\u003e') // > becomes \u003e (prevents tag injection)
+    .replace(/&/g, '\\u0026') // & becomes \u0026 (prevents entity injection)
+    .replace(/'/g, '\\u0027') // ' becomes \u0027 (prevents single-quote attribute breakout)
 }
 
 /**
