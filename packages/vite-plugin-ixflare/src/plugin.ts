@@ -52,6 +52,78 @@ const RESOLVED_VIRTUAL_MODULE_ID = '\0' + VIRTUAL_MODULE_ID
 const VIRTUAL_ISLANDS_ID = 'virtual:ixflare-islands'
 const RESOLVED_ISLANDS_ID = '\0' + VIRTUAL_ISLANDS_ID
 
+/**
+ * Extracts route path from a file path for HMR targeting.
+ *
+ * Handles various route file patterns:
+ * - /src/routes/index.tsx → /
+ * - /src/routes/dashboard/index.tsx → /dashboard
+ * - /src/routes/about.tsx → /about
+ * - /src/routes/users/[id].tsx → /users/[id]
+ * - /src/routes/users/[id]/posts.tsx → /users/[id]/posts
+ *
+ * @param file - Full file path
+ * @param routesDir - Routes directory name (e.g., 'src/routes')
+ * @returns Route path (e.g., '/dashboard')
+ */
+function extractRoutePathFromFile(file: string, routesDir: string): string {
+  // Normalize path separators to forward slashes
+  const normalizedFile = file.replace(/\\/g, '/')
+  const normalizedRoutesDir = routesDir.replace(/\\/g, '/')
+
+  // Split both paths into segments for proper matching
+  const fileSegments = normalizedFile.split('/')
+  const routesDirSegments = normalizedRoutesDir.split('/').filter(Boolean)
+
+  // Find where routesDir ends in the file path by matching segments
+  let routesDirEndIndex = -1
+
+  for (let i = 0; i <= fileSegments.length - routesDirSegments.length; i++) {
+    let match = true
+    for (let j = 0; j < routesDirSegments.length; j++) {
+      if (fileSegments[i + j] !== routesDirSegments[j]) {
+        match = false
+        break
+      }
+    }
+    if (match) {
+      routesDirEndIndex = i + routesDirSegments.length
+      break
+    }
+  }
+
+  if (routesDirEndIndex === -1) {
+    return '/'
+  }
+
+  // Get segments after routes directory
+  const routeSegments = fileSegments.slice(routesDirEndIndex)
+
+  if (routeSegments.length === 0) {
+    return '/'
+  }
+
+  // Process the last segment (remove extension)
+  let lastSegment = routeSegments[routeSegments.length - 1]
+  const extIndex = lastSegment.lastIndexOf('.')
+  if (extIndex > 0) {
+    lastSegment = lastSegment.slice(0, extIndex)
+  }
+  routeSegments[routeSegments.length - 1] = lastSegment
+
+  // Handle index files - remove 'index' from the path
+  if (lastSegment === 'index') {
+    routeSegments.pop()
+  }
+
+  // Build route path
+  if (routeSegments.length === 0) {
+    return '/'
+  }
+
+  return '/' + routeSegments.join('/')
+}
+
 export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
   const routesDir = options.routesDir || 'src/routes'
   const componentsDir = options.componentsDir || 'src/components'
@@ -277,17 +349,13 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
         discoveredIslands = await discoverIslands(resolvedComponentsDir)
 
         // Use enhanced island HMR handler with timing and logging
-        return handleIslandHMR(file, server, discoveredIslands)
+        return handleIslandHMR(file, server)
       }
 
       // Handle HMR for server component files (routes/*.tsx but not .client.tsx)
       if (file.includes(routesDir) && file.endsWith('.tsx') && !file.endsWith('.client.tsx')) {
         // Extract route path from file path for targeted updates
-        // Example: /path/to/src/routes/dashboard/index.tsx -> /dashboard
-        const routePathMatch = file.match(/routes\/(.+?)\/index\.tsx$|routes\/(.+?)\.tsx$/)
-        const routePath = routePathMatch
-          ? `/${routePathMatch[1] || routePathMatch[2] || ''}`
-          : '/'
+        const routePath = extractRoutePathFromFile(file, routesDir)
 
         // Send custom event to client for HTML swap with island preservation
         handleServerComponentHMR(file, server, routePath)

@@ -29,7 +29,7 @@ const RESOLVED_VIRTUAL_MODULE_ID = '\0' + VIRTUAL_MODULE_ID
 
 /**
  * Setup HMR for the Vite dev server
- * Configures logging for route manifest updates
+ * Configures logging for route manifest updates and breaking change detection
  */
 export function setupHMR(server: ViteDevServer, config: HMRConfig = {}): void {
   if (config.enabled === false) {
@@ -40,6 +40,41 @@ export function setupHMR(server: ViteDevServer, config: HMRConfig = {}): void {
   server.ws.on('connection', () => {
     server.config.logger.info('[ixflare] HMR connected', { timestamp: true })
   })
+
+  // Listen for full reload events to detect breaking changes
+  // This is triggered when React Fast Refresh bails out
+  server.ws.on('vite:beforeFullReload', (payload: { path?: string }) => {
+    const filePath = payload?.path || 'unknown file'
+    const fileName = filePath.split('/').pop() || filePath
+
+    // Detect common bailout patterns
+    let reason = 'Component signature changed'
+
+    if (fileName.endsWith('.client.tsx') || fileName.endsWith('.tsx')) {
+      reason = detectBailoutReason(fileName)
+    }
+
+    logBreakingChange(reason, server)
+  })
+}
+
+/**
+ * Detects the likely reason for a Fast Refresh bailout based on file name patterns
+ * @internal
+ */
+function detectBailoutReason(fileName: string): string {
+  // Common bailout patterns - we can't know for sure without parsing,
+  // but we can provide helpful hints
+  const hints = [
+    'Possible causes:',
+    '• Component was renamed',
+    '• Default export removed or changed',
+    '• Hook order changed',
+    '• Anonymous arrow function used (export default () => ...)',
+    '• File exports both components and non-components',
+  ]
+
+  return `Breaking change detected in ${fileName}. ${hints.join(' ')}`
 }
 
 /**
@@ -175,23 +210,18 @@ export function logHMRTiming(
  *
  * @param file - Changed island file path
  * @param server - Vite dev server
- * @param discoveredIslands - Updated islands array after re-discovery
  * @returns Modules that need to be invalidated
  *
  * @example
  * ```typescript
  * // In handleHotUpdate hook:
  * if (file.endsWith('.client.tsx')) {
- *   discoveredIslands = await discoverIslands(componentsDir)
- *   return handleIslandHMR(file, server, discoveredIslands)
+ *   await discoverIslands(componentsDir) // Update island registry
+ *   return handleIslandHMR(file, server)
  * }
  * ```
  */
-export function handleIslandHMR(
-  file: string,
-  server: ViteDevServer,
-  _discoveredIslands: unknown[]
-): ModuleNode[] {
+export function handleIslandHMR(file: string, server: ViteDevServer): ModuleNode[] {
   const timing = startHMRTiming(file, 'island')
 
   const VIRTUAL_ISLANDS_ID = 'virtual:ixflare-islands'

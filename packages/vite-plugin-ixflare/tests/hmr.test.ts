@@ -81,6 +81,36 @@ describe('HMR Functions', () => {
 
       expect(server.ws.on).not.toHaveBeenCalled()
     })
+
+    it('should register vite:beforeFullReload listener for breaking change detection', () => {
+      const server = createMockServer()
+      setupHMR(server, { enabled: true })
+
+      expect(server.ws.on).toHaveBeenCalledWith('vite:beforeFullReload', expect.any(Function))
+    })
+
+    it('should log breaking change when beforeFullReload is triggered', () => {
+      const listeners = new Map<string, Function>()
+      const server = createMockServer()
+
+      // Override ws.on to capture listeners
+      server.ws.on = vi.fn((event: string, callback: Function) => {
+        listeners.set(event, callback)
+      })
+
+      setupHMR(server, { enabled: true })
+
+      // Trigger the beforeFullReload listener
+      const beforeFullReloadListener = listeners.get('vite:beforeFullReload')
+      expect(beforeFullReloadListener).toBeDefined()
+
+      beforeFullReloadListener!({ path: '/src/components/Counter.client.tsx' })
+
+      expect(server.config.logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Full reload triggered'),
+        expect.any(Object)
+      )
+    })
   })
 
   describe('handleRouteHMR', () => {
@@ -132,7 +162,7 @@ describe('HMR Functions', () => {
         new Set([createMockModule(file)])
       )
 
-      const modules = handleIslandHMR(file, server, [])
+      const modules = handleIslandHMR(file, server)
 
       expect(server.moduleGraph.invalidateModule).toHaveBeenCalledWith(virtualModule)
     })
@@ -144,7 +174,7 @@ describe('HMR Functions', () => {
 
       server.moduleGraph.getModuleById = vi.fn().mockReturnValue(virtualModule)
 
-      handleIslandHMR(file, server, [])
+      handleIslandHMR(file, server)
 
       const sentMessages = (server as unknown as { __sentMessages: unknown[] }).__sentMessages
       expect(sentMessages).toHaveLength(1)
@@ -172,7 +202,7 @@ describe('HMR Functions', () => {
       })
       server.moduleGraph.getModulesByFile = vi.fn().mockReturnValue(new Set([islandModule]))
 
-      const modules = handleIslandHMR(file, server, [])
+      const modules = handleIslandHMR(file, server)
 
       expect(modules).toContain(islandModule)
       expect(modules).toContain(virtualModule)
@@ -184,7 +214,7 @@ describe('HMR Functions', () => {
 
       server.moduleGraph.getModuleById = vi.fn().mockReturnValue(null)
 
-      handleIslandHMR(file, server, [])
+      handleIslandHMR(file, server)
 
       expect(server.config.logger.info).toHaveBeenCalledWith(
         expect.stringContaining('(state preserved)'),

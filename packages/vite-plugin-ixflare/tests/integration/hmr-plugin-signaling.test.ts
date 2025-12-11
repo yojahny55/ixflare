@@ -1,13 +1,21 @@
 /**
- * Integration Tests: HMR State Preservation
+ * Integration Tests: HMR Plugin Signaling
  *
- * These tests verify that Hot Module Replacement preserves component state
- * via React Fast Refresh for islands and handles server component updates.
+ * These tests verify the Vite plugin's HMR signaling behavior:
+ * - Module invalidation for islands and routes
+ * - WebSocket message sending (ixflare:server-update events)
+ * - Breaking change detection (vite:beforeFullReload listener)
+ * - Timing and logging behavior
+ *
+ * NOTE: These tests verify the SERVER-SIDE plugin behavior only.
+ * Actual client-side DOM manipulation and React state preservation
+ * is tested in packages/ixflare/tests/client/hmr-client.test.ts
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Plugin, ViteDevServer, ModuleNode, ResolvedConfig } from 'vite'
 import { ixflarePlugin } from '../../src/plugin'
+import { setupHMR } from '../../src/hmr'
 
 /**
  * Create mock Vite dev server for testing
@@ -66,7 +74,7 @@ function createMockModule(id: string, file: string = id): ModuleNode {
   } as ModuleNode
 }
 
-describe('HMR State Preservation Integration', () => {
+describe('HMR Plugin Signaling Integration', () => {
   let server: ViteDevServer
   let plugin: Plugin
 
@@ -82,7 +90,7 @@ describe('HMR State Preservation Integration', () => {
     modules.set('\0virtual:ixflare-islands', createMockModule('\0virtual:ixflare-islands'))
   })
 
-  describe('Island State Preservation', () => {
+  describe('Island HMR Signaling', () => {
     it('should trigger HMR for island component changes', async () => {
       const handleHotUpdate = plugin.handleHotUpdate as Function
       const file = '/test/project/src/components/Counter.client.tsx'
@@ -228,7 +236,7 @@ describe('HMR State Preservation Integration', () => {
     })
   })
 
-  describe('Multiple Islands State Preservation', () => {
+  describe('Multiple Islands HMR Signaling', () => {
     it('should handle multiple independent island updates', async () => {
       const handleHotUpdate = plugin.handleHotUpdate as Function
       const files = [
@@ -318,16 +326,73 @@ describe('HMR State Preservation Integration', () => {
   })
 
   describe('Breaking Change Detection', () => {
-    it('should be handled by React Fast Refresh automatically', async () => {
-      // Note: Actual breaking change detection is done by @vitejs/plugin-react
-      // This test verifies our logging function exists
-      const handleHotUpdate = plugin.handleHotUpdate as Function
-      const file = '/test/project/src/components/Renamed.client.tsx'
+    it('should log breaking change when vite:beforeFullReload is triggered', () => {
+      // Create a fresh server with ws.on tracking
+      const listeners = new Map<string, Function[]>()
+      const testServer = {
+        ...server,
+        ws: {
+          ...server.ws,
+          on: (event: string, callback: Function) => {
+            if (!listeners.has(event)) {
+              listeners.set(event, [])
+            }
+            listeners.get(event)!.push(callback)
+          },
+        },
+      } as unknown as ViteDevServer
 
-      await handleHotUpdate({ file, server })
+      // Setup HMR which registers the vite:beforeFullReload listener
+      setupHMR(testServer, { enabled: true })
 
-      // Should complete without error - React Fast Refresh handles bailout
-      expect(true).toBe(true)
+      // Verify listener was registered
+      expect(listeners.has('vite:beforeFullReload')).toBe(true)
+
+      // Trigger the beforeFullReload event with a component file
+      const beforeFullReloadListeners = listeners.get('vite:beforeFullReload')!
+      beforeFullReloadListeners.forEach((listener) => {
+        listener({ path: '/src/components/Counter.client.tsx' })
+      })
+
+      // Should log a warning about the breaking change
+      expect(testServer.config.logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Full reload triggered'),
+        expect.any(Object)
+      )
+      expect(testServer.config.logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Counter.client.tsx'),
+        expect.any(Object)
+      )
+    })
+
+    it('should provide helpful hints about bailout causes', () => {
+      const listeners = new Map<string, Function[]>()
+      const testServer = {
+        ...server,
+        ws: {
+          ...server.ws,
+          on: (event: string, callback: Function) => {
+            if (!listeners.has(event)) {
+              listeners.set(event, [])
+            }
+            listeners.get(event)!.push(callback)
+          },
+        },
+      } as unknown as ViteDevServer
+
+      setupHMR(testServer, { enabled: true })
+
+      // Trigger with a tsx file
+      const beforeFullReloadListeners = listeners.get('vite:beforeFullReload')!
+      beforeFullReloadListeners.forEach((listener) => {
+        listener({ path: '/src/routes/dashboard.tsx' })
+      })
+
+      // Should include helpful hints
+      expect(testServer.config.logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Possible causes'),
+        expect.any(Object)
+      )
     })
   })
 })
