@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import { InfraError } from '@/errors'
+import { AppError, InfraError } from '@/errors'
 import { escapeHtml } from './html-utils'
 
 /**
@@ -39,9 +39,9 @@ export interface SSRErrorInfo {
  *
  * Error classification determines how the framework handles the error:
  * - Shell errors: Reject Promise, return fallback HTML (critical failure)
- * - Boundary errors: Continue streaming with fallback (recoverable)
  * - Infrastructure errors: Framework/runtime issues (InfraError instances)
- * - App errors: User code errors (default)
+ * - App errors: User code errors (AppError and subclasses)
+ * - Boundary errors: Continue streaming with fallback (recoverable, generic errors)
  *
  * @param error - The error to classify
  * @param isShell - Whether this error occurred during shell rendering
@@ -58,7 +58,12 @@ export interface SSRErrorInfo {
  * const errorType = classifySSRError(infraError, false)
  * // Returns: 'infra'
  *
- * // Boundary error - recoverable
+ * // App error - user code error
+ * const appError = new ValidationError('INVALID_INPUT', 'Bad data')
+ * const errorType = classifySSRError(appError, false)
+ * // Returns: 'app'
+ *
+ * // Boundary error - recoverable generic error
  * const errorType = classifySSRError(new Error('Component failed'), false)
  * // Returns: 'boundary'
  * ```
@@ -72,7 +77,13 @@ export function classifySSRError(error: Error, isShell: boolean): SSRErrorType {
     return 'infra'
   }
 
-  // All non-shell errors during streaming are boundary errors
+  // AppError and subclasses (ValidationError, AuthError, etc.) are user code errors
+  // Check AppError after InfraError since InfraError extends AppError
+  if (error instanceof AppError) {
+    return 'app'
+  }
+
+  // Generic errors during streaming are boundary errors
   // These can be recovered by showing fallback content
   return 'boundary'
 }

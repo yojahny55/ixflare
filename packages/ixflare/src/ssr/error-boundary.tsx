@@ -90,6 +90,13 @@ const ErrorBoundaryContext = createContext<ErrorBoundaryContextValue | null>(nul
  * crashing the entire page. Supports multiple fallback rendering strategies
  * and integrates with request context for logging.
  *
+ * @remarks
+ * **Fallback rendering priority:**
+ * 1. `FallbackComponent` - React component (most flexible)
+ * 2. `fallbackRender` - Render function with error info
+ * 3. `fallback` - Static JSX element
+ * 4. `null` - Nothing rendered if no fallback provided
+ *
  * @example
  * ```typescript
  * // Static fallback
@@ -182,7 +189,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     const { children, fallback, fallbackRender, FallbackComponent } = this.props
 
     if (hasError && error) {
-      // Priority order: FallbackComponent > fallbackRender > fallback
+      // See @remarks in JSDoc for fallback priority documentation
       if (FallbackComponent) {
         return <FallbackComponent error={error} resetErrorBoundary={this.resetErrorBoundary} />
       }

@@ -3,7 +3,7 @@
  * @description Tests for custom error page rendering
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import React from 'react'
 import { renderErrorPage, createFallbackErrorHtml, findErrorPage } from '@/ssr/error-page-renderer'
 import type { ErrorProps } from '@/ssr/types'
@@ -48,7 +48,7 @@ describe('renderErrorPage', () => {
   it('should use custom error component if provided', async () => {
     function CustomErrorPage({ error, statusCode }: ErrorProps) {
       return (
-        <div>
+        <div data-testid="custom-error">
           <h1>Custom Error {statusCode}</h1>
           <p>{error.message}</p>
         </div>
@@ -61,10 +61,15 @@ describe('renderErrorPage', () => {
     })
 
     const html = await response.text()
-    // React renders {statusCode} with a space comment: "Custom Error <!-- -->500"
+
+    // Verify custom component rendered (not default)
+    expect(html).toContain('data-testid="custom-error"')
     expect(html).toContain('Custom Error')
+    // React may insert comment nodes between JSX expressions, so check separately
     expect(html).toContain('500')
     expect(html).toContain('Custom error message')
+    // Verify it's NOT the default error page
+    expect(html).not.toContain('Something went wrong')
   })
 
   it('should never cache error pages', async () => {
@@ -72,6 +77,48 @@ describe('renderErrorPage', () => {
     const response = await renderErrorPage(error)
 
     expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+
+  it('should log error and use fallback when error component fails', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    // Create an error component that throws
+    function FailingErrorPage(): never {
+      throw new Error('Error page render failed')
+    }
+
+    const originalError = new Error('Original error')
+    const response = await renderErrorPage(originalError, {
+      ErrorComponent: FailingErrorPage,
+      rayId: 'test-ray-456',
+      path: '/test-path',
+    })
+
+    // Should log the error (renderError may be wrapped by InfraError)
+    expect(consoleSpy).toHaveBeenCalledWith(
+      '[SSR Error Page] Failed to render error page:',
+      expect.objectContaining({
+        originalError: 'Original error',
+        statusCode: 500,
+        rayId: 'test-ray-456',
+        path: '/test-path',
+      })
+    )
+
+    // Verify renderError contains the original error message
+    const logCall = consoleSpy.mock.calls.find(
+      (call) => call[0] === '[SSR Error Page] Failed to render error page:'
+    )
+    expect(logCall).toBeDefined()
+    expect(logCall![1].renderError).toContain('Error page render failed')
+
+    // Should return fallback HTML
+    expect(response.status).toBe(500)
+    const html = await response.text()
+    expect(html).toContain('<!DOCTYPE html>')
+    expect(html).toContain('500')
+
+    consoleSpy.mockRestore()
   })
 })
 

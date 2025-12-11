@@ -11,6 +11,18 @@ import { renderToString } from './render'
 import { escapeHtml } from './html-utils'
 
 /**
+ * Shared error page styles (used by both React component and fallback HTML)
+ */
+const ERROR_PAGE_STYLES = {
+  container:
+    'font-family:system-ui,sans-serif;max-width:600px;margin:100px auto;padding:2rem;text-align:center;',
+  heading: 'font-size:3rem;margin:0 0 1rem 0;color:#dc2626',
+  subheading: 'font-size:1.5rem;margin:0 0 1rem 0;font-weight:normal',
+  message: 'color:#6b7280;margin:0 0 2rem 0',
+  rayId: 'font-size:0.875rem;color:#9ca3af',
+} as const
+
+/**
  * Default error page component when no custom _error.tsx is found.
  *
  * Provides a basic, accessible error page with status code and message.
@@ -20,23 +32,27 @@ import { escapeHtml } from './html-utils'
  * @returns React element for default error page
  */
 function DefaultErrorPage({ statusCode, message, rayId }: ErrorProps): ReactElement {
+  // Parse shared styles into React style objects
+  const parseStyle = (cssString: string): React.CSSProperties => {
+    const style: Record<string, string> = {}
+    for (const rule of cssString.split(';')) {
+      const [key, value] = rule.split(':')
+      if (key && value) {
+        // Convert kebab-case to camelCase
+        const camelKey = key.trim().replace(/-([a-z])/g, (_, char) => char.toUpperCase())
+        style[camelKey] = value.trim()
+      }
+    }
+    return style as React.CSSProperties
+  }
+
   return (
-    <div
-      style={{
-        fontFamily: 'system-ui, sans-serif',
-        maxWidth: '600px',
-        margin: '100px auto',
-        padding: '2rem',
-        textAlign: 'center',
-      }}
-    >
-      <h1 style={{ fontSize: '3rem', margin: '0 0 1rem 0', color: '#dc2626' }}>{statusCode}</h1>
-      <h2 style={{ fontSize: '1.5rem', margin: '0 0 1rem 0', fontWeight: 'normal' }}>
-        Something went wrong
-      </h2>
-      <p style={{ color: '#6b7280', margin: '0 0 2rem 0' }}>{message}</p>
+    <div style={parseStyle(ERROR_PAGE_STYLES.container)}>
+      <h1 style={parseStyle(ERROR_PAGE_STYLES.heading)}>{statusCode}</h1>
+      <h2 style={parseStyle(ERROR_PAGE_STYLES.subheading)}>Something went wrong</h2>
+      <p style={parseStyle(ERROR_PAGE_STYLES.message)}>{message}</p>
       {rayId && (
-        <p style={{ fontSize: '0.875rem', color: '#9ca3af' }}>
+        <p style={parseStyle(ERROR_PAGE_STYLES.rayId)}>
           Error ID: <code>{rayId}</code>
         </p>
       )}
@@ -115,8 +131,17 @@ export async function renderErrorPage(
         'Cache-Control': 'no-store', // Never cache error pages
       },
     })
-  } catch {
-    // Error page rendering failed - send minimal HTML fallback
+  } catch (renderError) {
+    // Error page rendering failed - log the error for debugging
+    console.error('[SSR Error Page] Failed to render error page:', {
+      originalError: error.message,
+      renderError: renderError instanceof Error ? renderError.message : String(renderError),
+      statusCode,
+      rayId: options?.rayId,
+      path: options?.path,
+    })
+
+    // Send minimal HTML fallback
     const fallbackHtml = createFallbackErrorHtml(statusCode, message, options?.rayId)
 
     return new Response(fallbackHtml, {
@@ -161,11 +186,11 @@ export function createFallbackErrorHtml(
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>${statusCode} Error</title>
 </head>
-<body style="font-family:system-ui,sans-serif;max-width:600px;margin:100px auto;padding:2rem;text-align:center;">
-  <h1 style="font-size:3rem;margin:0 0 1rem 0;color:#dc2626">${statusCode}</h1>
-  <h2 style="font-size:1.5rem;margin:0 0 1rem 0;font-weight:normal">Something went wrong</h2>
-  <p style="color:#6b7280;margin:0 0 2rem 0">${safeMessage}</p>
-  ${safeRayId ? `<p style="font-size:0.875rem;color:#9ca3af">Error ID: <code>${safeRayId}</code></p>` : ''}
+<body style="${ERROR_PAGE_STYLES.container}">
+  <h1 style="${ERROR_PAGE_STYLES.heading}">${statusCode}</h1>
+  <h2 style="${ERROR_PAGE_STYLES.subheading}">Something went wrong</h2>
+  <p style="${ERROR_PAGE_STYLES.message}">${safeMessage}</p>
+  ${safeRayId ? `<p style="${ERROR_PAGE_STYLES.rayId}">Error ID: <code>${safeRayId}</code></p>` : ''}
 </body>
 </html>`
 }

@@ -9,7 +9,12 @@
 
 export { renderToString, renderToStream } from './render'
 export { ErrorBoundary, useErrorBoundary } from './error-boundary'
-export type { ErrorBoundaryProps, ErrorBoundaryInfo, ErrorRequestContext, FallbackProps } from './error-boundary'
+export type {
+  ErrorBoundaryProps,
+  ErrorBoundaryInfo,
+  ErrorRequestContext,
+  FallbackProps,
+} from './error-boundary'
 export {
   classifySSRError,
   generateErrorNotificationScript,

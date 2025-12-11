@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest'
+import React from 'react'
 import {
   classifySSRError,
   generateErrorNotificationScript,
@@ -11,7 +12,8 @@ import {
   logSSRError,
   type SSRErrorType,
 } from '@/ssr/streaming-error-handler'
-import { InfraError } from '@/errors'
+import { renderToStream } from '@/ssr/render'
+import { AppError, InfraError, ValidationError } from '@/errors'
 
 describe('classifySSRError', () => {
   it('should classify shell errors correctly', () => {
@@ -40,6 +42,28 @@ describe('classifySSRError', () => {
     const errorType = classifySSRError(infraError, true)
 
     expect(errorType).toBe('shell')
+  })
+
+  it('should classify app errors correctly (AppError base class)', () => {
+    const error = new AppError('APP_ERROR', 'User code error')
+    const errorType = classifySSRError(error, false)
+
+    expect(errorType).toBe('app')
+  })
+
+  it('should classify app errors correctly (ValidationError subclass)', () => {
+    const error = new ValidationError('INVALID_INPUT', 'Bad data')
+    const errorType = classifySSRError(error, false)
+
+    expect(errorType).toBe('app')
+  })
+
+  it('should prioritize infra over app classification', () => {
+    // InfraError extends AppError, so we need to check InfraError first
+    const error = new InfraError('SSR_FAILED', 'Infrastructure failure')
+    const errorType = classifySSRError(error, false)
+
+    expect(errorType).toBe('infra')
   })
 })
 
@@ -196,5 +220,64 @@ describe('logSSRError', () => {
     }
 
     consoleSpy.mockRestore()
+  })
+})
+
+describe('renderToStream error classification integration', () => {
+  it('should classify and log errors during streaming via onError callback', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    // Component that throws during render
+    function ThrowingComponent(): never {
+      throw new Error('Component render failed')
+    }
+
+    // Create stream with component that throws
+    const stream = renderToStream(React.createElement(ThrowingComponent))
+
+    // Consume stream to trigger error
+    const reader = stream.getReader()
+    try {
+      while (true) {
+        const { done } = await reader.read()
+        if (done) break
+      }
+    } catch {
+      // Expected to error
+    }
+
+    // Verify error was logged with SSR Error prefix
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[SSR Error]'),
+      expect.any(Object)
+    )
+
+    consoleSpy.mockRestore()
+  })
+
+  it('should use custom onError handler when provided', async () => {
+    const customErrorHandler = vi.fn()
+
+    function ThrowingComponent(): never {
+      throw new Error('Custom handler test')
+    }
+
+    const stream = renderToStream(React.createElement(ThrowingComponent), {
+      onError: customErrorHandler,
+    })
+
+    // Consume stream to trigger error
+    const reader = stream.getReader()
+    try {
+      while (true) {
+        const { done } = await reader.read()
+        if (done) break
+      }
+    } catch {
+      // Expected to error
+    }
+
+    // Custom handler should have been called
+    expect(customErrorHandler).toHaveBeenCalled()
   })
 })
