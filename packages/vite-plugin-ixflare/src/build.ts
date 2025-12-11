@@ -4,6 +4,7 @@
  * @node-only
  */
 
+import type { OutputBundle, OutputChunk } from 'rollup'
 import {
   discoverRoutes,
   detectRouteConflicts,
@@ -124,4 +125,234 @@ export function optimizeRoutes(manifest: RouteManifest): RouteManifest {
     ...manifest,
     routes: sortedRoutes,
   }
+}
+
+/**
+ * Bundle size budgets in bytes
+ */
+const ROUTE_CHUNK_BUDGET = 10 * 1024 // 10KB per route chunk
+const TOTAL_BUNDLE_BUDGET = 50 * 1024 // 50KB total per route (route + shared)
+const VENDOR_CHUNK_BUDGET = 30 * 1024 // 30KB for vendor chunks
+
+/**
+ * Information about a single chunk
+ */
+export interface ChunkInfo {
+  /** Chunk file name */
+  name: string
+  /** Size in bytes */
+  size: number
+  /** Size in kilobytes (formatted) */
+  sizeKB: string
+  /** Whether chunk exceeds its budget */
+  warning: boolean
+  /** Chunk type: route, vendor, or other */
+  type: 'route' | 'vendor' | 'other'
+}
+
+/**
+ * Bundle size analysis report
+ */
+export interface ChunkSizeReport {
+  /** List of all chunks with size information */
+  chunks: ChunkInfo[]
+  /** Total bundle size in bytes */
+  totalSize: number
+  /** Total bundle size in kilobytes (formatted) */
+  totalSizeKB: string
+  /** Whether any budget was exceeded */
+  budgetExceeded: boolean
+  /** Number of warnings */
+  warningCount: number
+  /** Breakdown by chunk type */
+  breakdown: {
+    routeChunks: number
+    vendorChunks: number
+    otherChunks: number
+  }
+}
+
+/**
+ * Validate chunk sizes against bundle budgets
+ *
+ * Analyzes the production build output and checks if chunks stay within
+ * the configured size budgets. Issues warnings for chunks that exceed limits.
+ *
+ * @param bundle - Rollup output bundle from writeBundle hook
+ * @returns Size report with warnings for budget violations
+ *
+ * @example
+ * ```typescript
+ * // In Vite plugin writeBundle hook
+ * async writeBundle(options, bundle) {
+ *   const report = validateChunkSizes(bundle)
+ *
+ *   if (report.budgetExceeded) {
+ *     this.warn(`Bundle budget exceeded! ${report.warningCount} warnings`)
+ *     for (const chunk of report.chunks.filter(c => c.warning)) {
+ *       this.warn(`  ${chunk.name}: ${chunk.sizeKB} (budget exceeded)`)
+ *     }
+ *   }
+ * }
+ * ```
+ */
+export function validateChunkSizes(bundle: OutputBundle): ChunkSizeReport {
+  const chunks: ChunkInfo[] = []
+  let totalSize = 0
+  let budgetExceeded = false
+  let warningCount = 0
+
+  const breakdown = {
+    routeChunks: 0,
+    vendorChunks: 0,
+    otherChunks: 0,
+  }
+
+  for (const [fileName, output] of Object.entries(bundle)) {
+    // Only analyze JavaScript chunks, not assets
+    if (output.type !== 'chunk') {
+      continue
+    }
+
+    const chunk = output as OutputChunk
+    const size = chunk.code.length
+
+    // Determine chunk type and budget
+    let chunkType: 'route' | 'vendor' | 'other' = 'other'
+    let budget = 0
+
+    if (fileName.includes('route-')) {
+      chunkType = 'route'
+      budget = ROUTE_CHUNK_BUDGET
+      breakdown.routeChunks++
+    } else if (fileName.includes('vendor')) {
+      chunkType = 'vendor'
+      budget = VENDOR_CHUNK_BUDGET
+      breakdown.vendorChunks++
+    } else {
+      chunkType = 'other'
+      breakdown.otherChunks++
+      // No budget for other chunks (framework code, etc.)
+    }
+
+    // Check if chunk exceeds budget
+    const warning = budget > 0 && size > budget
+
+    if (warning) {
+      budgetExceeded = true
+      warningCount++
+    }
+
+    totalSize += size
+
+    chunks.push({
+      name: fileName,
+      size,
+      sizeKB: formatBytes(size),
+      warning,
+      type: chunkType,
+    })
+  }
+
+  return {
+    chunks,
+    totalSize,
+    totalSizeKB: formatBytes(totalSize),
+    budgetExceeded,
+    warningCount,
+    breakdown,
+  }
+}
+
+/**
+ * Format bytes to human-readable KB with 2 decimal places
+ *
+ * @param bytes - Size in bytes
+ * @returns Formatted string (e.g., "12.34 KB")
+ */
+function formatBytes(bytes: number): string {
+  return `${(bytes / 1024).toFixed(2)} KB`
+}
+
+/**
+ * Log bundle size report to console
+ *
+ * Outputs a formatted table showing chunk sizes and budget compliance
+ *
+ * @param report - Chunk size report from validateChunkSizes
+ * @param logger - Logger interface with info/warn methods
+ *
+ * @example
+ * ```typescript
+ * const report = validateChunkSizes(bundle)
+ * logChunkSizeReport(report, {
+ *   info: (msg) => console.log(msg),
+ *   warn: (msg) => console.warn(msg)
+ * })
+ * ```
+ */
+export function logChunkSizeReport(
+  report: ChunkSizeReport,
+  logger: { info: (msg: string) => void; warn: (msg: string) => void }
+): void {
+  logger.info('\n📦 Bundle Size Report:')
+  logger.info('─'.repeat(80))
+
+  // Group chunks by type
+  const routeChunks = report.chunks.filter((c) => c.type === 'route')
+  const vendorChunks = report.chunks.filter((c) => c.type === 'vendor')
+  const otherChunks = report.chunks.filter((c) => c.type === 'other')
+
+  // Log route chunks
+  if (routeChunks.length > 0) {
+    logger.info('\n🗺️  Route Chunks:')
+    for (const chunk of routeChunks) {
+      const status = chunk.warning ? '⚠️ ' : '✅'
+      const msg = `  ${status} ${chunk.name.padEnd(40)} ${chunk.sizeKB.padStart(10)}`
+      if (chunk.warning) {
+        logger.warn(msg + ` (exceeds ${formatBytes(ROUTE_CHUNK_BUDGET)} budget)`)
+      } else {
+        logger.info(msg)
+      }
+    }
+  }
+
+  // Log vendor chunks
+  if (vendorChunks.length > 0) {
+    logger.info('\n📚 Vendor Chunks:')
+    for (const chunk of vendorChunks) {
+      const status = chunk.warning ? '⚠️ ' : '✅'
+      const msg = `  ${status} ${chunk.name.padEnd(40)} ${chunk.sizeKB.padStart(10)}`
+      if (chunk.warning) {
+        logger.warn(msg + ` (exceeds ${formatBytes(VENDOR_CHUNK_BUDGET)} budget)`)
+      } else {
+        logger.info(msg)
+      }
+    }
+  }
+
+  // Log other chunks
+  if (otherChunks.length > 0) {
+    logger.info('\n📄 Other Chunks:')
+    for (const chunk of otherChunks) {
+      logger.info(`  ✅ ${chunk.name.padEnd(40)} ${chunk.sizeKB.padStart(10)}`)
+    }
+  }
+
+  // Summary
+  logger.info('\n' + '─'.repeat(80))
+  logger.info(`Total Bundle Size: ${report.totalSizeKB}`)
+  logger.info(`Total Budget: ${formatBytes(TOTAL_BUNDLE_BUDGET)}`)
+
+  if (report.budgetExceeded) {
+    logger.warn(`\n⚠️  ${report.warningCount} chunk(s) exceed size budget!`)
+    logger.warn('Consider:')
+    logger.warn('  - Code splitting with dynamic imports')
+    logger.warn('  - Removing unused dependencies')
+    logger.warn('  - Using lighter alternatives')
+  } else {
+    logger.info('\n✅ All chunks within budget!')
+  }
+
+  logger.info('─'.repeat(80) + '\n')
 }

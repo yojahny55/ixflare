@@ -1,6 +1,6 @@
 /**
  * @module client
- * @description Client-side utilities for island hydration and HMR
+ * @description Client-side utilities for island hydration, HMR, and prefetching
  * @client-only
  * @packageDocumentation
  *
@@ -10,3 +10,10 @@
 
 export { hydrateIslands, hydrateIslandById, setIslandRegistry, getIslandRegistry } from './hydrate'
 export { setupServerComponentHMR } from './hmr-client'
+export {
+  prefetchRoute,
+  setupLinkPrefetching,
+  clearPrefetchCache,
+  isPrefetched,
+  type PrefetchOptions,
+} from './prefetch'

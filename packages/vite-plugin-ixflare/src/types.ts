@@ -13,4 +13,6 @@ export interface IxflarePluginOptions {
   componentsDir?: string
   /** Enable HMR for route manifest and islands (default: true) */
   hmr?: boolean
+  /** Enable automatic route-based code splitting (default: true) */
+  codeSplitting?: boolean
 }

@@ -32,7 +32,7 @@ import {
   type RouteManifest,
 } from './router-codegen'
 import { createDevServer, type DevServer } from './dev-server'
-import { bundleManifest, optimizeRoutes } from './build'
+import { bundleManifest, optimizeRoutes, validateChunkSizes, logChunkSizeReport } from './build'
 import {
   setupHMR,
   handleRouteHMR,
@@ -45,6 +45,7 @@ import {
   serializeHydrationManifest,
   type HydrationManifest,
 } from './hydration-manifest'
+import { createRouteChunks } from './code-splitting'
 
 const VIRTUAL_MODULE_ID = 'virtual:ixflare-routes'
 const RESOLVED_VIRTUAL_MODULE_ID = '\0' + VIRTUAL_MODULE_ID
@@ -128,6 +129,7 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
   const routesDir = options.routesDir || 'src/routes'
   const componentsDir = options.componentsDir || 'src/components'
   const hmrEnabled = options.hmr !== false
+  const codeSplitting = options.codeSplitting !== false
 
   let devServer: DevServer | null = null
   let viteServer: ViteDevServer | null = null
@@ -142,11 +144,32 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
     name: 'vite-plugin-ixflare',
 
     config(config) {
+      // Prepare rollupOptions with code splitting if enabled
+      const rollupOptions = codeSplitting
+        ? {
+            output: {
+              manualChunks: createRouteChunks(routesDir),
+              // Add content hash to chunk names for cache busting
+              chunkFileNames: 'chunks/[name]-[hash].js',
+              // Add content hash to entry file names
+              entryFileNames: 'entries/[name]-[hash].js',
+            },
+          }
+        : {}
+
       return {
         ...config,
         build: {
           ...config.build,
           target: 'esnext',
+          rollupOptions: {
+            ...config.build?.rollupOptions,
+            ...rollupOptions,
+            output: {
+              ...config.build?.rollupOptions?.output,
+              ...rollupOptions.output,
+            },
+          },
         },
       }
     },
@@ -297,7 +320,16 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
       }
     },
 
-    async writeBundle(options, _bundle) {
+    async writeBundle(options, bundle) {
+      // Validate bundle sizes if code splitting is enabled
+      if (codeSplitting) {
+        const report = validateChunkSizes(bundle)
+        logChunkSizeReport(report, {
+          info: (msg) => this.info(msg),
+          warn: (msg) => this.warn(msg),
+        })
+      }
+
       // Generate hydration manifest after bundle is written
       if (discoveredIslands.length === 0) {
         return

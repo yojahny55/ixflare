@@ -33,7 +33,7 @@ export default ixflarePlugin
 export type { IxflarePluginOptions } from './types'
 export type { Route, RouteManifest, RouteParam, HttpMethod } from './router-codegen'
 export type { DevServerConfig, DevServer } from './dev-server'
-export type { BuildConfig, BuildResult } from './build'
+export type { BuildConfig, BuildResult, ChunkInfo, ChunkSizeReport } from './build'
 export type { DiscoveredIsland, IslandLoadStrategy } from './island-discovery'
 export type {
   HydrationManifest,
@@ -58,3 +58,7 @@ export type {
   SSGManifest,
   SSGPrerenderConfig,
 } from './ssg-prerender'
+
+// Code splitting exports
+export { createRouteChunks, createRollupConfig } from './code-splitting'
+export type { ManualChunksFunction, CodeSplittingOptions } from './code-splitting'
