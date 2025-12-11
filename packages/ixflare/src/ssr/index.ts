@@ -8,7 +8,14 @@
  */
 
 export { renderToString, renderToStream } from './render'
-export { createIsland, hydrateIsland } from './islands'
+export {
+  createIsland,
+  hydrateIsland,
+  isIslandComponent,
+  serializeIslandProps,
+  deserializeIslandProps,
+  IslandRegistry,
+} from './islands'
 export { renderLayoutChain, renderWithoutLayouts } from './layout-renderer'
 export { useLayoutData, LayoutContextProvider } from '@/core/layout'
 export {
@@ -16,13 +23,17 @@ export {
   streamWithShellCallback,
   createTimeoutController,
   withTimeout,
-  createSuspenseFallback
+  createSuspenseFallback,
 } from './streaming'
 export type {
   RenderOptions,
   RenderResult,
   PageProps,
   LoaderContext,
-  IslandConfig
+  IslandConfig,
+  IslandLoadStrategy,
+  IslandMarkerProps,
+  HydrationManifest,
+  IslandRegistryEntry,
 } from './types'
 export type { LayoutComponent } from './layout-renderer'

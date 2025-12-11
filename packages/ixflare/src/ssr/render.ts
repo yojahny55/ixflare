@@ -38,9 +38,22 @@ function safeJsonStringify(data: unknown): string {
 }
 
 /**
+ * Builds HTML attributes string from a Record, escaping values for security.
+ * @param attrs - Record of attribute name to value
+ * @returns HTML attributes string like ' class="dark" dir="rtl"'
+ */
+function buildAttributes(attrs?: Record<string, string>): string {
+  if (!attrs) return ''
+  return Object.entries(attrs)
+    .map(([name, value]) => ` ${escapeHtml(name)}="${escapeHtml(value)}"`)
+    .join('')
+}
+
+/**
  * Builds the HTML head section with meta tags, title, and viewport.
- * @param options - Render options containing title and meta configuration
- * @returns HTML head string
+ * Supports extensible html and body attributes for Tailwind dark mode, RTL, etc.
+ * @param options - Render options containing title, meta, and attribute configuration
+ * @returns HTML head string with opening body tag
  */
 function buildHtmlHead(options?: RenderOptions): string {
   const lang = options?.lang ?? 'en'
@@ -54,7 +67,11 @@ function buildHtmlHead(options?: RenderOptions): string {
     }
   }
 
-  return `<html lang="${lang}"><head><meta charset="utf-8"/>${viewport}${title}${metaTags}</head><body>`
+  // Build extensible html and body attributes
+  const htmlAttrs = buildAttributes(options?.htmlAttributes)
+  const bodyAttrs = buildAttributes(options?.bodyAttributes)
+
+  return `<html lang="${lang}"${htmlAttrs}><head><meta charset="utf-8"/>${viewport}${title}${metaTags}</head><body${bodyAttrs}>`
 }
 
 /**
@@ -127,9 +144,11 @@ export async function renderToString(
     const stream = await renderToReadableStream(reactElement, {
       signal: options?.abortSignal,
       bootstrapScripts: options?.bootstrapScripts,
-      onError: options?.onError ?? ((error: unknown) => {
-        console.error('[SSR Error]', error)
-      })
+      onError:
+        options?.onError ??
+        ((error: unknown) => {
+          console.error('[SSR Error]', error)
+        }),
     })
 
     // Convert stream to string
@@ -243,26 +262,30 @@ export function renderToStream(
           signal: options?.abortSignal,
           bootstrapScripts: options?.bootstrapScripts,
           progressiveChunkSize: options?.progressiveChunkSize,
-          onError: options?.onError ?? ((error: unknown) => {
-            console.error('[SSR Stream Error]', error)
-          })
+          onError:
+            options?.onError ??
+            ((error: unknown) => {
+              console.error('[SSR Stream Error]', error)
+            }),
         })
 
         // Monitor allReady Promise if callback provided
         if (options?.onAllReady && reactStream.allReady) {
-          reactStream.allReady.then(() => {
-            if (!allReady) {
-              allReady = true
-              options.onAllReady?.()
-            }
-          }).catch((error) => {
-            // Forward allReady errors to user's error handler if provided
-            if (options?.onError) {
-              options.onError(error)
-            } else {
-              console.error('[SSR allReady Error]', error)
-            }
-          })
+          reactStream.allReady
+            .then(() => {
+              if (!allReady) {
+                allReady = true
+                options.onAllReady?.()
+              }
+            })
+            .catch((error) => {
+              // Forward allReady errors to user's error handler if provided
+              if (options?.onError) {
+                options.onError(error)
+              } else {
+                console.error('[SSR allReady Error]', error)
+              }
+            })
         }
 
         // Pipe React stream chunks to our output stream
@@ -293,15 +316,12 @@ export function renderToStream(
 
           controller.enqueue(value)
 
-          // Check if aborted mid-stream - ensure valid HTML before erroring
-          if (options?.abortSignal?.aborted) {
-            // Write closing tags to ensure valid HTML structure even on abort
-            if (shouldWrapInShell) {
-              controller.enqueue(encoder.encode(HTML_CLOSE))
-            }
-            controller.error(new Error('Render aborted'))
-            break
-          }
+          // NOTE: Do NOT manually check abortSignal here!
+          // React's renderToReadableStream handles abort signals internally and will:
+          // 1. Detect the abort
+          // 2. Flush remaining Suspense fallbacks as final HTML
+          // 3. End the stream gracefully
+          // Manual abort checks would interrupt this and violate AC5.
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
@@ -315,6 +335,6 @@ export function renderToStream(
     },
     cancel() {
       // Stream was cancelled by consumer
-    }
+    },
   })
 }

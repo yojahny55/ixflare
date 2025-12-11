@@ -27,7 +27,7 @@ describe('renderToString', () => {
 
   it('should render async Server Components', async () => {
     const AsyncComponent = async () => {
-      await new Promise(resolve => setTimeout(resolve, 10))
+      await new Promise((resolve) => setTimeout(resolve, 10))
       return <div>Async Content</div>
     }
 
@@ -50,7 +50,7 @@ describe('renderToString', () => {
   it('should safely escape bootstrap data containing script tags (XSS prevention)', async () => {
     const maliciousData = {
       payload: '</script><script>alert("xss")</script>',
-      nested: { attack: '<img onerror="alert(1)">' }
+      nested: { attack: '<img onerror="alert(1)">' },
     }
 
     const html = await renderToString(<div>Test</div>, { bootstrapData: maliciousData })
@@ -65,7 +65,7 @@ describe('renderToString', () => {
 
   it('should escape U+2028 and U+2029 in bootstrap data', async () => {
     const dataWithLineSeparators = {
-      text: 'line1\u2028line2\u2029line3'
+      text: 'line1\u2028line2\u2029line3',
     }
 
     const html = await renderToString(<div>Test</div>, { bootstrapData: dataWithLineSeparators })
@@ -86,7 +86,7 @@ describe('renderToString', () => {
 
   it('should escape HTML in title to prevent injection', async () => {
     const html = await renderToString(<div>Test</div>, {
-      title: '<script>alert("xss")</script>'
+      title: '<script>alert("xss")</script>',
     })
 
     expect(html).not.toContain('<script>alert')
@@ -95,7 +95,7 @@ describe('renderToString', () => {
 
   it('should include custom meta tags', async () => {
     const html = await renderToString(<div>Test</div>, {
-      meta: { description: 'My description', author: 'Test Author' }
+      meta: { description: 'My description', author: 'Test Author' },
     })
 
     expect(html).toContain('<meta name="description" content="My description"/>')
@@ -125,7 +125,7 @@ describe('renderToString', () => {
   it('should include bootstrap data even with shell: false', async () => {
     const html = await renderToString(<div>Test</div>, {
       shell: false,
-      bootstrapData: { key: 'value' }
+      bootstrapData: { key: 'value' },
     })
 
     expect(html).not.toContain('<!DOCTYPE html>')
@@ -138,8 +138,9 @@ describe('renderToString', () => {
       throw new Error('Render failed')
     }
 
-    await expect(renderToString(<ErrorComponent />))
-      .rejects.toThrow('Failed to render component to string')
+    await expect(renderToString(<ErrorComponent />)).rejects.toThrow(
+      'Failed to render component to string'
+    )
   })
 
   it('should respect abort signal timeout', async () => {
@@ -147,7 +148,7 @@ describe('renderToString', () => {
     controller.abort()
 
     const renderPromise = renderToString(<div>Should not render</div>, {
-      abortSignal: controller.signal
+      abortSignal: controller.signal,
     })
 
     await expect(renderPromise).rejects.toThrow()
@@ -191,7 +192,7 @@ describe('renderToStream', () => {
     }
 
     const stream = renderToStream(<Component />, {
-      abortSignal: controller.signal
+      abortSignal: controller.signal,
     })
 
     const reader = stream.getReader()
@@ -211,7 +212,7 @@ describe('renderToStream', () => {
   it('should stream bootstrap data with XSS protection', async () => {
     const bootstrapData = {
       key: 'value',
-      dangerous: '</script><script>evil()</script>'
+      dangerous: '</script><script>evil()</script>',
     }
 
     const stream = renderToStream(<div>Test</div>, { bootstrapData })

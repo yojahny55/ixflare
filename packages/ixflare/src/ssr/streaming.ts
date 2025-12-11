@@ -9,13 +9,17 @@ import type { RenderOptions } from './types'
 /**
  * Creates a Response object with proper streaming headers.
  *
- * Sets Transfer-Encoding: chunked and other security headers for streaming HTML.
+ * Sets Content-Type and security headers for streaming HTML responses.
+ *
+ * **Note on Transfer-Encoding:** Cloudflare Workers automatically handles
+ * chunked transfer encoding for streaming responses. We don't set it manually
+ * as it's either redundant or may be ignored by the runtime.
  *
  * @param stream - ReadableStream of HTML content to send as the response body
  * @param options - Optional configuration for the response
  * @param options.status - HTTP status code (default: 200)
  * @param options.headers - Additional headers to merge with defaults
- * @returns Response configured for streaming with chunked transfer encoding
+ * @returns Response configured for streaming
  *
  * @example
  * ```typescript
@@ -31,10 +35,11 @@ export function createStreamingResponse(
     status: options?.status ?? 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Transfer-Encoding': 'chunked',
+      // Note: Transfer-Encoding is handled automatically by Workers runtime
+      // for streaming responses - no need to set it manually
       'X-Content-Type-Options': 'nosniff',
-      ...options?.headers
-    }
+      ...options?.headers,
+    },
   })
 }
 
@@ -80,7 +85,7 @@ export function streamWithShellCallback(
         onShellReady()
       }
       controller.enqueue(chunk)
-    }
+    },
   })
 
   return stream.pipeThrough(transformStream)
@@ -164,10 +169,14 @@ export function withTimeout(
       combinedSignal = options.abortSignal
     } else {
       // Listen to user's signal to also abort our controller
-      options.abortSignal.addEventListener('abort', () => {
-        controller.abort(options.abortSignal?.reason)
-        cleanup()
-      }, { once: true })
+      options.abortSignal.addEventListener(
+        'abort',
+        () => {
+          controller.abort(options.abortSignal?.reason)
+          cleanup()
+        },
+        { once: true }
+      )
     }
   }
 
@@ -181,7 +190,7 @@ export function withTimeout(
   const stream = renderFn({
     ...options,
     abortSignal: combinedSignal,
-    onShellReady: wrappedOnShellReady
+    onShellReady: wrappedOnShellReady,
   })
 
   // Create a passthrough stream that cleans up on cancellation
@@ -194,7 +203,7 @@ export function withTimeout(
     },
     cancel() {
       cleanup()
-    }
+    },
   })
 
   return stream.pipeThrough(transformStream)
@@ -227,10 +236,14 @@ export function withTimeout(
  * ```
  */
 export function createSuspenseFallback(message: string, id?: string): React.ReactElement {
-  return React.createElement('div', {
-    role: 'status',
-    'aria-live': 'polite',
-    'aria-busy': 'true',
-    ...(id && { id })
-  }, message)
+  return React.createElement(
+    'div',
+    {
+      role: 'status',
+      'aria-live': 'polite',
+      'aria-busy': 'true',
+      ...(id && { id }),
+    },
+    message
+  )
 }
