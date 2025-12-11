@@ -243,6 +243,60 @@ export default function Complex() {}
 
       await expect(parseIslandFile(nonExistentFile)).rejects.toThrow()
     })
+
+    it('should handle empty island files', async () => {
+      await writeFile(join(testDir, 'Empty.client.tsx'), '')
+
+      const result = await parseIslandFile(join(testDir, 'Empty.client.tsx'))
+
+      // Empty file has no island export, should return null
+      expect(result).toBeNull()
+    })
+
+    it('should handle files with only comments', async () => {
+      await writeFile(
+        join(testDir, 'OnlyComments.client.tsx'),
+        `
+// This is a comment
+/* Another comment */
+`
+      )
+
+      const result = await parseIslandFile(join(testDir, 'OnlyComments.client.tsx'))
+
+      expect(result).toBeNull()
+    })
+
+    it('should handle malformed island export (commented out)', async () => {
+      await writeFile(
+        join(testDir, 'CommentedIsland.client.tsx'),
+        `
+// export const island = true
+export default function CommentedIsland() {}
+`
+      )
+
+      const result = await parseIslandFile(join(testDir, 'CommentedIsland.client.tsx'))
+
+      // Commented out export should not match
+      expect(result).toBeNull()
+    })
+
+    it('should handle island export in string (false positive prevention)', async () => {
+      await writeFile(
+        join(testDir, 'StringIsland.client.tsx'),
+        `
+const code = "export const island = true"
+export default function StringIsland() {}
+`
+      )
+
+      const result = await parseIslandFile(join(testDir, 'StringIsland.client.tsx'))
+
+      // Current regex will match this - documenting existing behavior
+      // In a stricter implementation, this could be handled with AST parsing
+      expect(result).not.toBeNull()
+    })
   })
 
   describe('Island ID generation', () => {

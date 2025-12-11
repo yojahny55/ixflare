@@ -27,8 +27,8 @@
  * ```
  */
 
-import { readdir, readFile, stat } from 'node:fs/promises'
-import { join, basename, relative } from 'node:path'
+import { readdir, readFile, stat, realpath } from 'node:fs/promises'
+import { join, basename, relative, resolve } from 'node:path'
 
 /**
  * Island loading strategies
@@ -113,9 +113,30 @@ function toPascalCase(filename: string): string {
 export async function parseIslandFile(filePath: string): Promise<DiscoveredIsland | null> {
   const content = await readFile(filePath, 'utf-8')
 
+  // Remove single-line comments to avoid false positives from commented-out code
+  // This prevents matching "// export const island = true"
+  const contentWithoutComments = content
+    .split('\n')
+    .map((line) => {
+      // Remove single-line comments (but preserve strings that might contain //)
+      const commentIndex = line.indexOf('//')
+      if (commentIndex === -1) return line
+      // Simple heuristic: if // appears before any quote, it's likely a comment
+      const quoteIndex = Math.min(
+        line.indexOf('"') === -1 ? Infinity : line.indexOf('"'),
+        line.indexOf("'") === -1 ? Infinity : line.indexOf("'"),
+        line.indexOf('`') === -1 ? Infinity : line.indexOf('`')
+      )
+      if (commentIndex < quoteIndex) {
+        return line.slice(0, commentIndex)
+      }
+      return line
+    })
+    .join('\n')
+
   // Check for island export marker using regex
   // Matches: export const island = true | { load: 'strategy' }
-  const hasIslandExport = /export\s+const\s+island\s*=/.test(content)
+  const hasIslandExport = /export\s+const\s+island\s*=/.test(contentWithoutComments)
 
   if (!hasIslandExport) {
     return null
@@ -128,7 +149,7 @@ export async function parseIslandFile(filePath: string): Promise<DiscoveredIslan
 
   // Extract load strategy if present
   // Match: island = { load: 'idle' } or island = { load: "visible" }
-  const loadMatch = content.match(/island\s*=\s*\{\s*load:\s*['"](\w+)['"]/)
+  const loadMatch = contentWithoutComments.match(/island\s*=\s*\{\s*load:\s*['"](\w+)['"]/)
   const loadStrategy = (loadMatch?.[1] as IslandLoadStrategy) || 'immediate'
 
   return {
@@ -160,6 +181,27 @@ export async function parseIslandFile(filePath: string): Promise<DiscoveredIslan
 export async function discoverIslands(rootDir: string): Promise<DiscoveredIsland[]> {
   const islands: DiscoveredIsland[] = []
 
+  // Resolve the root directory to an absolute path for security validation
+  const resolvedRootDir = resolve(rootDir)
+
+  /**
+   * Validates that a path is within the allowed root directory.
+   * Prevents path traversal attacks via symlinks or malformed paths.
+   */
+  async function isPathWithinRoot(targetPath: string): Promise<boolean> {
+    try {
+      // Resolve the real path (following symlinks) to prevent symlink-based traversal
+      const realTargetPath = await realpath(targetPath)
+      const realRootPath = await realpath(resolvedRootDir)
+
+      // Ensure the resolved path starts with the root directory
+      return realTargetPath.startsWith(realRootPath)
+    } catch {
+      // If we can't resolve the path, it's not safe to use
+      return false
+    }
+  }
+
   /**
    * Recursively scans directory for *.client.tsx files
    */
@@ -175,6 +217,12 @@ export async function discoverIslands(rootDir: string): Promise<DiscoveredIsland
 
     for (const entry of entries) {
       const fullPath = join(dir, entry)
+
+      // Security: Skip entries that would escape the root directory
+      if (!(await isPathWithinRoot(fullPath))) {
+        console.warn(`[ixflare] Skipping path outside root directory: ${fullPath}`)
+        continue
+      }
 
       // Check if entry is directory or file
       let stats
@@ -203,7 +251,7 @@ export async function discoverIslands(rootDir: string): Promise<DiscoveredIsland
     }
   }
 
-  await scanDirectory(rootDir)
+  await scanDirectory(resolvedRootDir)
 
   return islands
 }

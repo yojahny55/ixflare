@@ -708,6 +708,142 @@ describe('Client Hydration', () => {
       expect(hydrateRoot).toHaveBeenCalled()
     })
   })
+
+  describe('Nested islands hydration order', () => {
+    it('should hydrate islands in DOM order (parent before child)', async () => {
+      vi.resetModules()
+
+      const hydrationOrder: string[] = []
+
+      // Create parent and child island elements in DOM order
+      const parentElement = {
+        getAttribute: vi.fn((attr: string) => {
+          if (attr === 'data-island') return 'parent-island'
+          if (attr === 'data-props') return '{}'
+          if (attr === 'data-load') return 'immediate'
+          return null
+        }),
+        firstChild: null,
+        appendChild: vi.fn(),
+        insertBefore: vi.fn(),
+      }
+
+      const childElement = {
+        getAttribute: vi.fn((attr: string) => {
+          if (attr === 'data-island') return 'child-island'
+          if (attr === 'data-props') return '{}'
+          if (attr === 'data-load') return 'immediate'
+          return null
+        }),
+        firstChild: null,
+        appendChild: vi.fn(),
+        insertBefore: vi.fn(),
+      }
+
+      // Mock querySelectorAll to return elements in document order (parent first)
+      const mockQuerySelectorAll = vi.fn().mockReturnValue([parentElement, childElement])
+
+      vi.stubGlobal('document', {
+        querySelectorAll: mockQuerySelectorAll,
+        querySelector: vi.fn(),
+        createElement: vi.fn().mockReturnValue({
+          style: {},
+          textContent: '',
+          appendChild: vi.fn(),
+          insertBefore: vi.fn(),
+        }),
+      })
+
+      // Mock registry that tracks hydration order
+      const mockRegistry = {
+        'parent-island': vi.fn(async () => {
+          hydrationOrder.push('parent')
+          return {
+            default: function ParentComponent() {
+              return null
+            },
+          }
+        }),
+        'child-island': vi.fn(async () => {
+          hydrationOrder.push('child')
+          return {
+            default: function ChildComponent() {
+              return null
+            },
+          }
+        }),
+      }
+
+      const { hydrateIslands, setIslandRegistry } = await import('@/client/hydrate')
+      setIslandRegistry(mockRegistry as unknown as Record<string, () => Promise<{ default: React.ComponentType<unknown> }>>)
+      hydrateIslands()
+
+      // Wait for async hydration
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      // Verify hydration happened in DOM order (parent before child)
+      expect(hydrationOrder[0]).toBe('parent')
+      expect(hydrationOrder[1]).toBe('child')
+      expect(mockRegistry['parent-island']).toHaveBeenCalled()
+      expect(mockRegistry['child-island']).toHaveBeenCalled()
+    })
+
+    it('should process deeply nested islands in correct order', async () => {
+      vi.resetModules()
+
+      const hydrationOrder: string[] = []
+
+      // Create elements representing: grandparent > parent > child
+      const elements = ['grandparent', 'parent', 'child'].map((name) => ({
+        getAttribute: vi.fn((attr: string) => {
+          if (attr === 'data-island') return `${name}-island`
+          if (attr === 'data-props') return '{}'
+          if (attr === 'data-load') return 'immediate'
+          return null
+        }),
+        firstChild: null,
+        appendChild: vi.fn(),
+        insertBefore: vi.fn(),
+      }))
+
+      const mockQuerySelectorAll = vi.fn().mockReturnValue(elements)
+
+      vi.stubGlobal('document', {
+        querySelectorAll: mockQuerySelectorAll,
+        querySelector: vi.fn(),
+        createElement: vi.fn().mockReturnValue({
+          style: {},
+          textContent: '',
+          appendChild: vi.fn(),
+          insertBefore: vi.fn(),
+        }),
+      })
+
+      const mockRegistry = {
+        'grandparent-island': vi.fn(async () => {
+          hydrationOrder.push('grandparent')
+          return { default: () => null }
+        }),
+        'parent-island': vi.fn(async () => {
+          hydrationOrder.push('parent')
+          return { default: () => null }
+        }),
+        'child-island': vi.fn(async () => {
+          hydrationOrder.push('child')
+          return { default: () => null }
+        }),
+      }
+
+      const { hydrateIslands, setIslandRegistry } = await import('@/client/hydrate')
+      setIslandRegistry(mockRegistry as unknown as Record<string, () => Promise<{ default: React.ComponentType<unknown> }>>)
+      hydrateIslands()
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      // Verify hydration order follows DOM order
+      expect(hydrationOrder).toEqual(['grandparent', 'parent', 'child'])
+    })
+  })
 })
 
 /**

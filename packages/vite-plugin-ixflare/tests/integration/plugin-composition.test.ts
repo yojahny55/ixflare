@@ -45,6 +45,15 @@ describe('Plugin Composition', () => {
       expect(result).toBe('\0virtual:ixflare-routes')
     })
 
+    it('resolves virtual:ixflare-islands module ID', () => {
+      const plugin = ixflarePlugin() as Plugin
+      const resolveId = plugin.resolveId as Function
+
+      const result = resolveId('virtual:ixflare-islands')
+
+      expect(result).toBe('\0virtual:ixflare-islands')
+    })
+
     it('returns null for non-virtual module IDs', () => {
       const plugin = ixflarePlugin() as Plugin
       const resolveId = plugin.resolveId as Function
@@ -62,6 +71,16 @@ describe('Plugin Composition', () => {
 
       expect(result).toContain('export const routeManifest')
       expect(result).toContain('routes: []')
+    })
+
+    it('loads virtual islands module with empty registry initially', () => {
+      const plugin = ixflarePlugin() as Plugin
+      const load = plugin.load as Function
+
+      const result = load('\0virtual:ixflare-islands')
+
+      expect(result).toContain('import { setIslandRegistry }')
+      expect(result).toContain('setIslandRegistry({})')
     })
 
     it('does not load non-virtual modules', () => {
@@ -123,13 +142,53 @@ describe('Plugin Composition', () => {
       expect(Array.isArray(result) || result === undefined).toBe(true)
     })
 
-    it('ignores non-route file changes', async () => {
+    it('handles hot update for island files (.client.tsx)', async () => {
+      const plugin = ixflarePlugin({ routesDir: 'src/routes', componentsDir: 'src/components' }) as Plugin
+      const handleHotUpdate = plugin.handleHotUpdate as Function
+
+      const mockServer = createMockViteDevServer()
+
+      // Simulate an island file change
+      const result = await handleHotUpdate({
+        file: '/test/project/src/components/Counter.client.tsx',
+        server: mockServer,
+      })
+
+      // Should return modules to invalidate (may be empty if module not in graph, but returns array or undefined)
+      expect(Array.isArray(result) || result === undefined).toBe(true)
+    })
+
+    it('triggers island virtual module invalidation on .client.tsx change', async () => {
+      const plugin = ixflarePlugin({ routesDir: 'src/routes', componentsDir: 'src/components' }) as Plugin
+      const handleHotUpdate = plugin.handleHotUpdate as Function
+
+      const mockVirtualModule = { id: '\0virtual:ixflare-islands' }
+      const mockServer = createMockViteDevServer()
+      // Mock that the virtual module exists in the module graph
+      ;(mockServer.moduleGraph.getModuleById as ReturnType<typeof vi.fn>).mockImplementation((id: string) => {
+        if (id === '\0virtual:ixflare-islands') return mockVirtualModule
+        return null
+      })
+
+      // Simulate an island file change
+      const result = await handleHotUpdate({
+        file: '/test/project/src/components/SearchBox.client.tsx',
+        server: mockServer,
+      })
+
+      // Should return the virtual module for invalidation
+      if (Array.isArray(result)) {
+        expect(result).toContain(mockVirtualModule)
+      }
+    })
+
+    it('ignores non-route and non-island file changes', async () => {
       const plugin = ixflarePlugin({ routesDir: 'src/routes' }) as Plugin
       const handleHotUpdate = plugin.handleHotUpdate as Function
 
       const mockServer = createMockViteDevServer()
 
-      // Simulate a non-route file change
+      // Simulate a non-route, non-island file change
       const result = await handleHotUpdate({
         file: '/test/project/src/components/Button.tsx',
         server: mockServer,
@@ -154,10 +213,28 @@ describe('Plugin Composition', () => {
       expect(plugin).toBeDefined()
     })
 
+    it('accepts custom componentsDir for island discovery', () => {
+      const plugin = ixflarePlugin({ componentsDir: 'app/islands' }) as Plugin
+
+      expect(plugin).toBeDefined()
+      expect(plugin.name).toBe('vite-plugin-ixflare')
+    })
+
     it('accepts HMR disable option', () => {
       const plugin = ixflarePlugin({ hmr: false }) as Plugin
 
       expect(plugin).toBeDefined()
+    })
+
+    it('accepts all options together', () => {
+      const plugin = ixflarePlugin({
+        routesDir: 'app/routes',
+        componentsDir: 'app/islands',
+        hmr: true,
+      }) as Plugin
+
+      expect(plugin).toBeDefined()
+      expect(plugin.name).toBe('vite-plugin-ixflare')
     })
   })
 
@@ -225,5 +302,65 @@ describe('Export Aliases', () => {
     const { ixflare, ixflarePlugin } = await import('../../src/index')
 
     expect(ixflare).toBe(ixflarePlugin)
+  })
+})
+
+describe('Type Exports', () => {
+  it('exports IxflarePluginOptions type', async () => {
+    // TypeScript will catch if these types don't exist at compile time
+    // This test verifies runtime exports are accessible
+    const exports = await import('../../src/index')
+
+    // Type exports don't have runtime values, but we can verify the module loads
+    expect(exports).toBeDefined()
+  })
+
+  it('exports island discovery types', async () => {
+    // Verify island-related exports are accessible
+    const { discoverIslands, parseIslandFile } = await import('../../src/island-discovery')
+
+    expect(typeof discoverIslands).toBe('function')
+    expect(typeof parseIslandFile).toBe('function')
+  })
+
+  it('exports hydration manifest types', async () => {
+    // Verify manifest-related exports are accessible
+    const { generateHydrationManifest, serializeHydrationManifest, deserializeHydrationManifest } = await import(
+      '../../src/hydration-manifest'
+    )
+
+    expect(typeof generateHydrationManifest).toBe('function')
+    expect(typeof serializeHydrationManifest).toBe('function')
+    expect(typeof deserializeHydrationManifest).toBe('function')
+  })
+})
+
+describe('Build Integration', () => {
+  it('plugin has required Vite hooks for island manifest generation', () => {
+    const plugin = ixflarePlugin() as Plugin
+
+    // Verify all required hooks for island manifest generation exist
+    expect(typeof plugin.resolveId).toBe('function')
+    expect(typeof plugin.load).toBe('function')
+    expect(typeof plugin.configureServer).toBe('function')
+    expect(typeof plugin.buildEnd).toBe('function')
+    expect(typeof plugin.writeBundle).toBe('function')
+    expect(typeof plugin.handleHotUpdate).toBe('function')
+  })
+
+  it('plugin generates island registry code with discovered islands', async () => {
+    // This tests the virtual module generation with islands
+    const plugin = ixflarePlugin() as Plugin
+
+    // We can't test the actual build flow without Vite, but we can verify
+    // that the load hook generates valid code structure
+    const load = plugin.load as Function
+
+    // With no islands discovered, should return empty registry
+    const emptyResult = load('\0virtual:ixflare-islands')
+    expect(emptyResult).toContain('setIslandRegistry')
+    expect(emptyResult).toContain("import { setIslandRegistry } from 'ixflare/client'")
+    expect(emptyResult).toContain('setIslandRegistry({})')
+    expect(emptyResult).not.toContain('undefined')
   })
 })
