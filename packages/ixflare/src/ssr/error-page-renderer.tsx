@@ -198,32 +198,46 @@ export function createFallbackErrorHtml(
 /**
  * Detects if a custom error page component exists in the route hierarchy.
  *
- * This is a placeholder for build-time error page detection.
- * In production, this would be implemented by the Vite plugin to scan
- * the routes directory for _error.tsx files during the build.
+ * **Current Status:** Placeholder implementation - always returns null.
+ * Auto-detection of `_error.tsx` files requires Vite plugin integration (future work).
+ *
+ * **How to use custom error pages now:**
+ * Pass your error component directly to `renderErrorPage()`:
+ * ```typescript
+ * import { MyCustomErrorPage } from './error-pages/MyCustomErrorPage'
+ *
+ * const response = await renderErrorPage(error, {
+ *   ErrorComponent: MyCustomErrorPage,
+ *   rayId: ctx.rayId,
+ * })
+ * ```
+ *
+ * **Future Vite plugin behavior:**
+ * The Vite plugin will scan routes for `_error.tsx` files at build time:
+ * - `src/routes/(dashboard)/_error.tsx` - Group-specific error page
+ * - `src/routes/_error.tsx` - Global fallback error page
  *
  * @param routePath - The route path to check for error pages
- * @returns Promise resolving to the error component or null
+ * @returns Promise resolving to the error component or null (currently always null)
  *
  * @example
  * ```typescript
- * // At build time, Vite plugin would scan:
- * // - src/routes/(dashboard)/_error.tsx (group-specific)
- * // - src/routes/_error.tsx (global)
- *
+ * // Future usage (once Vite plugin is implemented):
  * const ErrorComponent = await findErrorPage('/dashboard/stats')
- * // Returns: DashboardErrorPage or GlobalErrorPage or null
+ * if (ErrorComponent) {
+ *   return renderErrorPage(error, { ErrorComponent })
+ * }
  * ```
  */
 export async function findErrorPage(
   _routePath: string
 ): Promise<React.ComponentType<ErrorProps> | null> {
-  // TODO: Implement build-time error page detection via Vite plugin
-  // This would be populated by the Vite plugin during build:
+  // Placeholder: Vite plugin will implement build-time error page detection
+  // The plugin will:
   // 1. Scan routes directory for _error.tsx files
   // 2. Create a mapping of route paths to error components
-  // 3. Export the mapping for runtime use
+  // 3. Populate this function with the mapping at build time
   //
-  // For now, return null to use default error page
+  // Until then, use renderErrorPage() with explicit ErrorComponent option
   return null
 }

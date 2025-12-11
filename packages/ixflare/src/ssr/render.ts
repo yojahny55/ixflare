@@ -8,7 +8,12 @@ import type { ReactElement } from 'react'
 import type { RenderOptions } from './types'
 import { InfraError } from '@/errors'
 import { escapeHtml, buildAttributes } from './html-utils'
-import { classifySSRError, createSSRErrorInfo, logSSRError } from './streaming-error-handler'
+import {
+  classifySSRError,
+  createSSRErrorInfo,
+  logSSRError,
+  generateErrorNotificationScript,
+} from './streaming-error-handler'
 
 // HTML structure constants to avoid duplication
 const HTML_DOCTYPE = '<!DOCTYPE html>'
@@ -220,6 +225,10 @@ export function renderToStream(
   let shellReady = false
   let allReady = false
 
+  // Track boundary errors for client notification (AC2: error script notifies client)
+  const boundaryErrors: Array<{ error: Error; boundaryId: string }> = []
+  let boundaryErrorCount = 0
+
   // Create a new stream that wraps React's stream with DOCTYPE and bootstrap data
   return new ReadableStream({
     async start(controller) {
@@ -250,6 +259,12 @@ export function renderToStream(
 
               const errorInfo = createSSRErrorInfo(err, errorType)
               logSSRError(errorInfo)
+
+              // Track boundary errors for client notification (AC2)
+              if (errorType === 'boundary' || errorType === 'app') {
+                const boundaryId = `ssr-boundary-error-${boundaryErrorCount++}`
+                boundaryErrors.push({ error: err, boundaryId })
+              }
             }),
         })
 
@@ -279,6 +294,13 @@ export function renderToStream(
           const { done, value } = await reader.read()
 
           if (done) {
+            // Inject error notification scripts for boundary errors (AC2)
+            // This notifies the client which Suspense boundaries failed during SSR
+            for (const { error, boundaryId } of boundaryErrors) {
+              const errorScript = generateErrorNotificationScript(error, boundaryId)
+              controller.enqueue(encoder.encode(errorScript))
+            }
+
             // Inject safely escaped bootstrap data before closing
             const bootstrapScript = buildBootstrapScript(options?.bootstrapData)
             if (bootstrapScript) {
