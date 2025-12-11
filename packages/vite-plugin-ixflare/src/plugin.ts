@@ -33,7 +33,12 @@ import {
 } from './router-codegen'
 import { createDevServer, type DevServer } from './dev-server'
 import { bundleManifest, optimizeRoutes } from './build'
-import { setupHMR, handleRouteHMR } from './hmr'
+import {
+  setupHMR,
+  handleRouteHMR,
+  handleIslandHMR,
+  handleServerComponentHMR,
+} from './hmr'
 import { discoverIslands, type DiscoveredIsland } from './island-discovery'
 import {
   generateHydrationManifest,
@@ -261,8 +266,43 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
     },
 
     async handleHotUpdate({ file, server }): Promise<ModuleNode[] | void> {
-      // Handle HMR for route files
-      if (hmrEnabled && file.includes(routesDir)) {
+      if (!hmrEnabled) {
+        return undefined
+      }
+
+      // Handle HMR for island files (.client.tsx)
+      // React Fast Refresh handles state preservation automatically
+      if (file.endsWith('.client.tsx')) {
+        // Re-discover islands to update registry
+        discoveredIslands = await discoverIslands(resolvedComponentsDir)
+
+        // Use enhanced island HMR handler with timing and logging
+        return handleIslandHMR(file, server, discoveredIslands)
+      }
+
+      // Handle HMR for server component files (routes/*.tsx but not .client.tsx)
+      if (file.includes(routesDir) && file.endsWith('.tsx') && !file.endsWith('.client.tsx')) {
+        // Extract route path from file path for targeted updates
+        // Example: /path/to/src/routes/dashboard/index.tsx -> /dashboard
+        const routePathMatch = file.match(/routes\/(.+?)\/index\.tsx$|routes\/(.+?)\.tsx$/)
+        const routePath = routePathMatch
+          ? `/${routePathMatch[1] || routePathMatch[2] || ''}`
+          : '/'
+
+        // Send custom event to client for HTML swap with island preservation
+        handleServerComponentHMR(file, server, routePath)
+
+        // Also handle as route file for manifest updates
+        const modules = handleRouteHMR(file, server)
+        const virtualModule = server.moduleGraph.getModuleById(RESOLVED_VIRTUAL_MODULE_ID)
+        if (virtualModule && modules) {
+          return [...modules, virtualModule]
+        }
+        return modules
+      }
+
+      // Handle HMR for other route files (loaders, actions, etc.)
+      if (file.includes(routesDir)) {
         const modules = handleRouteHMR(file, server)
 
         // Also invalidate virtual module if it exists
@@ -272,35 +312,6 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
         }
 
         return modules
-      }
-
-      // Handle HMR for island files
-      if (hmrEnabled && file.endsWith('.client.tsx')) {
-        // Re-discover islands
-        discoveredIslands = await discoverIslands(resolvedComponentsDir)
-
-        // Invalidate the islands virtual module
-        const virtualModule = server.moduleGraph.getModuleById(RESOLVED_ISLANDS_ID)
-        if (virtualModule) {
-          server.moduleGraph.invalidateModule(virtualModule)
-
-          // Send HMR update
-          server.ws.send({
-            type: 'update',
-            updates: [
-              {
-                type: 'js-update',
-                path: VIRTUAL_ISLANDS_ID,
-                acceptedPath: VIRTUAL_ISLANDS_ID,
-                timestamp: Date.now(),
-              },
-            ],
-          })
-
-          server.config.logger.info(`[ixflare] Island updated: ${file}`, { timestamp: true })
-
-          return [virtualModule]
-        }
       }
 
       return undefined

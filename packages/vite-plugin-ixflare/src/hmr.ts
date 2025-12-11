@@ -1,16 +1,27 @@
 /**
  * @module hmr
- * @description Hot Module Replacement support for route files
+ * @description Hot Module Replacement support for routes and islands
  * @node-only
  *
- * This module handles HMR for route manifest changes.
- * Component-level HMR is handled by Vite core and @vitejs/plugin-react.
+ * This module handles HMR for route manifest changes, island updates,
+ * and server component changes. Component-level state preservation is
+ * handled by @vitejs/plugin-react's Fast Refresh.
  */
 
 import type { ViteDevServer, HmrContext, ModuleNode } from 'vite'
 
 export interface HMRConfig {
   enabled?: boolean
+}
+
+/**
+ * HMR timing tracker for performance monitoring
+ * @internal
+ */
+interface HMRTiming {
+  start: number
+  file: string
+  type: 'route' | 'island' | 'server-component'
 }
 
 const VIRTUAL_MODULE_ID = 'virtual:ixflare-routes'
@@ -108,4 +119,181 @@ export function createHMRContext(file: string, modules: ModuleNode[]): Partial<H
     file,
     modules,
   }
+}
+
+/**
+ * Starts HMR timing measurement
+ * @returns Timing object to pass to logHMRTiming
+ * @internal
+ */
+export function startHMRTiming(
+  file: string,
+  type: 'route' | 'island' | 'server-component'
+): HMRTiming {
+  return {
+    start: Date.now(),
+    file,
+    type,
+  }
+}
+
+/**
+ * Logs HMR timing with performance warning for slow updates
+ * @param timing - Timing object from startHMRTiming
+ * @param server - Vite dev server for logging
+ * @param additionalInfo - Additional context to log
+ * @internal
+ */
+export function logHMRTiming(
+  timing: HMRTiming,
+  server: ViteDevServer,
+  additionalInfo?: string
+): void {
+  const duration = Date.now() - timing.start
+  const fileName = timing.file.split('/').pop() || timing.file
+
+  let message = `[ixflare] ${timing.type} updated: ${fileName}`
+  if (additionalInfo) {
+    message += ` ${additionalInfo}`
+  }
+  message += ` (${duration}ms)`
+
+  // Warn if HMR update is slow (>1s as per NFR requirement)
+  if (duration > 1000) {
+    server.config.logger.warn(`${message} ⚠️ Slow HMR update`, { timestamp: true })
+  } else {
+    server.config.logger.info(message, { timestamp: true })
+  }
+}
+
+/**
+ * Handles island file HMR updates with state preservation via React Fast Refresh
+ *
+ * Islands use @vitejs/plugin-react's Fast Refresh for state preservation.
+ * This function invalidates the virtual islands module so the registry updates,
+ * but does NOT trigger re-hydration (React Fast Refresh handles component updates).
+ *
+ * @param file - Changed island file path
+ * @param server - Vite dev server
+ * @param discoveredIslands - Updated islands array after re-discovery
+ * @returns Modules that need to be invalidated
+ *
+ * @example
+ * ```typescript
+ * // In handleHotUpdate hook:
+ * if (file.endsWith('.client.tsx')) {
+ *   discoveredIslands = await discoverIslands(componentsDir)
+ *   return handleIslandHMR(file, server, discoveredIslands)
+ * }
+ * ```
+ */
+export function handleIslandHMR(
+  file: string,
+  server: ViteDevServer,
+  _discoveredIslands: unknown[]
+): ModuleNode[] {
+  const timing = startHMRTiming(file, 'island')
+
+  const VIRTUAL_ISLANDS_ID = 'virtual:ixflare-islands'
+  const RESOLVED_ISLANDS_ID = '\0' + VIRTUAL_ISLANDS_ID
+
+  // Invalidate the islands virtual module to update registry
+  const virtualModule = server.moduleGraph.getModuleById(RESOLVED_ISLANDS_ID)
+  const modules: ModuleNode[] = []
+
+  if (virtualModule) {
+    server.moduleGraph.invalidateModule(virtualModule)
+    modules.push(virtualModule)
+
+    // Send HMR update for virtual module
+    server.ws.send({
+      type: 'update',
+      updates: [
+        {
+          type: 'js-update',
+          path: VIRTUAL_ISLANDS_ID,
+          acceptedPath: VIRTUAL_ISLANDS_ID,
+          timestamp: Date.now(),
+        },
+      ],
+    })
+  }
+
+  // Also get the actual island module for React Fast Refresh
+  const islandModule = server.moduleGraph.getModuleById(file)
+  if (islandModule) {
+    modules.push(islandModule)
+  }
+
+  const modulesByUrl = server.moduleGraph.getModulesByFile(file)
+  if (modulesByUrl) {
+    for (const mod of modulesByUrl) {
+      if (!modules.includes(mod)) {
+        modules.push(mod)
+      }
+    }
+  }
+
+  logHMRTiming(timing, server, '(state preserved)')
+
+  return modules
+}
+
+/**
+ * Handles server component HMR by sending custom update event to client
+ *
+ * When a server component (non-.client.tsx) changes, we re-render the route
+ * and send an event to the client to swap HTML while preserving island state.
+ *
+ * @param file - Changed server component file path
+ * @param server - Vite dev server
+ * @param routePath - Route path affected by the change (e.g., '/dashboard')
+ *
+ * @example
+ * ```typescript
+ * // In handleHotUpdate hook:
+ * if (file.includes('routes/') && file.endsWith('.tsx') && !file.endsWith('.client.tsx')) {
+ *   handleServerComponentHMR(file, server, '/dashboard')
+ * }
+ * ```
+ */
+export function handleServerComponentHMR(
+  file: string,
+  server: ViteDevServer,
+  routePath: string
+): void {
+  const timing = startHMRTiming(file, 'server-component')
+
+  // Send custom event to client to swap HTML
+  server.ws.send({
+    type: 'custom',
+    event: 'ixflare:server-update',
+    data: {
+      route: routePath,
+      timestamp: Date.now(),
+    },
+  })
+
+  logHMRTiming(timing, server, `(route: ${routePath})`)
+}
+
+/**
+ * Logs breaking change detection and full reload reason
+ *
+ * When React Fast Refresh cannot preserve state (breaking change detected),
+ * log a clear message explaining why a full reload is necessary.
+ *
+ * @param reason - Description of the breaking change
+ * @param server - Vite dev server for logging
+ *
+ * @example
+ * ```typescript
+ * // When Fast Refresh bailout detected:
+ * logBreakingChange('Component renamed from Counter to CounterWidget', server)
+ * ```
+ */
+export function logBreakingChange(reason: string, server: ViteDevServer): void {
+  server.config.logger.warn(`[ixflare] Full reload triggered: ${reason}`, {
+    timestamp: true,
+  })
 }

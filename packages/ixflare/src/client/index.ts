@@ -1,6 +1,6 @@
 /**
  * @module client
- * @description Client-side utilities for island hydration
+ * @description Client-side utilities for island hydration and HMR
  * @client-only
  * @packageDocumentation
  *
@@ -9,3 +9,4 @@
  */
 
 export { hydrateIslands, hydrateIslandById, setIslandRegistry, getIslandRegistry } from './hydrate'
+export { setupServerComponentHMR } from './hmr-client'
