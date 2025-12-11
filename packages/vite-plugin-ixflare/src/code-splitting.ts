@@ -25,13 +25,14 @@
  * ```
  */
 
-import type { ManualChunksOption } from 'rollup'
+import type { ManualChunksOption, GetManualChunk } from 'rollup'
 
 /**
  * Type for the manualChunks function
  * Takes a module ID and returns a chunk name or undefined
+ * Compatible with Rollup's GetManualChunk type
  */
-export type ManualChunksFunction = (id: string) => string | undefined
+export type ManualChunksFunction = GetManualChunk
 
 /**
  * Create a manualChunks function for route-based code splitting
@@ -62,7 +63,7 @@ export function createRouteChunks(routesDir: string): ManualChunksFunction {
   // Normalize routes directory path for cross-platform compatibility
   const normalizedRoutesDir = routesDir.replace(/\\/g, '/')
 
-  return (id: string): string | undefined => {
+  return (id: string, _meta): string | undefined => {
     // Normalize module ID for cross-platform compatibility
     const normalizedId = id.replace(/\\/g, '/')
 
@@ -158,10 +159,10 @@ export function createRollupConfig(options: CodeSplittingOptions = {}) {
   // Merge custom chunks with route-based chunks
   const manualChunks: ManualChunksFunction =
     typeof customChunks === 'function'
-      ? (id: string) => {
+      ? (id: string, meta) => {
           // Try custom chunks first, fall back to route chunks
-          const customChunk = customChunks(id)
-          return customChunk || routeChunks(id)
+          const customChunk = customChunks(id, meta)
+          return customChunk || routeChunks(id, meta)
         }
       : routeChunks
 

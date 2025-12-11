@@ -32,7 +32,13 @@ import {
   type RouteManifest,
 } from './router-codegen'
 import { createDevServer, type DevServer } from './dev-server'
-import { bundleManifest, optimizeRoutes, validateChunkSizes, logChunkSizeReport } from './build'
+import {
+  bundleManifest,
+  optimizeRoutes,
+  validateChunkSizes,
+  logChunkSizeReport,
+  generateChunkManifest,
+} from './build'
 import {
   setupHMR,
   handleRouteHMR,
@@ -321,6 +327,8 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
     },
 
     async writeBundle(options, bundle) {
+      const outputDir = options.dir || 'dist'
+
       // Validate bundle sizes if code splitting is enabled
       if (codeSplitting) {
         const report = validateChunkSizes(bundle)
@@ -328,6 +336,19 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
           info: (msg) => this.info(msg),
           warn: (msg) => this.warn(msg),
         })
+
+        // Generate and save chunk manifest for client-side prefetching
+        try {
+          const chunkManifest = generateChunkManifest(bundle, '/')
+          const chunkManifestPath = join(outputDir, 'chunk-manifest.json')
+          await mkdir(outputDir, { recursive: true })
+          await writeFile(chunkManifestPath, JSON.stringify(chunkManifest, null, 2))
+          this.info(
+            `[ixflare] Generated chunk manifest with ${Object.keys(chunkManifest.chunks).length} route chunks`
+          )
+        } catch (error) {
+          this.warn('[ixflare] Failed to generate chunk manifest: ' + (error as Error).message)
+        }
       }
 
       // Generate hydration manifest after bundle is written
@@ -337,7 +358,6 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
 
       // Load Vite's manifest to map source files to output chunks
       try {
-        const outputDir = options.dir || 'dist'
         const viteManifestPath = join(outputDir, '.vite', 'manifest.json')
 
         // Read Vite manifest

@@ -71,13 +71,13 @@ describe('validateChunkSizes', () => {
 
   it('should validate vendor chunks within budget', () => {
     const bundle: OutputBundle = Object.fromEntries([
-      createMockChunk('chunks/vendor-abc123.js', 25 * 1024), // 25KB - under 30KB budget
-      createMockChunk('chunks/react-vendor-def456.js', 28 * 1024), // 28KB - under budget
+      createMockChunk('chunks/vendor-abc123.js', 20 * 1024), // 20KB - under 30KB budget
+      createMockChunk('chunks/react-vendor-def456.js', 25 * 1024), // 25KB - under budget
     ])
 
     const report = validateChunkSizes(bundle)
 
-    expect(report.budgetExceeded).toBe(false)
+    expect(report.warningCount).toBe(0) // No individual chunk warnings
     expect(report.breakdown.vendorChunks).toBe(2)
   })
 
@@ -99,14 +99,13 @@ describe('validateChunkSizes', () => {
 
   it('should not warn for other chunks (no budget)', () => {
     const bundle: OutputBundle = Object.fromEntries([
-      createMockChunk('entries/main-abc123.js', 20 * 1024), // 20KB - no budget
-      createMockChunk('chunks/framework-def456.js', 50 * 1024), // 50KB - no budget
+      createMockChunk('entries/main-abc123.js', 15 * 1024), // 15KB - no budget
+      createMockChunk('chunks/framework-def456.js', 30 * 1024), // 30KB - no budget
     ])
 
     const report = validateChunkSizes(bundle)
 
-    expect(report.budgetExceeded).toBe(false)
-    expect(report.warningCount).toBe(0)
+    expect(report.warningCount).toBe(0) // No individual chunk warnings
     expect(report.breakdown.otherChunks).toBe(2)
 
     for (const chunk of report.chunks) {
@@ -222,5 +221,37 @@ describe('validateChunkSizes', () => {
 
     expect(passedChunks.length).toBe(3)
     expect(failedChunks.length).toBe(2)
+  })
+
+  it('should warn when total bundle size exceeds 50KB budget', () => {
+    const bundle: OutputBundle = Object.fromEntries([
+      createMockChunk('chunks/route-a-abc123.js', 8 * 1024), // 8KB
+      createMockChunk('chunks/route-b-def456.js', 8 * 1024), // 8KB
+      createMockChunk('chunks/vendor-ghi789.js', 20 * 1024), // 20KB
+      createMockChunk('entries/main-jkl012.js', 20 * 1024), // 20KB
+      // Total: 56KB > 50KB budget
+    ])
+
+    const report = validateChunkSizes(bundle)
+
+    expect(report.totalBudgetExceeded).toBe(true)
+    expect(report.budgetExceeded).toBe(true)
+    expect(report.totalSize).toBeGreaterThan(50 * 1024)
+  })
+
+  it('should not warn when total bundle size is within 50KB budget', () => {
+    const bundle: OutputBundle = Object.fromEntries([
+      createMockChunk('chunks/route-a-abc123.js', 8 * 1024), // 8KB
+      createMockChunk('chunks/route-b-def456.js', 8 * 1024), // 8KB
+      createMockChunk('chunks/vendor-ghi789.js', 15 * 1024), // 15KB
+      createMockChunk('entries/main-jkl012.js', 15 * 1024), // 15KB
+      // Total: 46KB < 50KB budget
+    ])
+
+    const report = validateChunkSizes(bundle)
+
+    expect(report.totalBudgetExceeded).toBe(false)
+    expect(report.warningCount).toBe(0) // No individual warnings
+    expect(report.totalSize).toBeLessThan(50 * 1024)
   })
 })

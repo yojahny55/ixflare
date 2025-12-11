@@ -160,9 +160,9 @@ export interface ChunkSizeReport {
   totalSize: number
   /** Total bundle size in kilobytes (formatted) */
   totalSizeKB: string
-  /** Whether any budget was exceeded */
+  /** Whether any budget was exceeded (individual or total) */
   budgetExceeded: boolean
-  /** Number of warnings */
+  /** Number of individual chunk warnings */
   warningCount: number
   /** Breakdown by chunk type */
   breakdown: {
@@ -170,6 +170,8 @@ export interface ChunkSizeReport {
     vendorChunks: number
     otherChunks: number
   }
+  /** Whether total bundle size exceeds the 50KB budget */
+  totalBudgetExceeded?: boolean
 }
 
 /**
@@ -254,6 +256,14 @@ export function validateChunkSizes(bundle: OutputBundle): ChunkSizeReport {
     })
   }
 
+  // Check if total bundle size exceeds budget
+  // Note: This is the total for the entire build, not per-route
+  // AC5 requires <50KB total loaded JS for any route (route + shared)
+  const totalBudgetExceeded = totalSize > TOTAL_BUNDLE_BUDGET
+  if (totalBudgetExceeded) {
+    budgetExceeded = true
+  }
+
   return {
     chunks,
     totalSize,
@@ -261,6 +271,7 @@ export function validateChunkSizes(bundle: OutputBundle): ChunkSizeReport {
     budgetExceeded,
     warningCount,
     breakdown,
+    totalBudgetExceeded,
   }
 }
 
@@ -344,8 +355,15 @@ export function logChunkSizeReport(
   logger.info(`Total Bundle Size: ${report.totalSizeKB}`)
   logger.info(`Total Budget: ${formatBytes(TOTAL_BUNDLE_BUDGET)}`)
 
+  if (report.totalBudgetExceeded) {
+    logger.warn(`\n⚠️  Total bundle size (${report.totalSizeKB}) exceeds ${formatBytes(TOTAL_BUNDLE_BUDGET)} budget!`)
+  }
+
+  if (report.warningCount > 0) {
+    logger.warn(`\n⚠️  ${report.warningCount} chunk(s) exceed individual size budget!`)
+  }
+
   if (report.budgetExceeded) {
-    logger.warn(`\n⚠️  ${report.warningCount} chunk(s) exceed size budget!`)
     logger.warn('Consider:')
     logger.warn('  - Code splitting with dynamic imports')
     logger.warn('  - Removing unused dependencies')
@@ -355,4 +373,63 @@ export function logChunkSizeReport(
   }
 
   logger.info('─'.repeat(80) + '\n')
+}
+
+/**
+ * Chunk manifest mapping chunk names to URLs for client-side prefetching
+ */
+export interface ChunkManifest {
+  /** Map of chunk names to URLs (e.g., 'route-dashboard' → '/chunks/route-dashboard-abc123.js') */
+  chunks: Record<string, string>
+  /** Generation timestamp */
+  generatedAt: number
+}
+
+/**
+ * Generate chunk manifest for client-side route prefetching
+ *
+ * Creates a mapping from chunk names to their actual URLs with content hashes.
+ * This manifest is used by the client-side prefetch utilities to know which
+ * files to request when prefetching routes.
+ *
+ * @param bundle - Rollup output bundle from writeBundle hook
+ * @param basePath - Base path for chunk URLs (default: '/')
+ * @returns Chunk manifest object
+ *
+ * @example
+ * ```typescript
+ * // In Vite plugin writeBundle hook
+ * async writeBundle(options, bundle) {
+ *   const manifest = generateChunkManifest(bundle)
+ *   await writeFile('dist/chunk-manifest.json', JSON.stringify(manifest))
+ * }
+ * ```
+ */
+export function generateChunkManifest(
+  bundle: OutputBundle,
+  basePath: string = '/'
+): ChunkManifest {
+  const chunks: Record<string, string> = {}
+
+  for (const [fileName, output] of Object.entries(bundle)) {
+    if (output.type !== 'chunk') {
+      continue
+    }
+
+    // Extract base chunk name (without hash)
+    // e.g., 'chunks/route-dashboard-abc123.js' → 'route-dashboard'
+    const match = fileName.match(/(?:chunks\/)?([^-]+(?:-[^-]+)*?)(?:-[a-f0-9]+)?\.js$/)
+    if (match) {
+      const chunkName = match[1]
+      // Only include route chunks in manifest
+      if (chunkName.startsWith('route-')) {
+        chunks[chunkName] = `${basePath}${fileName}`
+      }
+    }
+  }
+
+  return {
+    chunks,
+    generatedAt: Date.now(),
+  }
 }

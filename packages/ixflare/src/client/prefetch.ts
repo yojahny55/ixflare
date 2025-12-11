@@ -6,9 +6,19 @@
  * Provides utilities to prefetch route chunks before navigation, reducing
  * perceived load time and improving user experience.
  *
+ * **Important:** For prefetching to work correctly with hashed chunk names,
+ * you must initialize the chunk manifest using `setChunkManifest()` after
+ * the page loads. The manifest maps route names to actual chunk URLs.
+ *
  * @example
  * ```typescript
- * import { prefetchRoute, setupLinkPrefetching } from 'ixflare/client'
+ * import { prefetchRoute, setupLinkPrefetching, setChunkManifest } from 'ixflare/client'
+ *
+ * // Initialize manifest (typically injected by SSR or loaded from /chunk-manifest.json)
+ * setChunkManifest({
+ *   'route-dashboard': '/chunks/route-dashboard-abc123.js',
+ *   'route-about': '/chunks/route-about-def456.js'
+ * })
  *
  * // Setup automatic prefetching for visible links
  * setupLinkPrefetching()
@@ -21,6 +31,12 @@
  */
 
 /**
+ * Chunk manifest mapping chunk names to actual URLs with hashes
+ * Must be set via setChunkManifest() for prefetching to work
+ */
+let chunkManifest: Record<string, string> | null = null
+
+/**
  * Set of routes that have already been prefetched
  * Prevents duplicate prefetch requests
  */
@@ -31,6 +47,10 @@ const prefetchedRoutes = new Set<string>()
  *
  * Creates a `<link rel="prefetch">` tag to load the route chunk in the background.
  * The browser will download the chunk when idle, making future navigation instant.
+ *
+ * **Note:** For prefetching to work correctly with hashed chunk names,
+ * the chunk manifest must be initialized via `setChunkManifest()` first.
+ * Without the manifest, prefetching will be skipped with a console warning.
  *
  * @param routePath - Route path to prefetch (e.g., '/dashboard', '/blog/post-1')
  *
@@ -60,17 +80,43 @@ export function prefetchRoute(routePath: string): void {
   // Examples:
   // - '/dashboard' → 'route-dashboard'
   // - '/blog/post' → 'route-blog-post'
-  // - '/users/123' → 'route-users-_id_' (for dynamic routes)
+  // - '/users/[id]' → 'route-users-_id_' (for dynamic routes)
   const chunkName = routePathToChunkName(routePath)
+
+  // Look up the actual chunk URL from the manifest
+  let chunkUrl: string | null = null
+
+  if (chunkManifest) {
+    // Direct lookup
+    chunkUrl = chunkManifest[chunkName] || null
+
+    // If not found, try to find a matching chunk (handles hash variations)
+    if (!chunkUrl) {
+      const matchingKey = Object.keys(chunkManifest).find(
+        (key) => key.startsWith(chunkName + '-') || key === chunkName
+      )
+      if (matchingKey) {
+        chunkUrl = chunkManifest[matchingKey]
+      }
+    }
+  }
+
+  // Without manifest, we can't prefetch correctly (hashes unknown)
+  if (!chunkUrl) {
+    if (typeof console !== 'undefined' && console.warn) {
+      console.warn(
+        `[ixflare/prefetch] Cannot prefetch "${routePath}": chunk manifest not set or chunk "${chunkName}" not found. ` +
+          `Call setChunkManifest() with the chunk mapping first.`
+      )
+    }
+    return
+  }
 
   // Create prefetch link
   const link = document.createElement('link')
   link.rel = 'prefetch'
   link.as = 'script'
-  // Vite places chunks in chunks/ directory with content hash
-  // We can't know the exact hash, so we rely on Vite's manifest or service worker
-  // For now, we'll prefetch by inferring the chunk pattern
-  link.href = `/chunks/${chunkName}.js`
+  link.href = chunkUrl
 
   // Append to head
   document.head.appendChild(link)
@@ -79,8 +125,13 @@ export function prefetchRoute(routePath: string): void {
 /**
  * Convert route path to chunk name
  *
- * @param routePath - Route path (e.g., '/dashboard', '/blog/post')
- * @returns Chunk name (e.g., 'route-dashboard', 'route-blog-post')
+ * Handles both file-based route syntax and URL parameter syntax:
+ * - File-based: `/users/[id]` → `route-users-_id_`
+ * - URL params: `/users/:id` → `route-users-_id_`
+ * - Catch-all: `/docs/[...slug]` or `/docs/*` → `route-docs-_slug_` or `route-docs-_`
+ *
+ * @param routePath - Route path (e.g., '/dashboard', '/blog/post', '/users/[id]')
+ * @returns Chunk name (e.g., 'route-dashboard', 'route-blog-post', 'route-users-_id_')
  *
  * @internal
  */
@@ -88,9 +139,11 @@ function routePathToChunkName(routePath: string): string {
   // Remove leading slash and convert slashes to dashes
   const cleanPath = routePath
     .replace(/^\//, '') // Remove leading slash
+    .replace(/\[\.\.\.([^\]]+)\]/g, '_$1_') // [...param] → _param_ (catch-all, file-based)
+    .replace(/\[([^\]]+)\]/g, '_$1_') // [param] → _param_ (dynamic, file-based)
+    .replace(/:([^/]+)/g, '_$1_') // :param → _param_ (dynamic, URL-based)
+    .replace(/\*/g, '_') // * → _ (catch-all, URL-based)
     .replace(/\//g, '-') // Slashes → dashes
-    .replace(/:/g, '_') // Dynamic params → underscores
-    .replace(/\*/g, '_') // Catch-all → underscores
 
   return `route-${cleanPath || 'index'}`
 }
@@ -242,4 +295,46 @@ export function clearPrefetchCache(): void {
  */
 export function isPrefetched(routePath: string): boolean {
   return prefetchedRoutes.has(routePath)
+}
+
+/**
+ * Set the chunk manifest for route prefetching
+ *
+ * The manifest maps chunk names (like 'route-dashboard') to their actual
+ * URLs including content hashes (like '/chunks/route-dashboard-abc123.js').
+ *
+ * This should be called during page initialization with the manifest
+ * generated during the build process.
+ *
+ * @param manifest - Object mapping chunk names to chunk URLs
+ *
+ * @example
+ * ```typescript
+ * // Load manifest and initialize
+ * const manifest = await fetch('/chunk-manifest.json').then(r => r.json())
+ * setChunkManifest(manifest)
+ *
+ * // Or inject from SSR
+ * setChunkManifest(window.__CHUNK_MANIFEST__)
+ * ```
+ */
+export function setChunkManifest(manifest: Record<string, string>): void {
+  chunkManifest = manifest
+}
+
+/**
+ * Get the current chunk manifest
+ *
+ * @returns The chunk manifest or null if not set
+ *
+ * @example
+ * ```typescript
+ * const manifest = getChunkManifest()
+ * if (!manifest) {
+ *   console.warn('Chunk manifest not initialized')
+ * }
+ * ```
+ */
+export function getChunkManifest(): Record<string, string> | null {
+  return chunkManifest
 }

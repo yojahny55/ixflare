@@ -185,6 +185,9 @@ importers:
         specifier: workspace:*
         version: link:../ixflare
     devDependencies:
+      rollup:
+        specifier: ^4.28.0
+        version: 4.53.3
       tsup:
         specifier: ^8.5.0
         version: 8.5.1(postcss@8.5.6)(typescript@5.9.3)
@@ -3845,14 +3848,6 @@ snapshots:
       chai: 6.2.1
       tinyrainbow: 3.0.3
 
-  '@vitest/mocker@4.0.15(vite@6.4.1(@types/node@20.19.25))':
-    dependencies:
-      '@vitest/spy': 4.0.15
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      vite: 6.4.1(@types/node@20.19.25)
-
   '@vitest/mocker@4.0.15(vite@6.4.1(@types/node@22.19.1))':
     dependencies:
       '@vitest/spy': 4.0.15
@@ -5149,7 +5144,7 @@ snapshots:
   vitest@4.0.15(@types/node@20.19.25)(jsdom@27.3.0(postcss@8.5.6)):
     dependencies:
       '@vitest/expect': 4.0.15
-      '@vitest/mocker': 4.0.15(vite@6.4.1(@types/node@20.19.25))
+      '@vitest/mocker': 4.0.15(vite@6.4.1(@types/node@22.19.1))
       '@vitest/pretty-format': 4.0.15
       '@vitest/runner': 4.0.15
       '@vitest/snapshot': 4.0.15

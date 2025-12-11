@@ -15,5 +15,7 @@ export {
   setupLinkPrefetching,
   clearPrefetchCache,
   isPrefetched,
+  setChunkManifest,
+  getChunkManifest,
   type PrefetchOptions,
 } from './prefetch'

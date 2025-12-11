@@ -33,7 +33,8 @@ export default ixflarePlugin
 export type { IxflarePluginOptions } from './types'
 export type { Route, RouteManifest, RouteParam, HttpMethod } from './router-codegen'
 export type { DevServerConfig, DevServer } from './dev-server'
-export type { BuildConfig, BuildResult, ChunkInfo, ChunkSizeReport } from './build'
+export type { BuildConfig, BuildResult, ChunkInfo, ChunkSizeReport, ChunkManifest } from './build'
+export { generateChunkManifest } from './build'
 export type { DiscoveredIsland, IslandLoadStrategy } from './island-discovery'
 export type {
   HydrationManifest,
