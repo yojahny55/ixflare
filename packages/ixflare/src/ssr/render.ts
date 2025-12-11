@@ -8,6 +8,7 @@ import type { ReactElement } from 'react'
 import type { RenderOptions } from './types'
 import { InfraError } from '@/errors'
 import { escapeHtml, buildAttributes } from './html-utils'
+import { classifySSRError, createSSRErrorInfo, logSSRError } from './streaming-error-handler'
 
 // HTML structure constants to avoid duplication
 const HTML_DOCTYPE = '<!DOCTYPE html>'
@@ -232,6 +233,9 @@ export function renderToStream(
           controller.enqueue(encoder.encode(`${HTML_DOCTYPE}${htmlHead}`))
         }
 
+        // Track if shell has rendered successfully
+        let shellRendered = false
+
         // Render React component to stream using React 19's renderToReadableStream
         const reactStream = await renderToReadableStream(reactElement, {
           signal: options?.abortSignal,
@@ -240,7 +244,12 @@ export function renderToStream(
           onError:
             options?.onError ??
             ((error: unknown) => {
-              console.error('[SSR Stream Error]', error)
+              // Classify error based on whether shell has rendered
+              const err = error instanceof Error ? error : new Error(String(error))
+              const errorType = classifySSRError(err, !shellRendered)
+
+              const errorInfo = createSSRErrorInfo(err, errorType)
+              logSSRError(errorInfo)
             }),
         })
 
@@ -286,6 +295,7 @@ export function renderToStream(
           // Fire onShellReady callback on first chunk (shell is complete)
           if (!shellReady) {
             shellReady = true
+            shellRendered = true // Mark shell as successfully rendered
             options?.onShellReady?.()
           }
 

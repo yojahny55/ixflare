@@ -201,3 +201,17 @@ export interface StaticParams {
  * ```
  */
 export type GetStaticPathsFunction = () => Promise<StaticParams[]> | StaticParams[]
+
+/**
+ * Error props for custom error pages
+ */
+export interface ErrorProps {
+  /** The error that occurred */
+  error: Error
+  /** HTTP status code */
+  statusCode: number
+  /** Error message */
+  message: string
+  /** Ray ID for distributed tracing */
+  rayId?: string
+}
