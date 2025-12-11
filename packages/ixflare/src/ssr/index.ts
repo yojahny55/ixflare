@@ -10,7 +10,6 @@
 export { renderToString, renderToStream } from './render'
 export {
   createIsland,
-  hydrateIsland,
   isIslandComponent,
   serializeIslandProps,
   deserializeIslandProps,

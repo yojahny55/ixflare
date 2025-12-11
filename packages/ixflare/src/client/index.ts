@@ -8,4 +8,9 @@
  * It should NOT be imported in server-side code.
  */
 
-export { hydrateIslands, hydrateIslandById } from './hydrate'
+export {
+  hydrateIslands,
+  hydrateIslandById,
+  setIslandRegistry,
+  getIslandRegistry,
+} from './hydrate'

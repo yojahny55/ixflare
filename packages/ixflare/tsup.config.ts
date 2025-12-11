@@ -6,6 +6,7 @@ export default defineConfig({
     orm: 'src/edge-record/index.ts',
     ssr: 'src/ssr/index.ts',
     config: 'src/config/index.ts',
+    client: 'src/client/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
@@ -14,7 +15,7 @@ export default defineConfig({
   treeshake: true,
   // React must be external - it's a peer dependency loaded by the consuming app
   // This prevents bundling React into ixflare/ssr (was 1.3MB, now ~8KB)
-  external: ['react', 'react-dom', 'react-dom/server'],
+  external: ['react', 'react-dom', 'react-dom/server', 'react-dom/client'],
   outExtension({ format }) {
     return {
       js: format === 'esm' ? '.mjs' : '.cjs',

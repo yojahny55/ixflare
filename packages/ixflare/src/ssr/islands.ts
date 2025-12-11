@@ -16,7 +16,7 @@
  * ```
  */
 
-import type { IslandConfig, IslandRegistryEntry, IslandMarkerProps } from './types'
+import type { IslandConfig, IslandRegistryEntry, IslandMarkerProps } from '@/ssr/types'
 import { ValidationError, InfraError } from '@/errors'
 
 /** Maximum size for serialized props (10KB) */
@@ -301,12 +301,3 @@ export function createIsland(config: IslandConfig): IslandMarkerProps {
   return markerProps
 }
 
-/**
- * Placeholder for client-side hydration (will be replaced by client/hydrate.ts)
- *
- * @param id - Island identifier
- * @deprecated Use hydrateIslands() from @ixflare/client instead
- */
-export function hydrateIsland(id: string): void {
-  console.log(`Hydrating island: ${id}`)
-}

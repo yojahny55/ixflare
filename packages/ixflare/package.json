@@ -58,6 +58,16 @@
         "types": "./dist/config.d.cts",
         "default": "./dist/config.cjs"
       }
+    },
+    "./client": {
+      "import": {
+        "types": "./dist/client.d.ts",
+        "default": "./dist/client.mjs"
+      },
+      "require": {
+        "types": "./dist/client.d.cts",
+        "default": "./dist/client.cjs"
+      }
     }
   },
   "files": [
