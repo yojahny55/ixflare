@@ -4,3 +4,4 @@
  */
 
 export { redactSecrets, redactString, isSensitiveKey } from './redact'
+export { filePathToChunkName, routePathToChunkName } from './chunk-naming'

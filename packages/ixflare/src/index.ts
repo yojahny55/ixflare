@@ -163,6 +163,7 @@ export type {
 
 // Utility exports
 export { redactSecrets, redactString, isSensitiveKey } from './utils/redact'
+export { filePathToChunkName, routePathToChunkName } from './utils/chunk-naming'
 
 // EdgeRecord ORM exports
 export * from './edge-record'

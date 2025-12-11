@@ -14,6 +14,7 @@ export {
   prefetchRoute,
   setupLinkPrefetching,
   clearPrefetchCache,
+  cleanupPrefetchLinks,
   isPrefetched,
   setChunkManifest,
   getChunkManifest,

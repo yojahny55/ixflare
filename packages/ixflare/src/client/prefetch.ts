@@ -30,11 +30,19 @@
  * ```
  */
 
+import { routePathToChunkName } from '@/utils/chunk-naming'
+
 /**
  * Chunk manifest mapping chunk names to actual URLs with hashes
- * Must be set via setChunkManifest() for prefetching to work
+ * Auto-loaded from window.__CHUNK_MANIFEST__ if available (SSR injection)
+ * Can be set manually via setChunkManifest()
  */
 let chunkManifest: Record<string, string> | null = null
+
+// Auto-load manifest from SSR injection if available
+if (typeof window !== 'undefined' && (window as Window & { __CHUNK_MANIFEST__?: Record<string, string> }).__CHUNK_MANIFEST__) {
+  chunkManifest = (window as Window & { __CHUNK_MANIFEST__?: Record<string, string> }).__CHUNK_MANIFEST__ ?? null
+}
 
 /**
  * Set of routes that have already been prefetched
@@ -112,41 +120,17 @@ export function prefetchRoute(routePath: string): void {
     return
   }
 
-  // Create prefetch link
+  // Create prefetch link with marker attribute for cleanup
   const link = document.createElement('link')
   link.rel = 'prefetch'
   link.as = 'script'
   link.href = chunkUrl
+  link.setAttribute('data-ixflare-prefetch', routePath)
 
   // Append to head
   document.head.appendChild(link)
 }
 
-/**
- * Convert route path to chunk name
- *
- * Handles both file-based route syntax and URL parameter syntax:
- * - File-based: `/users/[id]` → `route-users-_id_`
- * - URL params: `/users/:id` → `route-users-_id_`
- * - Catch-all: `/docs/[...slug]` or `/docs/*` → `route-docs-_slug_` or `route-docs-_`
- *
- * @param routePath - Route path (e.g., '/dashboard', '/blog/post', '/users/[id]')
- * @returns Chunk name (e.g., 'route-dashboard', 'route-blog-post', 'route-users-_id_')
- *
- * @internal
- */
-function routePathToChunkName(routePath: string): string {
-  // Remove leading slash and convert slashes to dashes
-  const cleanPath = routePath
-    .replace(/^\//, '') // Remove leading slash
-    .replace(/\[\.\.\.([^\]]+)\]/g, '_$1_') // [...param] → _param_ (catch-all, file-based)
-    .replace(/\[([^\]]+)\]/g, '_$1_') // [param] → _param_ (dynamic, file-based)
-    .replace(/:([^/]+)/g, '_$1_') // :param → _param_ (dynamic, URL-based)
-    .replace(/\*/g, '_') // * → _ (catch-all, URL-based)
-    .replace(/\//g, '-') // Slashes → dashes
-
-  return `route-${cleanPath || 'index'}`
-}
 
 /**
  * Options for link prefetching
@@ -263,21 +247,55 @@ export function setupLinkPrefetching(options: PrefetchOptions = {}): void {
 }
 
 /**
- * Clear all prefetched routes from the cache
+ * Remove all prefetch link elements from the DOM
  *
- * Useful for testing or when navigation patterns change significantly
+ * Cleans up `<link rel="prefetch">` elements that were added by `prefetchRoute()`.
+ * Useful when navigating to a different section of the app or on cleanup.
  *
  * @example
  * ```typescript
- * // Clear cache on user logout
+ * // Cleanup on route change
+ * router.on('navigate', () => {
+ *   cleanupPrefetchLinks()
+ * })
+ * ```
+ */
+export function cleanupPrefetchLinks(): void {
+  if (typeof document === 'undefined') return
+
+  const prefetchLinks = document.querySelectorAll('link[rel="prefetch"][data-ixflare-prefetch]')
+  prefetchLinks.forEach((link) => link.remove())
+}
+
+/**
+ * Clear all prefetched routes from the cache and optionally cleanup DOM
+ *
+ * Useful for testing or when navigation patterns change significantly.
+ *
+ * @param options - Cleanup options
+ * @param options.cleanupDOM - Also remove prefetch link elements from DOM (default: false)
+ *
+ * @example
+ * ```typescript
+ * // Clear cache only (links stay in DOM for browser to potentially reuse)
+ * clearPrefetchCache()
+ *
+ * // Clear cache and remove DOM elements
+ * clearPrefetchCache({ cleanupDOM: true })
+ *
+ * // Clear on user logout
  * function logout() {
- *   clearPrefetchCache()
+ *   clearPrefetchCache({ cleanupDOM: true })
  *   // ... logout logic
  * }
  * ```
  */
-export function clearPrefetchCache(): void {
+export function clearPrefetchCache(options?: { cleanupDOM?: boolean }): void {
   prefetchedRoutes.clear()
+
+  if (options?.cleanupDOM) {
+    cleanupPrefetchLinks()
+  }
 }
 
 /**

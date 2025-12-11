@@ -80,6 +80,16 @@ function buildBootstrapScript(data: unknown): string {
 }
 
 /**
+ * Builds the chunk manifest script tag for client-side prefetching.
+ * @param manifest - Chunk manifest mapping chunk names to URLs
+ * @returns Script tag string or empty string if no manifest
+ */
+function buildChunkManifestScript(manifest: Record<string, string> | undefined): string {
+  if (!manifest || Object.keys(manifest).length === 0) return ''
+  return `<script>window.__CHUNK_MANIFEST__=${safeJsonStringify(manifest)};</script>`
+}
+
+/**
  * Renders a React component to an HTML string.
  *
  * Uses React 19's renderToReadableStream internally and converts the stream
@@ -152,14 +162,17 @@ export async function renderToString(
     if (!shouldWrapInShell) {
       // Return raw component output with optional bootstrap data
       const bootstrapScript = buildBootstrapScript(options?.bootstrapData)
-      return bootstrapScript ? `${html}${bootstrapScript}` : html
+      const chunkManifestScript = buildChunkManifestScript(options?.chunkManifest)
+      const scripts = bootstrapScript + chunkManifestScript
+      return scripts ? `${html}${scripts}` : html
     }
 
-    // Build complete HTML document with safe bootstrap data injection
+    // Build complete HTML document with safe bootstrap data and chunk manifest injection
     const htmlHead = buildHtmlHead(options)
     const bootstrapScript = buildBootstrapScript(options?.bootstrapData)
+    const chunkManifestScript = buildChunkManifestScript(options?.chunkManifest)
 
-    return `${HTML_DOCTYPE}${htmlHead}${html}${bootstrapScript}${HTML_CLOSE}`
+    return `${HTML_DOCTYPE}${htmlHead}${html}${bootstrapScript}${chunkManifestScript}${HTML_CLOSE}`
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     throw new InfraError(
@@ -305,6 +318,11 @@ export function renderToStream(
             const bootstrapScript = buildBootstrapScript(options?.bootstrapData)
             if (bootstrapScript) {
               controller.enqueue(encoder.encode(bootstrapScript))
+            }
+            // Inject chunk manifest for client-side prefetching
+            const chunkManifestScript = buildChunkManifestScript(options?.chunkManifest)
+            if (chunkManifestScript) {
+              controller.enqueue(encoder.encode(chunkManifestScript))
             }
             // Close HTML document (if shell enabled)
             if (shouldWrapInShell) {

@@ -26,6 +26,7 @@
  */
 
 import type { ManualChunksOption, GetManualChunk } from 'rollup'
+import { filePathToChunkName } from 'ixflare'
 
 /**
  * Type for the manualChunks function
@@ -60,9 +61,6 @@ export type ManualChunksFunction = GetManualChunk
  * ```
  */
 export function createRouteChunks(routesDir: string): ManualChunksFunction {
-  // Normalize routes directory path for cross-platform compatibility
-  const normalizedRoutesDir = routesDir.replace(/\\/g, '/')
-
   return (id: string, _meta): string | undefined => {
     // Normalize module ID for cross-platform compatibility
     const normalizedId = id.replace(/\\/g, '/')
@@ -80,30 +78,10 @@ export function createRouteChunks(routesDir: string): ManualChunksFunction {
     }
 
     // Route chunks - one chunk per route file
-    if (normalizedId.includes(normalizedRoutesDir)) {
-      // Extract relative path from routes directory
-      const parts = normalizedId.split(normalizedRoutesDir)
-      if (parts.length < 2) {
-        return undefined
-      }
-
-      const relativePath = parts[1]
-
-      // Clean path for chunk name:
-      // - Remove leading slash
-      // - Remove file extension
-      // - Replace path separators with dashes
-      // - Convert dynamic segments: [id] → _id_, [...slug] → _slug_
-      const chunkName = relativePath
-        .replace(/^\//, '') // Remove leading slash
-        .replace(/\.\w+$/, '') // Remove extension (.tsx, .ts, etc.)
-        .replace(/[/\\]/g, '-') // Path separators → dashes
-        .replace(/\[\.\.\.([^\]]+)\]/g, '_$1_') // [...param] → _param_
-        .replace(/\[([^\]]+)\]/g, '_$1_') // [param] → _param_
-
-      // Return chunk name with 'route-' prefix
-      // Handle index files specially
-      return `route-${chunkName || 'index'}`
+    // Use shared utility for consistent chunk naming with client-side prefetching
+    const chunkName = filePathToChunkName(normalizedId, routesDir)
+    if (chunkName) {
+      return chunkName
     }
 
     // Everything else goes to default chunk

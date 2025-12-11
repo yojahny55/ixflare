@@ -8,6 +8,12 @@ export interface RenderOptions {
   streaming?: boolean
   /** Data to inject for hydration (will be safely escaped) */
   bootstrapData?: unknown
+  /**
+   * Chunk manifest for route prefetching.
+   * Maps chunk names to URLs: { 'route-dashboard': '/chunks/route-dashboard-abc123.js' }
+   * Will be injected as window.__CHUNK_MANIFEST__ for client-side prefetching.
+   */
+  chunkManifest?: Record<string, string>
   /** Abort signal for cancellation */
   abortSignal?: AbortSignal
   /** Bootstrap scripts to include */
