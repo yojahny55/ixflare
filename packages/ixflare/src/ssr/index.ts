@@ -8,6 +8,18 @@
  */
 
 export { renderToString, renderToStream } from './render'
+export { generateCacheHeaders, renderSSR, renderWithStrategy } from './route-renderer'
+export { generateCSRShell, createCSRShellResponse } from './csr-shell'
+export type { CSRShellOptions } from './csr-shell'
+export {
+  generateISRCacheKey,
+  prerenderRoute,
+  storeISRCache,
+  getISRCache,
+  handleISRRequest,
+  isSSGRoute,
+  validateSSGConfig,
+} from './ssg'
 export {
   createIsland,
   isIslandComponent,
@@ -34,5 +46,10 @@ export type {
   IslandMarkerProps,
   HydrationManifest,
   IslandRegistryEntry,
+  RenderingStrategy,
+  CacheConfig,
+  RouteConfig,
+  StaticParams,
+  GetStaticPathsFunction,
 } from './types'
 export type { LayoutComponent } from './layout-renderer'

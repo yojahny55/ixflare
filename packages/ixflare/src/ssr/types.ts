@@ -130,3 +130,74 @@ export interface IslandRegistryEntry {
   /** Loading strategy */
   load: IslandLoadStrategy
 }
+
+/**
+ * Rendering strategy for a route
+ * - ssr: Server-side render on every request (default)
+ * - ssg: Static site generation (pre-render at build time)
+ * - csr: Client-side only (no SSR, minimal HTML shell)
+ */
+export type RenderingStrategy = 'ssr' | 'ssg' | 'csr'
+
+/**
+ * Cache configuration for SSR responses
+ * Sets Cache-Control headers for edge caching
+ */
+export interface CacheConfig {
+  /** Maximum age in seconds that response is considered fresh */
+  maxAge?: number
+  /** Time in seconds to serve stale content while revalidating in background */
+  staleWhileRevalidate?: number
+}
+
+/**
+ * Route configuration export
+ * @example
+ * ```typescript
+ * // SSR with caching
+ * export const config: RouteConfig = {
+ *   rendering: 'ssr',
+ *   cache: { maxAge: 60, staleWhileRevalidate: 300 }
+ * }
+ *
+ * // SSG with revalidation (ISR)
+ * export const config: RouteConfig = {
+ *   rendering: 'ssg',
+ *   revalidate: 3600
+ * }
+ *
+ * // CSR (client-side only)
+ * export const config: RouteConfig = {
+ *   rendering: 'csr'
+ * }
+ * ```
+ */
+export interface RouteConfig {
+  /** Rendering strategy (default: 'ssr') */
+  rendering?: RenderingStrategy
+  /** Cache configuration for SSR responses */
+  cache?: CacheConfig
+  /** Revalidation interval in seconds for SSG/ISR routes */
+  revalidate?: number
+}
+
+/**
+ * Static path parameters for SSG routes with dynamic params
+ */
+export interface StaticParams {
+  /** Route parameters to pre-render */
+  params: Record<string, string>
+}
+
+/**
+ * Function to get static paths for SSG routes
+ * @returns Array of param objects to pre-render
+ * @example
+ * ```typescript
+ * export async function getStaticPaths(): Promise<StaticParams[]> {
+ *   const posts = await Post.select('slug').all()
+ *   return posts.map(post => ({ params: { slug: post.slug } }))
+ * }
+ * ```
+ */
+export type GetStaticPathsFunction = () => Promise<StaticParams[]> | StaticParams[]

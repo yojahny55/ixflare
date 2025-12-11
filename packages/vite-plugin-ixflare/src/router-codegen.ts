@@ -9,6 +9,7 @@ import { relative, basename } from 'node:path'
 import fg from 'fast-glob'
 import { discoverLayouts, extractLayoutChain } from './layout-discovery'
 import { discoverMiddleware, extractMiddlewareChain } from './middleware-discovery'
+import type { RouteConfig } from 'ixflare/ssr'
 
 export interface RouteParam {
   name: string
@@ -28,6 +29,8 @@ export interface Route {
   layoutHasLoader?: boolean[] // True for each layout that exports a loader function
   middleware?: string[] // Route-specific middleware (if route exports middleware array)
   middlewareChain?: string[] // Full middleware chain: directory middlewares from root to innermost
+  config?: RouteConfig // Route configuration for rendering strategy, caching, etc.
+  hasGetStaticPaths?: boolean // True if route exports getStaticPaths function (SSG)
 }
 
 export interface RouteManifest {
@@ -119,6 +122,55 @@ export async function parseRouteFile(filePath: string, routesDir: string): Promi
   const middlewareRegex = /export\s+const\s+middleware\b\s*[:=]/
   const hasMiddleware = middlewareRegex.test(content)
 
+  // Detect exported route config
+  // Match: export const config = {...} or export const config: RouteConfig = {...}
+  const configRegex = /export\s+const\s+config\b\s*[:=]/
+  const hasConfig = configRegex.test(content)
+
+  let routeConfig: RouteConfig | undefined
+  if (hasConfig) {
+    // Extract config values using regex (simple parsing)
+    const renderingMatch = content.match(/rendering:\s*['"](\w+)['"]/)
+    const rendering = renderingMatch?.[1] as 'ssr' | 'ssg' | 'csr' | undefined
+
+    // Validate rendering strategy at build time
+    if (rendering && !['ssr', 'ssg', 'csr'].includes(rendering)) {
+      throw new Error(
+        `[vite-plugin-ixflare] Invalid rendering strategy "${rendering}" in ${relativePath}.\n` +
+          `Valid options: 'ssr', 'ssg', 'csr'`
+      )
+    }
+
+    // Extract cache config
+    const maxAgeMatch = content.match(/maxAge:\s*(\d+)/)
+    const stwrMatch = content.match(/staleWhileRevalidate:\s*(\d+)/)
+    const revalidateMatch = content.match(/revalidate:\s*(\d+)/)
+
+    routeConfig = {
+      rendering: rendering || 'ssr',
+    }
+
+    // Add cache config if present
+    if (maxAgeMatch || stwrMatch) {
+      routeConfig.cache = {
+        maxAge: maxAgeMatch ? parseInt(maxAgeMatch[1], 10) : undefined,
+        staleWhileRevalidate: stwrMatch ? parseInt(stwrMatch[1], 10) : undefined,
+      }
+    }
+
+    // Add revalidate if present
+    if (revalidateMatch) {
+      routeConfig.revalidate = parseInt(revalidateMatch[1], 10)
+    }
+  }
+
+  // Detect getStaticPaths export for SSG routes
+  // Match: export async function getStaticPaths() or export function getStaticPaths() or export const getStaticPaths = ...
+  const getStaticPathsFunctionRegex = /export\s+(?:async\s+)?function\s+getStaticPaths\s*\(/g
+  const getStaticPathsConstRegex = /export\s+const\s+getStaticPaths\s*[:=]/g
+  const hasGetStaticPaths =
+    getStaticPathsFunctionRegex.test(content) || getStaticPathsConstRegex.test(content)
+
   // Extract dynamic params
   const params = extractDynamicParams(relativePath)
 
@@ -155,6 +207,16 @@ export async function parseRouteFile(filePath: string, routesDir: string): Promi
   // This flag indicates to the build system that middleware exists for this route.
   if (hasMiddleware) {
     route.middleware = [] // Presence indicates route has middleware; actual functions loaded at runtime
+  }
+
+  // Add route config if present
+  if (routeConfig) {
+    route.config = routeConfig
+  }
+
+  // Add getStaticPaths flag if present
+  if (hasGetStaticPaths) {
+    route.hasGetStaticPaths = true
   }
 
   return route
