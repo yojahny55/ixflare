@@ -142,9 +142,40 @@ export async function parseRouteFile(filePath: string, routesDir: string): Promi
     }
 
     // Extract cache config
-    const maxAgeMatch = content.match(/maxAge:\s*(\d+)/)
-    const stwrMatch = content.match(/staleWhileRevalidate:\s*(\d+)/)
-    const revalidateMatch = content.match(/revalidate:\s*(\d+)/)
+    const maxAgeMatch = content.match(/maxAge:\s*(-?\d+)/)
+    const stwrMatch = content.match(/staleWhileRevalidate:\s*(-?\d+)/)
+    const revalidateMatch = content.match(/revalidate:\s*(-?\d+)/)
+
+    // Validate cache config values at build time
+    if (maxAgeMatch) {
+      const maxAge = parseInt(maxAgeMatch[1], 10)
+      if (maxAge < 0) {
+        throw new Error(
+          `[vite-plugin-ixflare] Invalid maxAge value "${maxAge}" in ${relativePath}.\n` +
+            `maxAge must be a non-negative integer.`
+        )
+      }
+    }
+
+    if (stwrMatch) {
+      const stwr = parseInt(stwrMatch[1], 10)
+      if (stwr < 0) {
+        throw new Error(
+          `[vite-plugin-ixflare] Invalid staleWhileRevalidate value "${stwr}" in ${relativePath}.\n` +
+            `staleWhileRevalidate must be a non-negative integer.`
+        )
+      }
+    }
+
+    if (revalidateMatch) {
+      const revalidate = parseInt(revalidateMatch[1], 10)
+      if (revalidate < 0) {
+        throw new Error(
+          `[vite-plugin-ixflare] Invalid revalidate value "${revalidate}" in ${relativePath}.\n` +
+            `revalidate must be a non-negative integer.`
+        )
+      }
+    }
 
     routeConfig = {
       rendering: rendering || 'ssr',

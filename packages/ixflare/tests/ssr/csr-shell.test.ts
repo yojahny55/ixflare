@@ -177,6 +177,46 @@ describe('CSR Shell', () => {
       expect(shell).not.toContain('class=""')
       expect(shell).not.toContain('dir=""')
     })
+
+    it('should include stylesheet links', () => {
+      const shell = generateCSRShell({
+        scriptSrc: '/client.js',
+        stylesheets: ['/styles.css', '/theme.css'],
+      })
+
+      expect(shell).toContain('<link rel="stylesheet" href="/styles.css"/>')
+      expect(shell).toContain('<link rel="stylesheet" href="/theme.css"/>')
+    })
+
+    it('should escape stylesheet hrefs', () => {
+      const shell = generateCSRShell({
+        scriptSrc: '/client.js',
+        stylesheets: ['"></link><script>alert(1)</script><link href="'],
+      })
+
+      expect(shell).toContain('href="&quot;&gt;&lt;/link&gt;')
+      expect(shell).not.toContain('href=""></link><script>')
+    })
+
+    it('should include inline styles', () => {
+      const shell = generateCSRShell({
+        scriptSrc: '/client.js',
+        inlineStyles: 'body { opacity: 0; } body.loaded { opacity: 1; }',
+      })
+
+      expect(shell).toContain('<style>body { opacity: 0; } body.loaded { opacity: 1; }</style>')
+    })
+
+    it('should include both stylesheets and inline styles', () => {
+      const shell = generateCSRShell({
+        scriptSrc: '/client.js',
+        stylesheets: ['/main.css'],
+        inlineStyles: '.loading { display: none; }',
+      })
+
+      expect(shell).toContain('<link rel="stylesheet" href="/main.css"/>')
+      expect(shell).toContain('<style>.loading { display: none; }</style>')
+    })
   })
 
   describe('createCSRShellResponse', () => {

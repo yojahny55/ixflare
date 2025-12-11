@@ -11,6 +11,10 @@ import {
   type RouteManifest,
   type Route,
 } from './router-codegen'
+// SSG pre-rendering utilities are available via import from './ssg-prerender'
+// They require manual integration with a module loader (e.g., Vite's ssrLoadModule)
+// See: packages/vite-plugin-ixflare/src/ssg-prerender.ts
+import type { SSGManifest, PrerenderResult } from './ssg-prerender'
 
 export interface BuildConfig {
   routesDir: string
@@ -22,6 +26,8 @@ export interface BuildResult {
   manifest: RouteManifest
   success: boolean
   sourceMaps?: boolean
+  ssgManifest?: SSGManifest
+  ssgResults?: PrerenderResult[]
 }
 
 /**

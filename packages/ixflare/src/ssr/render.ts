@@ -7,6 +7,7 @@ import { renderToReadableStream } from 'react-dom/server'
 import type { ReactElement } from 'react'
 import type { RenderOptions } from './types'
 import { InfraError } from '@/errors'
+import { escapeHtml, buildAttributes } from './html-utils'
 
 // HTML structure constants to avoid duplication
 const HTML_DOCTYPE = '<!DOCTYPE html>'
@@ -38,18 +39,6 @@ function safeJsonStringify(data: unknown): string {
 }
 
 /**
- * Builds HTML attributes string from a Record, escaping values for security.
- * @param attrs - Record of attribute name to value
- * @returns HTML attributes string like ' class="dark" dir="rtl"'
- */
-function buildAttributes(attrs?: Record<string, string>): string {
-  if (!attrs) return ''
-  return Object.entries(attrs)
-    .map(([name, value]) => ` ${escapeHtml(name)}="${escapeHtml(value)}"`)
-    .join('')
-}
-
-/**
  * Builds the HTML head section with meta tags, title, and viewport.
  * Supports extensible html and body attributes for Tailwind dark mode, RTL, etc.
  * @param options - Render options containing title, meta, and attribute configuration
@@ -72,20 +61,6 @@ function buildHtmlHead(options?: RenderOptions): string {
   const bodyAttrs = buildAttributes(options?.bodyAttributes)
 
   return `<html lang="${lang}"${htmlAttrs}><head><meta charset="utf-8"/>${viewport}${title}${metaTags}</head><body${bodyAttrs}>`
-}
-
-/**
- * Escapes HTML special characters to prevent injection.
- * @param str - String to escape
- * @returns Escaped string safe for HTML attribute/content
- */
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
 }
 
 /**

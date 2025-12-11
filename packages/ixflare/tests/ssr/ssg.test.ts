@@ -83,6 +83,30 @@ describe('SSG/ISR', () => {
       expect(key).toContain('slug')
       expect(key).toContain('hello')
     })
+
+    it('should generate stable keys regardless of param order', () => {
+      // Same params, different insertion order
+      const key1 = generateISRCacheKey('/blog/[year]/[slug]', { year: '2024', slug: 'hello' })
+      const key2 = generateISRCacheKey('/blog/[year]/[slug]', { slug: 'hello', year: '2024' })
+
+      // Keys should be identical because params are sorted
+      expect(key1).toBe(key2)
+    })
+
+    it('should generate stable keys with many params', () => {
+      const params1 = { z: '3', a: '1', m: '2' }
+      const params2 = { a: '1', z: '3', m: '2' }
+      const params3 = { m: '2', a: '1', z: '3' }
+
+      const key1 = generateISRCacheKey('/route', params1)
+      const key2 = generateISRCacheKey('/route', params2)
+      const key3 = generateISRCacheKey('/route', params3)
+
+      expect(key1).toBe(key2)
+      expect(key2).toBe(key3)
+      // Verify sorted order in output
+      expect(key1).toBe('isr:/route:{"a":"1","m":"2","z":"3"}')
+    })
   })
 
   describe('prerenderRoute', () => {

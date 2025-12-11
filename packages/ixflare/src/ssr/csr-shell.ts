@@ -4,31 +4,7 @@
  * @packageDocumentation
  */
 
-/**
- * Escapes HTML special characters to prevent injection.
- * @param str - String to escape
- * @returns Escaped string safe for HTML attribute/content
- */
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-}
-
-/**
- * Builds HTML attributes string from a Record, escaping values for security.
- * @param attrs - Record of attribute name to value
- * @returns HTML attributes string like ' class="dark" dir="rtl"'
- */
-function buildAttributes(attrs?: Record<string, string>): string {
-  if (!attrs) return ''
-  return Object.entries(attrs)
-    .map(([name, value]) => ` ${escapeHtml(name)}="${escapeHtml(value)}"`)
-    .join('')
-}
+import { escapeHtml, buildAttributes } from './html-utils'
 
 /**
  * Options for generating CSR shell
@@ -48,6 +24,10 @@ export interface CSRShellOptions {
   bodyAttributes?: Record<string, string>
   /** Mount point ID for React root (default: 'root') */
   mountId?: string
+  /** CSS stylesheet URLs to include (prevents FOUC) */
+  stylesheets?: string[]
+  /** Inline CSS styles to include in <style> tag (prevents FOUC) */
+  inlineStyles?: string
 }
 
 /**
@@ -94,6 +74,17 @@ export function generateCSRShell(options: CSRShellOptions): string {
     }
   }
 
+  // Build stylesheet links (prevents FOUC)
+  let stylesheetLinks = ''
+  if (options.stylesheets) {
+    for (const href of options.stylesheets) {
+      stylesheetLinks += `<link rel="stylesheet" href="${escapeHtml(href)}"/>`
+    }
+  }
+
+  // Build inline styles (prevents FOUC)
+  const inlineStyles = options.inlineStyles ? `<style>${options.inlineStyles}</style>` : ''
+
   // Build extensible html and body attributes
   const htmlAttrs = buildAttributes(options.htmlAttributes)
   const bodyAttrs = buildAttributes(options.bodyAttributes)
@@ -108,6 +99,8 @@ export function generateCSRShell(options: CSRShellOptions): string {
   ${viewport}
   ${title}
   ${metaTags}
+  ${stylesheetLinks}
+  ${inlineStyles}
 </head>
 <body${bodyAttrs}>
   <div id="${escapeHtml(mountId)}"></div>

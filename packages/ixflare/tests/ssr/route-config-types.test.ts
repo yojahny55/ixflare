@@ -137,10 +137,7 @@ describe('Route Config Types', () => {
   describe('GetStaticPathsFunction', () => {
     it('should accept sync function returning array', () => {
       const getStaticPaths: GetStaticPathsFunction = () => {
-        return [
-          { params: { slug: 'post-1' } },
-          { params: { slug: 'post-2' } },
-        ]
+        return [{ params: { slug: 'post-1' } }, { params: { slug: 'post-2' } }]
       }
 
       const result = getStaticPaths()
@@ -150,10 +147,7 @@ describe('Route Config Types', () => {
     it('should accept async function returning array', async () => {
       const getStaticPaths: GetStaticPathsFunction = async () => {
         // Simulate async fetch
-        return Promise.resolve([
-          { params: { slug: 'post-1' } },
-          { params: { slug: 'post-2' } },
-        ])
+        return Promise.resolve([{ params: { slug: 'post-1' } }, { params: { slug: 'post-2' } }])
       }
 
       const result = await getStaticPaths()

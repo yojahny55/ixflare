@@ -41,3 +41,20 @@ export type {
   ViteManifest,
   ViteManifestEntry,
 } from './hydration-manifest'
+
+// SSG pre-rendering exports
+// These utilities can be used for custom SSG build integration
+export {
+  identifySSGRoutes,
+  resolveRoutePath,
+  routePathToOutputFile,
+  prerenderSSGRoutes,
+  generateSSGManifest,
+} from './ssg-prerender'
+export type {
+  SSGRoute,
+  StaticPath,
+  PrerenderResult,
+  SSGManifest,
+  SSGPrerenderConfig,
+} from './ssg-prerender'

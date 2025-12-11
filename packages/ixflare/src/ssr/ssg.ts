@@ -7,9 +7,24 @@
  * Build-time pre-rendering is handled by vite-plugin-ixflare.
  */
 
-import type { RouteConfig, StaticParams } from './types'
+import type { RouteConfig } from './types'
 import { renderToString } from './render'
 import type { RenderOptions } from './types'
+
+/**
+ * Serialize params object with stable key ordering for consistent cache keys.
+ * JSON.stringify doesn't guarantee key order, so we sort keys first.
+ * @param params Route parameters
+ * @returns Stable JSON string
+ */
+function stableStringify(params: Record<string, string>): string {
+  const sortedKeys = Object.keys(params).sort()
+  const sortedObj: Record<string, string> = {}
+  for (const key of sortedKeys) {
+    sortedObj[key] = params[key]
+  }
+  return JSON.stringify(sortedObj)
+}
 
 /**
  * Cache key generator for ISR
@@ -18,7 +33,7 @@ import type { RenderOptions } from './types'
  * @returns Cache key for KV storage
  */
 export function generateISRCacheKey(routePath: string, params?: Record<string, string>): string {
-  const paramStr = params ? JSON.stringify(params) : ''
+  const paramStr = params ? stableStringify(params) : ''
   return `isr:${routePath}:${paramStr}`
 }
 

@@ -413,4 +413,83 @@ describe('Router Codegen - Config Parsing', () => {
       })
     })
   })
+
+  describe('Cache Config Validation', () => {
+    it('should throw error on negative maxAge', async () => {
+      const filePath = join(testDir, 'negative-max-age.tsx')
+      await writeFile(
+        filePath,
+        `
+        export const config = {
+          rendering: 'ssr',
+          cache: {
+            maxAge: -1,
+          },
+        }
+        export function GET() {}
+      `
+      )
+
+      await expect(parseRouteFile(filePath, testDir)).rejects.toThrow(/Invalid maxAge value "-1"/)
+    })
+
+    it('should throw error on negative staleWhileRevalidate', async () => {
+      const filePath = join(testDir, 'negative-stwr.tsx')
+      await writeFile(
+        filePath,
+        `
+        export const config = {
+          rendering: 'ssr',
+          cache: {
+            staleWhileRevalidate: -100,
+          },
+        }
+        export function GET() {}
+      `
+      )
+
+      await expect(parseRouteFile(filePath, testDir)).rejects.toThrow(
+        /Invalid staleWhileRevalidate value "-100"/
+      )
+    })
+
+    it('should throw error on negative revalidate', async () => {
+      const filePath = join(testDir, 'negative-revalidate.tsx')
+      await writeFile(
+        filePath,
+        `
+        export const config = {
+          rendering: 'ssg',
+          revalidate: -3600,
+        }
+        export function GET() {}
+      `
+      )
+
+      await expect(parseRouteFile(filePath, testDir)).rejects.toThrow(
+        /Invalid revalidate value "-3600"/
+      )
+    })
+
+    it('should allow zero values for cache config', async () => {
+      const filePath = join(testDir, 'zero-cache.tsx')
+      await writeFile(
+        filePath,
+        `
+        export const config = {
+          rendering: 'ssr',
+          cache: {
+            maxAge: 0,
+            staleWhileRevalidate: 0,
+          },
+        }
+        export function GET() {}
+      `
+      )
+
+      const route = await parseRouteFile(filePath, testDir)
+      expect(route.config?.cache?.maxAge).toBe(0)
+      expect(route.config?.cache?.staleWhileRevalidate).toBe(0)
+    })
+  })
 })
