@@ -9,6 +9,8 @@
 export interface IxflarePluginOptions {
   /** Routes directory (default: 'src/routes') */
   routesDir?: string
-  /** Enable HMR for route manifest (default: true) */
+  /** Components directory for island discovery (default: 'src/components') */
+  componentsDir?: string
+  /** Enable HMR for route manifest and islands (default: true) */
   hmr?: boolean
 }

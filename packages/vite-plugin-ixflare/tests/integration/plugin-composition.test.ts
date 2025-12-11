@@ -107,14 +107,14 @@ describe('Plugin Composition', () => {
   })
 
   describe('HMR Integration', () => {
-    it('handles hot update for route files', () => {
+    it('handles hot update for route files', async () => {
       const plugin = ixflarePlugin({ routesDir: 'src/routes' }) as Plugin
       const handleHotUpdate = plugin.handleHotUpdate as Function
 
       const mockServer = createMockViteDevServer()
 
       // Simulate a route file change
-      const result = handleHotUpdate({
+      const result = await handleHotUpdate({
         file: '/test/project/src/routes/index.tsx',
         server: mockServer,
       })
@@ -123,14 +123,14 @@ describe('Plugin Composition', () => {
       expect(Array.isArray(result) || result === undefined).toBe(true)
     })
 
-    it('ignores non-route file changes', () => {
+    it('ignores non-route file changes', async () => {
       const plugin = ixflarePlugin({ routesDir: 'src/routes' }) as Plugin
       const handleHotUpdate = plugin.handleHotUpdate as Function
 
       const mockServer = createMockViteDevServer()
 
       // Simulate a non-route file change
-      const result = handleHotUpdate({
+      const result = await handleHotUpdate({
         file: '/test/project/src/components/Button.tsx',
         server: mockServer,
       })
