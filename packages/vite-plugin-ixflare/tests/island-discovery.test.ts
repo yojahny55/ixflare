@@ -13,8 +13,11 @@ describe('Island Discovery', () => {
   let testDir: string
 
   beforeEach(async () => {
-    // Create temporary test directory
-    testDir = join(tmpdir(), `ixflare-test-${Date.now()}`)
+    // Create temporary test directory with unique identifier to prevent collisions
+    testDir = join(
+      tmpdir(),
+      `ixflare-island-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    )
     await mkdir(testDir, { recursive: true })
   })
 
@@ -22,9 +25,8 @@ describe('Island Discovery', () => {
     // Clean up test directory
     try {
       await rm(testDir, { recursive: true, force: true, maxRetries: 3 })
-    } catch (error) {
+    } catch {
       // Ignore cleanup errors in tests
-      console.warn(`Failed to clean up test directory: ${testDir}`, error)
     }
   })
 
@@ -340,6 +342,227 @@ export default function APIStatus() {}
       const islands = await discoverIslands(testDir)
 
       expect(islands[0].id).toBe('api-status')
+    })
+  })
+
+  describe('Props extraction', () => {
+    it('should extract props from interface definition', async () => {
+      await writeFile(
+        join(testDir, 'Counter.client.tsx'),
+        `
+export const island = true
+
+interface CounterProps {
+  initialCount: number
+  label?: string
+  onIncrement: () => void
+}
+
+export default function Counter({ initialCount, label, onIncrement }: CounterProps) {
+  return <button onClick={onIncrement}>{label}: {initialCount}</button>
+}
+`
+      )
+
+      const result = await parseIslandFile(join(testDir, 'Counter.client.tsx'))
+
+      expect(result).not.toBeNull()
+      expect(result?.props).toContain('initialCount')
+      expect(result?.props).toContain('label')
+      expect(result?.props).toContain('onIncrement')
+    })
+
+    it('should extract props from generic Props interface', async () => {
+      await writeFile(
+        join(testDir, 'Widget.client.tsx'),
+        `
+export const island = true
+
+interface Props {
+  title: string
+  count: number
+}
+
+export default function Widget({ title, count }: Props) {
+  return <div>{title}: {count}</div>
+}
+`
+      )
+
+      const result = await parseIslandFile(join(testDir, 'Widget.client.tsx'))
+
+      expect(result).not.toBeNull()
+      expect(result?.props).toContain('title')
+      expect(result?.props).toContain('count')
+    })
+
+    it('should extract props from type definition', async () => {
+      await writeFile(
+        join(testDir, 'Card.client.tsx'),
+        `
+export const island = true
+
+type CardProps = {
+  heading: string
+  body: string
+}
+
+export default function Card({ heading, body }: CardProps) {
+  return <div><h2>{heading}</h2><p>{body}</p></div>
+}
+`
+      )
+
+      const result = await parseIslandFile(join(testDir, 'Card.client.tsx'))
+
+      expect(result).not.toBeNull()
+      expect(result?.props).toContain('heading')
+      expect(result?.props).toContain('body')
+    })
+
+    it('should extract props from function parameter destructuring', async () => {
+      await writeFile(
+        join(testDir, 'Simple.client.tsx'),
+        `
+export const island = true
+
+export default function Simple({ message, count }) {
+  return <div>{message}: {count}</div>
+}
+`
+      )
+
+      const result = await parseIslandFile(join(testDir, 'Simple.client.tsx'))
+
+      expect(result).not.toBeNull()
+      expect(result?.props).toContain('message')
+      expect(result?.props).toContain('count')
+    })
+
+    it('should extract props from inline type annotation', async () => {
+      await writeFile(
+        join(testDir, 'Inline.client.tsx'),
+        `
+export const island = true
+
+export default function Inline({ value }: { value: number }) {
+  return <span>{value}</span>
+}
+`
+      )
+
+      const result = await parseIslandFile(join(testDir, 'Inline.client.tsx'))
+
+      expect(result).not.toBeNull()
+      expect(result?.props).toContain('value')
+    })
+
+    it('should return empty props when none found', async () => {
+      await writeFile(
+        join(testDir, 'NoProps.client.tsx'),
+        `
+export const island = true
+
+export default function NoProps() {
+  return <div>Static content</div>
+}
+`
+      )
+
+      const result = await parseIslandFile(join(testDir, 'NoProps.client.tsx'))
+
+      expect(result).not.toBeNull()
+      expect(result?.props).toEqual([])
+    })
+
+    it('should sort props alphabetically', async () => {
+      await writeFile(
+        join(testDir, 'Sorted.client.tsx'),
+        `
+export const island = true
+
+interface SortedProps {
+  zebra: string
+  alpha: string
+  mike: string
+}
+
+export default function Sorted({ zebra, alpha, mike }: SortedProps) {
+  return <div>{alpha}{mike}{zebra}</div>
+}
+`
+      )
+
+      const result = await parseIslandFile(join(testDir, 'Sorted.client.tsx'))
+
+      expect(result).not.toBeNull()
+      expect(result?.props).toEqual(['alpha', 'mike', 'zebra'])
+    })
+  })
+
+  describe('Load strategy parsing (improved regex)', () => {
+    it('should parse load strategy when not first property', async () => {
+      await writeFile(
+        join(testDir, 'LoadNotFirst.client.tsx'),
+        `
+export const island = { preload: true, load: 'idle' }
+export default function LoadNotFirst() {}
+`
+      )
+
+      const result = await parseIslandFile(join(testDir, 'LoadNotFirst.client.tsx'))
+
+      expect(result).not.toBeNull()
+      expect(result?.loadStrategy).toBe('idle')
+    })
+
+    it('should parse load strategy with multiple properties before it', async () => {
+      await writeFile(
+        join(testDir, 'MultiProp.client.tsx'),
+        `
+export const island = { debug: true, priority: 5, load: 'visible' }
+export default function MultiProp() {}
+`
+      )
+
+      const result = await parseIslandFile(join(testDir, 'MultiProp.client.tsx'))
+
+      expect(result).not.toBeNull()
+      expect(result?.loadStrategy).toBe('visible')
+    })
+
+    it('should parse load strategy with properties after it', async () => {
+      await writeFile(
+        join(testDir, 'LoadMiddle.client.tsx'),
+        `
+export const island = { name: 'test', load: 'idle', priority: 1 }
+export default function LoadMiddle() {}
+`
+      )
+
+      const result = await parseIslandFile(join(testDir, 'LoadMiddle.client.tsx'))
+
+      expect(result).not.toBeNull()
+      expect(result?.loadStrategy).toBe('idle')
+    })
+
+    it('should handle multi-line config with load not first', async () => {
+      await writeFile(
+        join(testDir, 'MultiLineConfig.client.tsx'),
+        `
+export const island = {
+  debug: true,
+  preload: false,
+  load: 'visible',
+}
+export default function MultiLineConfig() {}
+`
+      )
+
+      const result = await parseIslandFile(join(testDir, 'MultiLineConfig.client.tsx'))
+
+      expect(result).not.toBeNull()
+      expect(result?.loadStrategy).toBe('visible')
     })
   })
 })

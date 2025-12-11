@@ -35,4 +35,9 @@ export type { Route, RouteManifest, RouteParam, HttpMethod } from './router-code
 export type { DevServerConfig, DevServer } from './dev-server'
 export type { BuildConfig, BuildResult } from './build'
 export type { DiscoveredIsland, IslandLoadStrategy } from './island-discovery'
-export type { HydrationManifest, IslandManifestEntry, ViteManifest, ViteManifestEntry } from './hydration-manifest'
+export type {
+  HydrationManifest,
+  IslandManifestEntry,
+  ViteManifest,
+  ViteManifestEntry,
+} from './hydration-manifest'

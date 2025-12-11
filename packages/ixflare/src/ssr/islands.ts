@@ -72,17 +72,23 @@ function validateSerializableProps(props: Record<string, unknown>, islandId: str
 
     // Functions are not serializable
     if (type === 'function') {
-      throw new ValidationError(`Island "${islandId}" received non-serializable prop "${path}". Functions cannot be passed to islands.`)
+      throw new ValidationError(
+        `Island "${islandId}" received non-serializable prop "${path}". Functions cannot be passed to islands.`
+      )
     }
 
     // Symbols are not serializable
     if (type === 'symbol') {
-      throw new ValidationError(`Island "${islandId}" received non-serializable prop "${path}". Symbols cannot be passed to islands.`)
+      throw new ValidationError(
+        `Island "${islandId}" received non-serializable prop "${path}". Symbols cannot be passed to islands.`
+      )
     }
 
     // BigInt is not serializable (JSON.stringify throws TypeError)
     if (type === 'bigint') {
-      throw new ValidationError(`Island "${islandId}" received non-serializable prop "${path}". BigInt cannot be passed to islands. Convert to number or string.`)
+      throw new ValidationError(
+        `Island "${islandId}" received non-serializable prop "${path}". BigInt cannot be passed to islands. Convert to number or string.`
+      )
     }
 
     // Check arrays recursively
@@ -96,7 +102,12 @@ function validateSerializableProps(props: Record<string, unknown>, islandId: str
     // Check objects recursively
     if (type === 'object') {
       // Check for special non-serializable objects
-      if (value instanceof Date || value instanceof RegExp || value instanceof Map || value instanceof Set) {
+      if (
+        value instanceof Date ||
+        value instanceof RegExp ||
+        value instanceof Map ||
+        value instanceof Set
+      ) {
         throw new ValidationError(
           `Island "${islandId}" received non-serializable prop "${path}". ${value.constructor.name} instances cannot be passed to islands. Convert to plain objects or primitives.`
         )
@@ -131,7 +142,9 @@ function detectCircularReferences(obj: Record<string, unknown>, islandId: string
     // Only track objects and arrays
     if (typeof value === 'object') {
       if (seen.has(value)) {
-        throw new ValidationError(`Island "${islandId}" has circular reference at "${path}". Circular references cannot be serialized.`)
+        throw new ValidationError(
+          `Island "${islandId}" has circular reference at "${path}". Circular references cannot be serialized.`
+        )
       }
 
       seen.add(value)
@@ -320,4 +333,3 @@ export function createIsland(config: IslandConfig): IslandMarkerProps {
 
   return markerProps
 }
-

@@ -47,6 +47,8 @@ export interface DiscoveredIsland {
   componentName: string
   /** Loading strategy */
   loadStrategy: IslandLoadStrategy
+  /** List of prop names extracted from component */
+  props: string[]
 }
 
 /**
@@ -148,15 +150,123 @@ export async function parseIslandFile(filePath: string): Promise<DiscoveredIslan
   const id = toKebabCase(componentName)
 
   // Extract load strategy if present
-  // Match: island = { load: 'idle' } or island = { load: "visible" }
-  const loadMatch = contentWithoutComments.match(/island\s*=\s*\{\s*load:\s*['"](\w+)['"]/)
+  // Match: island = { ... load: 'idle' ... } with load appearing anywhere in the object
+  // Uses [^}]* to match any content before load: to handle objects with multiple properties
+  const loadMatch = contentWithoutComments.match(/island\s*=\s*\{[^}]*load:\s*['"](\w+)['"]/)
   const loadStrategy = (loadMatch?.[1] as IslandLoadStrategy) || 'immediate'
+
+  // Extract props from component definition
+  const props = extractPropsFromContent(contentWithoutComments, componentName)
 
   return {
     id,
     filePath,
     componentName,
     loadStrategy,
+    props,
+  }
+}
+
+/**
+ * Extracts prop names from component content
+ *
+ * Attempts to extract props from:
+ * 1. Interface/type Props definitions
+ * 2. Function parameter destructuring
+ * 3. Arrow function parameter destructuring
+ *
+ * @param content - File content without comments
+ * @param componentName - Name of the component
+ * @returns Array of prop names
+ */
+function extractPropsFromContent(content: string, componentName: string): string[] {
+  const props: Set<string> = new Set()
+
+  // Strategy 1: Extract from interface/type Props definition
+  // Matches: interface XxxProps { prop1: type; prop2?: type; }
+  // or: type XxxProps = { prop1: type; prop2?: type; }
+  const propsTypeMatch = content.match(
+    new RegExp(`(?:interface|type)\\s+${componentName}Props\\s*(?:=\\s*)?\\{([^}]+)\\}`, 's')
+  )
+
+  if (propsTypeMatch) {
+    const propsBody = propsTypeMatch[1]
+    // Extract property names, handling optional (?) markers
+    const propMatches = propsBody.matchAll(/(\w+)\s*\??\s*:/g)
+    for (const match of propMatches) {
+      props.add(match[1])
+    }
+  }
+
+  // Strategy 2: Extract from generic Props interface
+  // Matches: interface Props { prop1: type; prop2?: type; }
+  const genericPropsMatch = content.match(/(?:interface|type)\s+Props\s*(?:=\s*)?\{([^}]+)\}/s)
+
+  if (genericPropsMatch) {
+    const propsBody = genericPropsMatch[1]
+    const propMatches = propsBody.matchAll(/(\w+)\s*\??\s*:/g)
+    for (const match of propMatches) {
+      props.add(match[1])
+    }
+  }
+
+  // Strategy 3: Extract from function parameter destructuring
+  // Matches: function ComponentName({ prop1, prop2 }: Props)
+  // or: export default function ComponentName({ prop1, prop2 }
+  const funcDestructureMatch = content.match(
+    new RegExp(`function\\s+${componentName}\\s*\\(\\s*\\{([^}]+)\\}`, 's')
+  )
+
+  if (funcDestructureMatch) {
+    extractDestructuredProps(funcDestructureMatch[1], props)
+  }
+
+  // Strategy 4: Extract from arrow function parameter destructuring
+  // Matches: const ComponentName = ({ prop1, prop2 }: Props) =>
+  const arrowDestructureMatch = content.match(
+    new RegExp(`(?:const|let)\\s+${componentName}\\s*=\\s*\\(\\s*\\{([^}]+)\\}`, 's')
+  )
+
+  if (arrowDestructureMatch) {
+    extractDestructuredProps(arrowDestructureMatch[1], props)
+  }
+
+  // Strategy 5: Extract from inline type annotation in function params
+  // Matches: function Counter({ count }: { count: number })
+  const inlineTypeMatch = content.match(
+    new RegExp(`function\\s+${componentName}\\s*\\([^)]*:\\s*\\{([^}]+)\\}`, 's')
+  )
+
+  if (inlineTypeMatch) {
+    const propsBody = inlineTypeMatch[1]
+    const propMatches = propsBody.matchAll(/(\w+)\s*\??\s*:/g)
+    for (const match of propMatches) {
+      props.add(match[1])
+    }
+  }
+
+  return Array.from(props).sort()
+}
+
+/**
+ * Extracts prop names from destructuring pattern
+ *
+ * @param destructureBody - Content inside { }
+ * @param props - Set to add props to
+ */
+function extractDestructuredProps(destructureBody: string, props: Set<string>): void {
+  // Remove type annotations to just get prop names
+  // Handle: { prop1, prop2 = default, prop3: renamed }
+  const cleaned = destructureBody.replace(/:\s*[^,}]+/g, '')
+
+  // Extract identifiers (prop names)
+  const matches = cleaned.matchAll(/(\w+)(?:\s*=)?/g)
+  for (const match of matches) {
+    const propName = match[1]
+    // Filter out common non-prop identifiers
+    if (propName && !['Props', 'children'].includes(propName)) {
+      props.add(propName)
+    }
   }
 }
 

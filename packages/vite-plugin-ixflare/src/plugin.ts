@@ -35,7 +35,11 @@ import { createDevServer, type DevServer } from './dev-server'
 import { bundleManifest, optimizeRoutes } from './build'
 import { setupHMR, handleRouteHMR } from './hmr'
 import { discoverIslands, type DiscoveredIsland } from './island-discovery'
-import { generateHydrationManifest, serializeHydrationManifest, type HydrationManifest } from './hydration-manifest'
+import {
+  generateHydrationManifest,
+  serializeHydrationManifest,
+  type HydrationManifest,
+} from './hydration-manifest'
 
 const VIRTUAL_MODULE_ID = 'virtual:ixflare-routes'
 const RESOLVED_VIRTUAL_MODULE_ID = '\0' + VIRTUAL_MODULE_ID
@@ -53,6 +57,7 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
   let routeManifest: RouteManifest | null = null
   let resolvedRoutesDir: string = ''
   let resolvedComponentsDir: string = ''
+  let projectRoot: string = ''
   let discoveredIslands: DiscoveredIsland[] = []
   let hydrationManifest: HydrationManifest | null = null
 
@@ -67,6 +72,13 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
           target: 'esnext',
         },
       }
+    },
+
+    configResolved(config) {
+      // Store project root for both dev and build modes
+      projectRoot = config.root
+      resolvedRoutesDir = join(config.root, routesDir)
+      resolvedComponentsDir = join(config.root, componentsDir)
     },
 
     // Resolve virtual module ID
@@ -112,8 +124,7 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
 
     async configureServer(server: ViteDevServer) {
       viteServer = server
-      resolvedRoutesDir = join(server.config.root, routesDir)
-      resolvedComponentsDir = join(server.config.root, componentsDir)
+      // projectRoot, resolvedRoutesDir, resolvedComponentsDir already set in configResolved
 
       // Setup HMR for route manifest
       if (hmrEnabled) {
@@ -166,7 +177,9 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
       discoveredIslands = await discoverIslands(resolvedComponentsDir)
 
       server.config.logger.info(`[ixflare] Discovered ${routes.length} routes`, { timestamp: true })
-      server.config.logger.info(`[ixflare] Discovered ${discoveredIslands.length} islands`, { timestamp: true })
+      server.config.logger.info(`[ixflare] Discovered ${discoveredIslands.length} islands`, {
+        timestamp: true,
+      })
     },
 
     async buildStart() {
@@ -231,8 +244,8 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
 
         const viteManifest = JSON.parse(viteManifestContent)
 
-        // Generate hydration manifest
-        hydrationManifest = generateHydrationManifest(discoveredIslands, viteManifest)
+        // Generate hydration manifest - pass projectRoot to convert absolute paths to relative
+        hydrationManifest = generateHydrationManifest(discoveredIslands, viteManifest, projectRoot)
 
         // Write hydration manifest to output directory
         const manifestPath = join(outputDir, 'island-manifest.json')

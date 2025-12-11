@@ -22,14 +22,21 @@ describe('router-codegen', () => {
   let testDir: string
 
   beforeEach(async () => {
-    // Create temporary test directory
-    testDir = join(tmpdir(), `ixflare-test-${Date.now()}`)
+    // Create temporary test directory with unique identifier to prevent collisions
+    testDir = join(
+      tmpdir(),
+      `ixflare-router-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    )
     await mkdir(testDir, { recursive: true })
   })
 
   afterEach(async () => {
     // Cleanup test directory
-    await rm(testDir, { recursive: true, force: true })
+    try {
+      await rm(testDir, { recursive: true, force: true, maxRetries: 3 })
+    } catch {
+      // Ignore cleanup errors
+    }
   })
 
   describe('extractDynamicParams', () => {

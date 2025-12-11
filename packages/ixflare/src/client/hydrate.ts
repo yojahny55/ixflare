@@ -141,7 +141,9 @@ async function hydrateImmediate(
     const Component = componentModule.default
 
     if (!Component) {
-      console.error(`[Island Hydration Error] ${islandId}: No default export found in component module`)
+      console.error(
+        `[Island Hydration Error] ${islandId}: No default export found in component module`
+      )
       return
     }
 
@@ -237,7 +239,11 @@ function hydrateOnIdle(element: Element, islandId: string, props: Record<string,
  *
  * @internal
  */
-function hydrateOnVisible(element: Element, islandId: string, props: Record<string, unknown>): void {
+function hydrateOnVisible(
+  element: Element,
+  islandId: string,
+  props: Record<string, unknown>
+): void {
   if ('IntersectionObserver' in window) {
     const observer = new IntersectionObserver(
       (entries) => {

@@ -12,7 +12,7 @@
  *
  * @example
  * ```typescript
- * const manifest = generateHydrationManifest(discoveredIslands, viteManifest)
+ * const manifest = generateHydrationManifest(discoveredIslands, viteManifest, projectRoot)
  * // {
  * //   version: '1.0.0',
  * //   generatedAt: 1733311800000,
@@ -21,13 +21,15 @@
  * //       chunk: '/assets/Counter-abc123.js',
  * //       imports: ['assets/react-xyz.js'],
  * //       marker: 'data-island-counter',
- * //       loadStrategy: 'immediate'
+ * //       loadStrategy: 'immediate',
+ * //       props: ['initialCount']
  * //     }
  * //   }
  * // }
  * ```
  */
 
+import { relative, isAbsolute } from 'node:path'
 import type { DiscoveredIsland, IslandLoadStrategy } from './island-discovery'
 
 /**
@@ -69,6 +71,8 @@ export interface IslandManifestEntry {
   marker: string
   /** Loading strategy */
   loadStrategy: IslandLoadStrategy
+  /** List of prop names accepted by this component */
+  props: string[]
 }
 
 /**
@@ -96,13 +100,14 @@ export interface HydrationManifest {
  *
  * @param discoveredIslands - Islands discovered during build
  * @param viteManifest - Vite's build manifest (maps source files to output chunks)
+ * @param projectRoot - Project root directory for converting absolute paths to relative
  * @returns Complete hydration manifest
  *
  * @example
  * ```typescript
  * const islands = await discoverIslands('./src/components')
  * const viteManifest = JSON.parse(await readFile('.vite/manifest.json', 'utf-8'))
- * const hydrationManifest = generateHydrationManifest(islands, viteManifest)
+ * const hydrationManifest = generateHydrationManifest(islands, viteManifest, process.cwd())
  *
  * // Write manifest for client consumption
  * await writeFile(
@@ -113,17 +118,28 @@ export interface HydrationManifest {
  */
 export function generateHydrationManifest(
   discoveredIslands: DiscoveredIsland[],
-  viteManifest: ViteManifest
+  viteManifest: ViteManifest,
+  projectRoot?: string
 ): HydrationManifest {
   const islands: Record<string, IslandManifestEntry> = {}
 
   for (const island of discoveredIslands) {
+    // Convert absolute path to relative path for Vite manifest lookup
+    // Vite manifest uses paths relative to project root (e.g., 'src/components/Counter.client.tsx')
+    let lookupPath = island.filePath
+
+    if (projectRoot && isAbsolute(island.filePath)) {
+      lookupPath = relative(projectRoot, island.filePath)
+      // Normalize Windows paths to forward slashes
+      lookupPath = lookupPath.replace(/\\/g, '/')
+    }
+
     // Find corresponding Vite manifest entry
-    const viteEntry = viteManifest[island.filePath]
+    const viteEntry = viteManifest[lookupPath]
 
     if (!viteEntry) {
       console.warn(
-        `[ixflare] Island "${island.id}" (${island.filePath}) not found in Vite manifest. ` +
+        `[ixflare] Island "${island.id}" (${lookupPath}) not found in Vite manifest. ` +
           `This island will not be available for hydration.`
       )
       continue
@@ -138,6 +154,7 @@ export function generateHydrationManifest(
       imports: viteEntry.imports || [],
       marker: `data-island-${island.id}`,
       loadStrategy: island.loadStrategy,
+      props: island.props || [],
     }
   }
 

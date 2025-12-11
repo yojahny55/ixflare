@@ -50,10 +50,13 @@ describe('Client Hydration', () => {
           return 1
         }),
       })
-      vi.stubGlobal('requestIdleCallback', vi.fn((cb: () => void) => {
-        cb()
-        return 1
-      }))
+      vi.stubGlobal(
+        'requestIdleCallback',
+        vi.fn((cb: () => void) => {
+          cb()
+          return 1
+        })
+      )
 
       // Mock document
       vi.stubGlobal('document', {
@@ -74,7 +77,11 @@ describe('Client Hydration', () => {
     })
 
     it('should parse props from data-props attribute', async () => {
-      const mockElement = createMockElement('counter-1', '{"count":5,"label":"Clicks"}', 'immediate')
+      const mockElement = createMockElement(
+        'counter-1',
+        '{"count":5,"label":"Clicks"}',
+        'immediate'
+      )
       mockQuerySelectorAll = vi.fn().mockReturnValue([mockElement])
 
       vi.stubGlobal('document', {
@@ -92,8 +99,8 @@ describe('Client Hydration', () => {
       hydrateIslands()
 
       // Props should be parsed (verified by no parse error logged)
-      const parseCalls = consoleErrorSpy.mock.calls.filter(
-        (call) => call[0]?.includes?.('Failed to parse props')
+      const parseCalls = consoleErrorSpy.mock.calls.filter((call) =>
+        call[0]?.includes?.('Failed to parse props')
       )
       expect(parseCalls.length).toBe(0)
     })
@@ -116,8 +123,8 @@ describe('Client Hydration', () => {
       const { hydrateIslands } = await import('@/client/hydrate')
       hydrateIslands()
 
-      const parseCalls = consoleErrorSpy.mock.calls.filter(
-        (call) => call[0]?.includes?.('Failed to parse props')
+      const parseCalls = consoleErrorSpy.mock.calls.filter((call) =>
+        call[0]?.includes?.('Failed to parse props')
       )
       expect(parseCalls.length).toBe(0)
     })
@@ -151,8 +158,8 @@ describe('Client Hydration', () => {
       hydrateIslands()
 
       // Should default to empty object, no parse error
-      const parseCalls = consoleErrorSpy.mock.calls.filter(
-        (call) => call[0]?.includes?.('Failed to parse props')
+      const parseCalls = consoleErrorSpy.mock.calls.filter((call) =>
+        call[0]?.includes?.('Failed to parse props')
       )
       expect(parseCalls.length).toBe(0)
     })
@@ -263,9 +270,7 @@ describe('Client Hydration', () => {
       // With no registry, we expect a "not found in registry" error
       await new Promise((resolve) => setTimeout(resolve, 10))
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('counter-1')
-      )
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('counter-1'))
     })
 
     it('should defer idle islands to requestIdleCallback', async () => {
@@ -387,8 +392,8 @@ describe('Client Hydration', () => {
       await new Promise((resolve) => setTimeout(resolve, 10))
 
       // Check no IntersectionObserver-related error
-      const observerErrors = consoleErrorSpy.mock.calls.filter(
-        (call) => call[0]?.includes?.('IntersectionObserver')
+      const observerErrors = consoleErrorSpy.mock.calls.filter((call) =>
+        call[0]?.includes?.('IntersectionObserver')
       )
       expect(observerErrors.length).toBe(0)
     })
@@ -472,9 +477,7 @@ describe('Client Hydration', () => {
       await new Promise((resolve) => setTimeout(resolve, 10))
 
       // Error should be caught and logged (component not in registry)
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('counter-1')
-      )
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('counter-1'))
     })
 
     it('should continue hydrating other islands on error', async () => {
@@ -500,8 +503,8 @@ describe('Client Hydration', () => {
       await new Promise((resolve) => setTimeout(resolve, 10))
 
       // Both islands should have been attempted
-      const errorCalls = consoleErrorSpy.mock.calls.filter(
-        (call) => call[0]?.includes?.('Component not found in registry')
+      const errorCalls = consoleErrorSpy.mock.calls.filter((call) =>
+        call[0]?.includes?.('Component not found in registry')
       )
       expect(errorCalls.length).toBe(2)
     })
@@ -526,9 +529,7 @@ describe('Client Hydration', () => {
 
       await new Promise((resolve) => setTimeout(resolve, 10))
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('my-special-island')
-      )
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('my-special-island'))
     })
 
     it('should preserve SSR content on hydration failure', async () => {
@@ -671,7 +672,9 @@ describe('Client Hydration', () => {
         counter: () => Promise.resolve({ default: () => null }),
       }
 
-      setIslandRegistry(mockRegistry as Record<string, () => Promise<{ default: React.ComponentType<unknown> }>>)
+      setIslandRegistry(
+        mockRegistry as Record<string, () => Promise<{ default: React.ComponentType<unknown> }>>
+      )
       const registry = getIslandRegistry()
 
       expect(registry).toBe(mockRegistry)
@@ -698,7 +701,9 @@ describe('Client Hydration', () => {
       })
 
       const { hydrateIslands, setIslandRegistry } = await import('@/client/hydrate')
-      setIslandRegistry(mockRegistry as Record<string, () => Promise<{ default: React.ComponentType<unknown> }>>)
+      setIslandRegistry(
+        mockRegistry as Record<string, () => Promise<{ default: React.ComponentType<unknown> }>>
+      )
       hydrateIslands()
 
       await new Promise((resolve) => setTimeout(resolve, 10))
@@ -775,7 +780,12 @@ describe('Client Hydration', () => {
       }
 
       const { hydrateIslands, setIslandRegistry } = await import('@/client/hydrate')
-      setIslandRegistry(mockRegistry as unknown as Record<string, () => Promise<{ default: React.ComponentType<unknown> }>>)
+      setIslandRegistry(
+        mockRegistry as unknown as Record<
+          string,
+          () => Promise<{ default: React.ComponentType<unknown> }>
+        >
+      )
       hydrateIslands()
 
       // Wait for async hydration
@@ -835,7 +845,12 @@ describe('Client Hydration', () => {
       }
 
       const { hydrateIslands, setIslandRegistry } = await import('@/client/hydrate')
-      setIslandRegistry(mockRegistry as unknown as Record<string, () => Promise<{ default: React.ComponentType<unknown> }>>)
+      setIslandRegistry(
+        mockRegistry as unknown as Record<
+          string,
+          () => Promise<{ default: React.ComponentType<unknown> }>
+        >
+      )
       hydrateIslands()
 
       await new Promise((resolve) => setTimeout(resolve, 50))

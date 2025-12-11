@@ -143,7 +143,10 @@ describe('Plugin Composition', () => {
     })
 
     it('handles hot update for island files (.client.tsx)', async () => {
-      const plugin = ixflarePlugin({ routesDir: 'src/routes', componentsDir: 'src/components' }) as Plugin
+      const plugin = ixflarePlugin({
+        routesDir: 'src/routes',
+        componentsDir: 'src/components',
+      }) as Plugin
       const handleHotUpdate = plugin.handleHotUpdate as Function
 
       const mockServer = createMockViteDevServer()
@@ -159,16 +162,21 @@ describe('Plugin Composition', () => {
     })
 
     it('triggers island virtual module invalidation on .client.tsx change', async () => {
-      const plugin = ixflarePlugin({ routesDir: 'src/routes', componentsDir: 'src/components' }) as Plugin
+      const plugin = ixflarePlugin({
+        routesDir: 'src/routes',
+        componentsDir: 'src/components',
+      }) as Plugin
       const handleHotUpdate = plugin.handleHotUpdate as Function
 
       const mockVirtualModule = { id: '\0virtual:ixflare-islands' }
       const mockServer = createMockViteDevServer()
       // Mock that the virtual module exists in the module graph
-      ;(mockServer.moduleGraph.getModuleById as ReturnType<typeof vi.fn>).mockImplementation((id: string) => {
-        if (id === '\0virtual:ixflare-islands') return mockVirtualModule
-        return null
-      })
+      ;(mockServer.moduleGraph.getModuleById as ReturnType<typeof vi.fn>).mockImplementation(
+        (id: string) => {
+          if (id === '\0virtual:ixflare-islands') return mockVirtualModule
+          return null
+        }
+      )
 
       // Simulate an island file change
       const result = await handleHotUpdate({
@@ -325,9 +333,8 @@ describe('Type Exports', () => {
 
   it('exports hydration manifest types', async () => {
     // Verify manifest-related exports are accessible
-    const { generateHydrationManifest, serializeHydrationManifest, deserializeHydrationManifest } = await import(
-      '../../src/hydration-manifest'
-    )
+    const { generateHydrationManifest, serializeHydrationManifest, deserializeHydrationManifest } =
+      await import('../../src/hydration-manifest')
 
     expect(typeof generateHydrationManifest).toBe('function')
     expect(typeof serializeHydrationManifest).toBe('function')

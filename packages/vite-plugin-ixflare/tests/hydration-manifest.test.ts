@@ -9,17 +9,25 @@ import type { DiscoveredIsland } from '../src/island-discovery'
 
 describe('Hydration Manifest Generation', () => {
   describe('generateHydrationManifest', () => {
-    it('should map islands to Vite chunks', () => {
+    // CRITICAL: Test that absolute paths are correctly converted to relative paths
+    // This test uses absolute paths (like the real discoverIslands output) and verifies
+    // they correctly match against Vite manifest keys (which use relative paths)
+    it('should convert absolute paths to relative for Vite manifest lookup', () => {
+      const projectRoot = '/home/user/project'
+
       const discoveredIslands: DiscoveredIsland[] = [
         {
           id: 'counter',
-          filePath: 'src/components/Counter.client.tsx',
+          // discoverIslands returns ABSOLUTE paths
+          filePath: '/home/user/project/src/components/Counter.client.tsx',
           componentName: 'Counter',
           loadStrategy: 'immediate',
+          props: ['initialCount'],
         },
       ]
 
       const viteManifest = {
+        // Vite manifest uses RELATIVE paths
         'src/components/Counter.client.tsx': {
           file: 'assets/Counter-abc123.js',
           isEntry: false,
@@ -28,11 +36,64 @@ describe('Hydration Manifest Generation', () => {
         },
       }
 
-      const manifest = generateHydrationManifest(discoveredIslands, viteManifest)
+      // Must pass projectRoot to enable path conversion
+      const manifest = generateHydrationManifest(discoveredIslands, viteManifest, projectRoot)
 
+      // Verify the lookup succeeded (would fail without path conversion)
       expect(manifest.islands['Counter']).toBeDefined()
       expect(manifest.islands['Counter'].chunk).toBe('/assets/Counter-abc123.js')
       expect(manifest.islands['Counter'].imports).toEqual(['_shared-xyz789.js'])
+      expect(manifest.islands['Counter'].props).toEqual(['initialCount'])
+    })
+
+    it('should include props list from discovered islands', () => {
+      const projectRoot = '/project'
+
+      const discoveredIslands: DiscoveredIsland[] = [
+        {
+          id: 'counter',
+          filePath: '/project/src/Counter.client.tsx',
+          componentName: 'Counter',
+          loadStrategy: 'immediate',
+          props: ['count', 'onIncrement', 'label'],
+        },
+      ]
+
+      const viteManifest = {
+        'src/Counter.client.tsx': {
+          file: 'assets/Counter-abc123.js',
+          isEntry: false,
+          isDynamicEntry: true,
+        },
+      }
+
+      const manifest = generateHydrationManifest(discoveredIslands, viteManifest, projectRoot)
+
+      expect(manifest.islands['Counter'].props).toEqual(['count', 'onIncrement', 'label'])
+    })
+
+    it('should handle empty props array', () => {
+      const discoveredIslands: DiscoveredIsland[] = [
+        {
+          id: 'simple',
+          filePath: 'src/Simple.client.tsx',
+          componentName: 'Simple',
+          loadStrategy: 'immediate',
+          props: [],
+        },
+      ]
+
+      const viteManifest = {
+        'src/Simple.client.tsx': {
+          file: 'assets/Simple-abc.js',
+          isEntry: false,
+          isDynamicEntry: true,
+        },
+      }
+
+      const manifest = generateHydrationManifest(discoveredIslands, viteManifest)
+
+      expect(manifest.islands['Simple'].props).toEqual([])
     })
 
     it('should generate correct marker IDs', () => {
@@ -42,6 +103,7 @@ describe('Hydration Manifest Generation', () => {
           filePath: 'src/SearchBox.client.tsx',
           componentName: 'SearchBox',
           loadStrategy: 'immediate',
+          props: ['query', 'onSearch'],
         },
       ]
 
@@ -65,6 +127,7 @@ describe('Hydration Manifest Generation', () => {
           filePath: 'src/Widget.client.tsx',
           componentName: 'Widget',
           loadStrategy: 'immediate',
+          props: [],
         },
       ]
 
@@ -86,18 +149,21 @@ describe('Hydration Manifest Generation', () => {
     })
 
     it('should handle missing Vite entries gracefully', () => {
+      const projectRoot = '/project'
+
       const discoveredIslands: DiscoveredIsland[] = [
         {
           id: 'missing',
-          filePath: 'src/Missing.client.tsx',
+          filePath: '/project/src/Missing.client.tsx',
           componentName: 'Missing',
           loadStrategy: 'immediate',
+          props: [],
         },
       ]
 
       const viteManifest = {}
 
-      const manifest = generateHydrationManifest(discoveredIslands, viteManifest)
+      const manifest = generateHydrationManifest(discoveredIslands, viteManifest, projectRoot)
 
       // Missing islands should not be included in manifest
       expect(manifest.islands['Missing']).toBeUndefined()
@@ -110,6 +176,7 @@ describe('Hydration Manifest Generation', () => {
           filePath: 'src/Lazy.client.tsx',
           componentName: 'Lazy',
           loadStrategy: 'idle',
+          props: [],
         },
       ]
 
@@ -137,25 +204,30 @@ describe('Hydration Manifest Generation', () => {
       expect(typeof manifest.generatedAt).toBe('number')
     })
 
-    it('should handle multiple islands', () => {
+    it('should handle multiple islands with absolute paths', () => {
+      const projectRoot = '/app'
+
       const discoveredIslands: DiscoveredIsland[] = [
         {
           id: 'counter',
-          filePath: 'src/Counter.client.tsx',
+          filePath: '/app/src/Counter.client.tsx',
           componentName: 'Counter',
           loadStrategy: 'immediate',
+          props: ['count'],
         },
         {
           id: 'search-box',
-          filePath: 'src/SearchBox.client.tsx',
+          filePath: '/app/src/SearchBox.client.tsx',
           componentName: 'SearchBox',
           loadStrategy: 'idle',
+          props: ['query'],
         },
         {
           id: 'user-menu',
-          filePath: 'src/UserMenu.client.tsx',
+          filePath: '/app/src/UserMenu.client.tsx',
           componentName: 'UserMenu',
           loadStrategy: 'visible',
+          props: ['user', 'onLogout'],
         },
       ]
 
@@ -177,12 +249,14 @@ describe('Hydration Manifest Generation', () => {
         },
       }
 
-      const manifest = generateHydrationManifest(discoveredIslands, viteManifest)
+      const manifest = generateHydrationManifest(discoveredIslands, viteManifest, projectRoot)
 
       expect(Object.keys(manifest.islands)).toHaveLength(3)
       expect(manifest.islands['Counter']).toBeDefined()
       expect(manifest.islands['SearchBox']).toBeDefined()
       expect(manifest.islands['UserMenu']).toBeDefined()
+      expect(manifest.islands['Counter'].props).toEqual(['count'])
+      expect(manifest.islands['UserMenu'].props).toEqual(['user', 'onLogout'])
     })
 
     it('should handle nested islands', () => {
@@ -192,12 +266,14 @@ describe('Hydration Manifest Generation', () => {
           filePath: 'src/Parent.client.tsx',
           componentName: 'Parent',
           loadStrategy: 'immediate',
+          props: [],
         },
         {
           id: 'child',
           filePath: 'src/Child.client.tsx',
           componentName: 'Child',
           loadStrategy: 'immediate',
+          props: [],
         },
       ]
 
@@ -229,6 +305,7 @@ describe('Hydration Manifest Generation', () => {
           filePath: 'src/Standalone.client.tsx',
           componentName: 'Standalone',
           loadStrategy: 'immediate',
+          props: [],
         },
       ]
 
@@ -253,6 +330,7 @@ describe('Hydration Manifest Generation', () => {
           filePath: 'src/Component.client.tsx',
           componentName: 'Component',
           loadStrategy: 'immediate',
+          props: [],
         },
       ]
 
@@ -269,5 +347,38 @@ describe('Hydration Manifest Generation', () => {
       expect(manifest.islands['Component'].chunk).toBe('/assets/Component-123.js')
       expect(manifest.islands['Component'].chunk.startsWith('/')).toBe(true)
     })
+
+    // CRITICAL: This test verifies Windows path handling
+    // Skip on non-Windows platforms since path.relative() behaves differently
+    it.skipIf(process.platform !== 'win32')(
+      'should normalize Windows paths in manifest lookup',
+      () => {
+        const projectRoot = 'C:\\Users\\dev\\project'
+
+        const discoveredIslands: DiscoveredIsland[] = [
+          {
+            id: 'counter',
+            // Windows-style absolute path
+            filePath: 'C:\\Users\\dev\\project\\src\\components\\Counter.client.tsx',
+            componentName: 'Counter',
+            loadStrategy: 'immediate',
+            props: ['count'],
+          },
+        ]
+
+        const viteManifest = {
+          // Vite always uses forward slashes
+          'src/components/Counter.client.tsx': {
+            file: 'assets/Counter-abc.js',
+            isEntry: false,
+            isDynamicEntry: true,
+          },
+        }
+
+        const manifest = generateHydrationManifest(discoveredIslands, viteManifest, projectRoot)
+
+        expect(manifest.islands['Counter']).toBeDefined()
+      }
+    )
   })
 })

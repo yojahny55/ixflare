@@ -306,12 +306,8 @@ describe('Islands Architecture', () => {
 
         serializeIslandProps(props, 'test-island')
 
-        expect(consoleSpy).toHaveBeenCalledWith(
-          expect.stringContaining('large props')
-        )
-        expect(consoleSpy).toHaveBeenCalledWith(
-          expect.stringContaining('test-island')
-        )
+        expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('large props'))
+        expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('test-island'))
 
         consoleSpy.mockRestore()
       })
