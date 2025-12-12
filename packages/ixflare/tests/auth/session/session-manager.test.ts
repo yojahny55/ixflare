@@ -256,10 +256,7 @@ describe('Session Manager', () => {
         expect(await session.isValid(oldRequest)).toBe(true)
 
         // Regenerate with old session ID (AC7: invalidate old session)
-        await session.regenerate(
-          { userId: 'user-123', role: 'admin' },
-          { oldSessionId }
-        )
+        await session.regenerate({ userId: 'user-123', role: 'admin' }, { oldSessionId })
 
         // CRITICAL: Old session MUST be revoked
         expect(await session.isValid(oldRequest)).toBe(false)
@@ -283,10 +280,10 @@ describe('Session Manager', () => {
         expect(await session.isValid(request)).toBe(true)
 
         // Use convenience method to regenerate from request
-        const newResponse = await session.regenerateFromRequest(
-          request,
-          { userId: 'user-123', role: 'admin' }
-        )
+        const newResponse = await session.regenerateFromRequest(request, {
+          userId: 'user-123',
+          role: 'admin',
+        })
 
         expect(newResponse).toBeTruthy()
 
@@ -307,10 +304,10 @@ describe('Session Manager', () => {
       it('should return null from regenerateFromRequest if no valid session exists', async () => {
         const request = new Request('https://example.com')
 
-        const result = await session.regenerateFromRequest(
-          request,
-          { userId: 'user-123', role: 'admin' }
-        )
+        const result = await session.regenerateFromRequest(request, {
+          userId: 'user-123',
+          role: 'admin',
+        })
 
         expect(result).toBeNull()
       })
