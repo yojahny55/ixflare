@@ -22,7 +22,7 @@
  */
 
 import { join } from 'node:path'
-import { writeFile, mkdir } from 'node:fs/promises'
+import { writeFile, mkdir, access, readdir } from 'node:fs/promises'
 import type { Plugin, ViteDevServer, ModuleNode } from 'vite'
 import type { IxflarePluginOptions } from './types'
 import {
@@ -52,6 +52,40 @@ import {
   type HydrationManifest,
 } from './hydration-manifest'
 import { createRouteChunks } from './code-splitting'
+
+/**
+ * Check if a directory contains frontend route files (*.tsx)
+ * Used to auto-detect if code splitting should be enabled
+ */
+async function hasFrontendRoutes(routesDir: string): Promise<boolean> {
+  try {
+    await access(routesDir)
+  } catch {
+    // Directory doesn't exist
+    return false
+  }
+
+  // Recursively check for .tsx files (frontend routes)
+  async function checkDir(dir: string): Promise<boolean> {
+    try {
+      const entries = await readdir(dir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const hasRoutes = await checkDir(join(dir, entry.name))
+          if (hasRoutes) return true
+        } else if (entry.isFile() && entry.name.endsWith('.tsx')) {
+          // Found a .tsx file - this is a frontend route
+          return true
+        }
+      }
+    } catch {
+      // Ignore errors reading directory
+    }
+    return false
+  }
+
+  return checkDir(routesDir)
+}
 
 const VIRTUAL_MODULE_ID = 'virtual:ixflare-routes'
 const RESOLVED_VIRTUAL_MODULE_ID = '\0' + VIRTUAL_MODULE_ID
@@ -135,7 +169,8 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
   const routesDir = options.routesDir || 'src/routes'
   const componentsDir = options.componentsDir || 'src/components'
   const hmrEnabled = options.hmr !== false
-  const codeSplitting = options.codeSplitting !== false
+  // Default to 'auto' - only enable code splitting if frontend routes exist
+  const codeSplittingOption = options.codeSplitting ?? 'auto'
 
   let devServer: DevServer | null = null
   let viteServer: ViteDevServer | null = null
@@ -145,13 +180,31 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
   let projectRoot: string = ''
   let discoveredIslands: DiscoveredIsland[] = []
   let hydrationManifest: HydrationManifest | null = null
+  // Track whether code splitting is actually enabled (resolved from 'auto')
+  let codeSplittingEnabled: boolean = false
 
   return {
     name: 'vite-plugin-ixflare',
 
-    config(config) {
+    async config(config, { command }) {
+      // Resolve project root early to check for frontend routes
+      const root = config.root || process.cwd()
+      const fullRoutesDir = join(root, routesDir)
+
+      // Determine if code splitting should be enabled
+      if (codeSplittingOption === 'auto') {
+        // Auto-detect: enable only if frontend routes (.tsx files) exist
+        codeSplittingEnabled = await hasFrontendRoutes(fullRoutesDir)
+        if (!codeSplittingEnabled && command === 'build') {
+          // Log for visibility during build
+          console.log('[ixflare] No frontend routes detected - code splitting disabled')
+        }
+      } else {
+        codeSplittingEnabled = codeSplittingOption === true
+      }
+
       // Prepare rollupOptions with code splitting if enabled
-      const rollupOptions = codeSplitting
+      const rollupOptions = codeSplittingEnabled
         ? {
             output: {
               manualChunks: createRouteChunks(routesDir),
@@ -330,7 +383,7 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
       const outputDir = options.dir || 'dist'
 
       // Validate bundle sizes if code splitting is enabled
-      if (codeSplitting) {
+      if (codeSplittingEnabled) {
         const report = validateChunkSizes(bundle)
         logChunkSizeReport(report, {
           info: (msg) => this.info(msg),

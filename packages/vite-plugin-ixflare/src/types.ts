@@ -13,6 +13,15 @@ export interface IxflarePluginOptions {
   componentsDir?: string
   /** Enable HMR for route manifest and islands (default: true) */
   hmr?: boolean
-  /** Enable automatic route-based code splitting (default: true) */
-  codeSplitting?: boolean
+  /**
+   * Enable automatic route-based code splitting.
+   *
+   * - `'auto'` (default): Enabled only if frontend routes (*.tsx files) exist in routesDir
+   * - `true`: Always enable code splitting
+   * - `false`: Disable code splitting
+   *
+   * For API-only apps without frontend routes, this defaults to disabled.
+   * This keeps bundle size minimal when only using API features.
+   */
+  codeSplitting?: boolean | 'auto'
 }

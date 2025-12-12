@@ -99,16 +99,16 @@ describe('Plugin Composition', () => {
       expect(plugin.name).toBe('vite-plugin-ixflare')
     })
 
-    it('sets build target to esnext', () => {
+    it('sets build target to esnext', async () => {
       const plugin = ixflarePlugin() as Plugin
       const config = plugin.config as Function
 
-      const result = config({}, { command: 'build' })
+      const result = await config({}, { command: 'build' })
 
       expect(result.build.target).toBe('esnext')
     })
 
-    it('preserves existing config options', () => {
+    it('preserves existing config options', async () => {
       const plugin = ixflarePlugin() as Plugin
       const config = plugin.config as Function
 
@@ -117,11 +117,66 @@ describe('Plugin Composition', () => {
         build: { minify: true },
       }
 
-      const result = config(existingConfig, { command: 'build' })
+      const result = await config(existingConfig, { command: 'build' })
 
       expect(result.resolve).toEqual({ alias: { '@': '/src' } })
       expect(result.build.minify).toBe(true)
       expect(result.build.target).toBe('esnext')
+    })
+  })
+
+  describe('Code Splitting Auto-Detection', () => {
+    it('disables code splitting when no frontend routes exist (auto mode)', async () => {
+      // Use a non-existent routes directory
+      const plugin = ixflarePlugin({
+        routesDir: 'non-existent-routes',
+        codeSplitting: 'auto',
+      }) as Plugin
+      const config = plugin.config as Function
+
+      const result = await config({}, { command: 'build' })
+
+      // Without frontend routes, manualChunks should NOT be set
+      expect(result.build.rollupOptions?.output?.manualChunks).toBeUndefined()
+    })
+
+    it('enables code splitting when explicitly set to true', async () => {
+      const plugin = ixflarePlugin({
+        routesDir: 'non-existent-routes',
+        codeSplitting: true,
+      }) as Plugin
+      const config = plugin.config as Function
+
+      const result = await config({}, { command: 'build' })
+
+      // Explicitly enabled - manualChunks should be set
+      expect(result.build.rollupOptions?.output?.manualChunks).toBeDefined()
+    })
+
+    it('disables code splitting when explicitly set to false', async () => {
+      const plugin = ixflarePlugin({
+        routesDir: 'src/routes',
+        codeSplitting: false,
+      }) as Plugin
+      const config = plugin.config as Function
+
+      const result = await config({}, { command: 'build' })
+
+      // Explicitly disabled - manualChunks should NOT be set
+      expect(result.build.rollupOptions?.output?.manualChunks).toBeUndefined()
+    })
+
+    it('defaults codeSplitting to auto mode', async () => {
+      // Plugin with default options (no codeSplitting specified)
+      const plugin = ixflarePlugin({
+        routesDir: 'non-existent-routes',
+      }) as Plugin
+      const config = plugin.config as Function
+
+      const result = await config({}, { command: 'build' })
+
+      // Default is 'auto', so without routes, manualChunks should NOT be set
+      expect(result.build.rollupOptions?.output?.manualChunks).toBeUndefined()
     })
   })
 

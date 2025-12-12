@@ -14,11 +14,11 @@ describe('Vite Plugin', () => {
     expect(plugin).toBeDefined()
   })
 
-  it('should configure build target to esnext', () => {
+  it('should configure build target to esnext', async () => {
     const plugin = ixflarePlugin()
 
     if (typeof plugin.config === 'function') {
-      const config = plugin.config({}, { command: 'build', mode: 'production' })
+      const config = await plugin.config({}, { command: 'build', mode: 'production' })
       expect(config?.build?.target).toBe('esnext')
     }
   })
