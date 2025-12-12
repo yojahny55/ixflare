@@ -389,10 +389,10 @@ export interface ChunkManifest {
  * Server-only code removal report
  */
 export interface ServerOnlyRemovalReport {
-  /** Whether any server code was detected */
+  /** Whether any server code was detected in the client bundle (true = BAD) */
   hasServerCode: boolean
-  /** List of exports that were stripped (loader, action, headers) */
-  strippedExports: string[]
+  /** List of server exports that leaked into client bundle (should be empty if removal worked) */
+  leakedExports: string[]
   /** Estimated bytes saved by removing server code */
   estimatedBytesSaved?: number
 }
@@ -416,7 +416,7 @@ export interface ServerOnlyRemovalReport {
  */
 export function analyzeServerCodeRemoval(bundle: OutputBundle): ServerOnlyRemovalReport {
   let hasServerCode = false
-  const strippedExports: string[] = []
+  const leakedExports: string[] = []
 
   // Collect all client JavaScript code
   const clientCode: string[] = []
@@ -433,24 +433,30 @@ export function analyzeServerCodeRemoval(bundle: OutputBundle): ServerOnlyRemova
 
   const fullClientCode = clientCode.join('\n')
 
-  // Check for server export patterns
+  // Check for server export patterns that should NOT be in client bundle
+  // If found, these exports "leaked" through (removal failed)
   const exportNames = ['loader', 'action', 'headers']
   for (const exportName of exportNames) {
-    const functionPattern = new RegExp(
-      `export\\s+(?:async\\s+)?function\\s+${exportName}\\s*\\(`,
+    // Check for function declarations with actual body content (not empty stubs)
+    const functionWithBodyPattern = new RegExp(
+      `export\\s+(?:async\\s+)?function\\s+${exportName}\\s*\\([^)]*\\)\\s*\\{(?!\\s*/\\*\\s*server-only)[^}]+\\}`,
       'g'
     )
-    const constPattern = new RegExp(`export\\s+const\\s+${exportName}\\s*[:=]`, 'g')
+    // Check for const declarations with actual implementation
+    const constWithBodyPattern = new RegExp(
+      `export\\s+const\\s+${exportName}\\s*(?::[^=]+)?\\s*=\\s*(?:async\\s*)?(?:\\([^)]*\\)|[^=])\\s*=>\\s*\\{(?!\\s*/\\*\\s*server-only)[^}]+\\}`,
+      'g'
+    )
 
-    if (functionPattern.test(fullClientCode) || constPattern.test(fullClientCode)) {
+    if (functionWithBodyPattern.test(fullClientCode) || constWithBodyPattern.test(fullClientCode)) {
       hasServerCode = true
-      strippedExports.push(exportName)
+      leakedExports.push(exportName)
     }
   }
 
   return {
     hasServerCode,
-    strippedExports,
+    leakedExports,
     // We can't easily calculate bytes saved, but we can note it succeeded
     estimatedBytesSaved: hasServerCode ? 0 : undefined,
   }
@@ -471,13 +477,13 @@ export function logServerOnlyRemovalReport(
 
   if (!report.hasServerCode) {
     logger.info('✅ No server-only exports detected in client bundle')
-    logger.info('   Loader, action, and headers functions successfully tree-shaken')
+    logger.info('   Loader, action, and headers functions successfully removed')
     logger.info('   Database imports, secrets, and server logic excluded')
   } else {
-    logger.warn('⚠️  WARNING: Server-only code detected in client bundle!')
-    logger.warn(`   Found exports: ${report.strippedExports.join(', ')}`)
+    logger.warn('⚠️  WARNING: Server-only code leaked into client bundle!')
+    logger.warn(`   Leaked exports: ${report.leakedExports.join(', ')}`)
     logger.warn('   This may expose sensitive server logic or credentials')
-    logger.warn('   Check that tree-shaking is enabled and working correctly')
+    logger.warn('   Check that server code removal is configured correctly')
   }
 
   logger.info('─'.repeat(80) + '\n')

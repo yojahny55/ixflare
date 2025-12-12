@@ -10,7 +10,7 @@ import type { Plugin } from 'vite'
 describe('transformServerExports', () => {
   const routesDir = 'src/routes'
 
-  it('should mark async function loader export for tree-shaking', () => {
+  it('should replace async function loader export with empty stub', () => {
     const code = `
 export async function loader({ params }) {
   const user = await db.query('SELECT * FROM users WHERE id = ?', [params.id])
@@ -30,10 +30,13 @@ export default function UserPage({ data }) {
     )
 
     expect(result).toBeTruthy()
-    expect(result?.code).toContain('/* @__PURE__ */ export async function loader')
+    expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
+    // Server code should be removed
+    expect(result?.code).not.toContain('db.query')
+    expect(result?.code).not.toContain('SELECT * FROM users')
   })
 
-  it('should mark sync function loader export for tree-shaking', () => {
+  it('should replace sync function loader export with empty stub', () => {
     const code = `
 export function loader() {
   return { data: 'test' }
@@ -48,10 +51,10 @@ export function loader() {
     )
 
     expect(result).toBeTruthy()
-    expect(result?.code).toContain('/* @__PURE__ */ export function loader')
+    expect(result?.code).toContain('export function loader() { /* server-only: removed in client build */ }')
   })
 
-  it('should mark const loader export for tree-shaking', () => {
+  it('should replace const loader export with empty stub', () => {
     const code = `
 export const loader = async ({ params }) => {
   return { data: await fetchData(params.id) }
@@ -66,10 +69,10 @@ export const loader = async ({ params }) => {
     )
 
     expect(result).toBeTruthy()
-    expect(result?.code).toContain('/* @__PURE__ */ export const loader')
+    expect(result?.code).toContain('export const loader = () => { /* server-only: removed in client build */ }')
   })
 
-  it('should mark action export for tree-shaking', () => {
+  it('should replace action export with empty stub', () => {
     const code = `
 export async function action({ request }) {
   const formData = await request.formData()
@@ -86,10 +89,12 @@ export async function action({ request }) {
     )
 
     expect(result).toBeTruthy()
-    expect(result?.code).toContain('/* @__PURE__ */ export async function action')
+    expect(result?.code).toContain('export async function action() { /* server-only: removed in client build */ }')
+    // Server code should be removed
+    expect(result?.code).not.toContain('db.insert')
   })
 
-  it('should mark headers export for tree-shaking', () => {
+  it('should replace headers export with empty stub', () => {
     const code = `
 export function headers() {
   return {
@@ -106,7 +111,7 @@ export function headers() {
     )
 
     expect(result).toBeTruthy()
-    expect(result?.code).toContain('/* @__PURE__ */ export function headers')
+    expect(result?.code).toContain('export function headers() { /* server-only: removed in client build */ }')
   })
 
   it('should handle multiple server exports in same file', () => {
@@ -136,9 +141,9 @@ export default function Page({ data }) {
     )
 
     expect(result).toBeTruthy()
-    expect(result?.code).toContain('/* @__PURE__ */ export async function loader')
-    expect(result?.code).toContain('/* @__PURE__ */ export async function action')
-    expect(result?.code).toContain('/* @__PURE__ */ export function headers')
+    expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
+    expect(result?.code).toContain('export async function action() { /* server-only: removed in client build */ }')
+    expect(result?.code).toContain('export function headers() { /* server-only: removed in client build */ }')
   })
 
   it('should NOT transform non-route files', () => {
@@ -198,13 +203,12 @@ export function UserCard({ user }) {
     )
 
     expect(result).toBeTruthy()
-    // Loader should be marked
-    expect(result?.code).toContain('/* @__PURE__ */ export async function loader')
-    // Component exports should NOT be marked
+    // Loader should be replaced with stub
+    expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
+    // Component exports should remain unchanged
     expect(result?.code).toContain('export default function UserPage')
     expect(result?.code).toContain('export function UserCard')
-    expect(result?.code).not.toContain('/* @__PURE__ */ export default function UserPage')
-    expect(result?.code).not.toContain('/* @__PURE__ */ export function UserCard')
+    expect(result?.code).toContain('<div>{data.user.name}</div>')
   })
 
   it('should handle TypeScript type annotations', () => {
@@ -224,7 +228,29 @@ export const loader: LoaderFunction = async ({ params }) => {
     )
 
     expect(result).toBeTruthy()
-    expect(result?.code).toContain('/* @__PURE__ */ export const loader')
+    expect(result?.code).toContain('export const loader = () => { /* server-only: removed in client build */ }')
+  })
+
+  it('should handle complex generic type annotations', () => {
+    const code = `
+import type { LoaderFunction } from 'ixflare'
+
+export const loader: LoaderFunction<{ user: User }, { id: string }> = async ({ params }) => {
+  return { user: await getUser(params.id) }
+}
+`
+
+    const result = transformServerExports(
+      code,
+      '/project/src/routes/test.tsx',
+      routesDir,
+      false
+    )
+
+    expect(result).toBeTruthy()
+    expect(result?.code).toContain('export const loader = () => { /* server-only: removed in client build */ }')
+    // Server code should be removed
+    expect(result?.code).not.toContain('getUser')
   })
 
   it('should return null when no server exports found', () => {

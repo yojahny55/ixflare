@@ -39,7 +39,7 @@ function formatDate(date) {
       const report = analyzeServerCodeRemoval(bundle)
 
       expect(report.hasServerCode).toBe(false)
-      expect(report.strippedExports).toEqual([])
+      expect(report.leakedExports).toEqual([])
     })
 
     it('should detect loader export in client bundle (BAD)', () => {
@@ -73,7 +73,7 @@ export default function UserPage({ data }) {
       const report = analyzeServerCodeRemoval(bundle)
 
       expect(report.hasServerCode).toBe(true)
-      expect(report.strippedExports).toContain('loader')
+      expect(report.leakedExports).toContain('loader')
     })
 
     it('should detect const loader export in client bundle (BAD)', () => {
@@ -102,7 +102,7 @@ export const loader = async ({ params }) => {
       const report = analyzeServerCodeRemoval(bundle)
 
       expect(report.hasServerCode).toBe(true)
-      expect(report.strippedExports).toContain('loader')
+      expect(report.leakedExports).toContain('loader')
     })
 
     it('should detect action export in client bundle (BAD)', () => {
@@ -133,7 +133,7 @@ export async function action({ request }) {
       const report = analyzeServerCodeRemoval(bundle)
 
       expect(report.hasServerCode).toBe(true)
-      expect(report.strippedExports).toContain('action')
+      expect(report.leakedExports).toContain('action')
     })
 
     it('should detect headers export in client bundle (BAD)', () => {
@@ -162,7 +162,7 @@ export function headers() {
       const report = analyzeServerCodeRemoval(bundle)
 
       expect(report.hasServerCode).toBe(true)
-      expect(report.strippedExports).toContain('headers')
+      expect(report.leakedExports).toContain('headers')
     })
 
     it('should detect multiple server exports in client bundle (BAD)', () => {
@@ -203,10 +203,10 @@ export default function Page({ data }) {
       const report = analyzeServerCodeRemoval(bundle)
 
       expect(report.hasServerCode).toBe(true)
-      expect(report.strippedExports).toContain('loader')
-      expect(report.strippedExports).toContain('action')
-      expect(report.strippedExports).toContain('headers')
-      expect(report.strippedExports).toHaveLength(3)
+      expect(report.leakedExports).toContain('loader')
+      expect(report.leakedExports).toContain('action')
+      expect(report.leakedExports).toContain('headers')
+      expect(report.leakedExports).toHaveLength(3)
     })
 
     it('should handle bundles with multiple chunks', () => {
@@ -261,7 +261,7 @@ export default function Page({ data }) {
       const report = analyzeServerCodeRemoval(bundle)
 
       expect(report.hasServerCode).toBe(false)
-      expect(report.strippedExports).toEqual([])
+      expect(report.leakedExports).toEqual([])
     })
 
     it('should ignore asset files (CSS, images)', () => {
@@ -335,7 +335,7 @@ export function UserCard({ user }) {
       const report = analyzeServerCodeRemoval(bundle)
 
       expect(report.hasServerCode).toBe(false)
-      expect(report.strippedExports).toEqual([])
+      expect(report.leakedExports).toEqual([])
     })
   })
 })

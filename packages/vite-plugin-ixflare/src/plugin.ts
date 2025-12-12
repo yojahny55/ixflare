@@ -56,6 +56,8 @@ import {
 import { createRouteChunks } from './code-splitting'
 import {
   transformServerExports,
+  isServerFile,
+  isInServerDirectory,
 } from './server-only-removal'
 
 /**
@@ -176,6 +178,7 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
   const hmrEnabled = options.hmr !== false
   // Default to 'auto' - only enable code splitting if frontend routes exist
   const codeSplittingOption = options.codeSplitting ?? 'auto'
+  const verbose = options.verbose ?? false
 
   let devServer: DevServer | null = null
   let viteServer: ViteDevServer | null = null
@@ -189,6 +192,8 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
   let codeSplittingEnabled: boolean = false
   // Track build command for transform hook
   let isBuildCommand: boolean = false
+  // Track transformed files for verbose logging
+  const transformedRoutes: string[] = []
 
   return {
     name: 'vite-plugin-ixflare',
@@ -272,14 +277,8 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
 
           // Only enforce boundary during client build
           if (!ssr) {
-            const normalizedImporter = importer.replace(/\\/g, '/')
-
             // Check if the importer is also a server file - that's allowed
-            const importerIsServerFile =
-              normalizedImporter.includes('.server.ts') ||
-              normalizedImporter.includes('.server.tsx') ||
-              normalizedImporter.includes('/.server/') ||
-              normalizedImporter.includes('\\.server\\')
+            const importerIsServerFile = isServerFile(importer) || isInServerDirectory(importer)
 
             if (!importerIsServerFile) {
               // Client code trying to import server-only code - this is an error!
@@ -358,7 +357,15 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
       if (isBuildCommand) {
         // Get SSR mode from environment
         const ssr = (this as any).environment?.name === 'ssr' || (this as any).ssr
-        return transformServerExports(code, id, routesDir, ssr)
+        const result = transformServerExports(code, id, routesDir, ssr)
+
+        // Track transformed routes for verbose logging
+        if (result && verbose) {
+          const relativePath = id.replace(projectRoot || process.cwd(), '.')
+          transformedRoutes.push(relativePath)
+        }
+
+        return result
       }
       return null
     },
@@ -471,6 +478,18 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
           info: (msg) => this.info(msg),
           warn: (msg) => this.warn(msg),
         })
+
+        // Verbose logging for transformed routes
+        if (verbose && transformedRoutes.length > 0) {
+          this.info('\n🔧 Server-Only Transform Details:')
+          this.info('─'.repeat(80))
+          this.info(`   Transformed ${transformedRoutes.length} route file(s):`)
+          for (const route of transformedRoutes) {
+            this.info(`     • ${route}`)
+          }
+          this.info('   Server exports (loader, action, headers) replaced with empty stubs')
+          this.info('─'.repeat(80) + '\n')
+        }
       }
 
       // Validate bundle sizes if code splitting is enabled

@@ -31,52 +31,83 @@ const SERVER_ONLY_EXPORTS = [
 const SERVER_ONLY_MODULE_ID = '\0server-only'
 
 /**
- * Check if a file path represents a route file
- * Route files are located in the routes directory
+ * Check if a file path represents a route file.
+ * Route files are located in the routes directory.
+ *
+ * @param id - The module ID (file path) to check
+ * @param routesDir - The routes directory path (e.g., 'src/routes')
+ * @returns True if the file is inside the routes directory
+ *
+ * @example
+ * isRouteFile('/project/src/routes/users.tsx', 'src/routes') // true
+ * isRouteFile('/project/src/utils/helper.ts', 'src/routes') // false
  */
-function isRouteFile(id: string, routesDir: string): boolean {
+export function isRouteFile(id: string, routesDir: string): boolean {
   const normalizedId = id.replace(/\\/g, '/')
   const normalizedRoutesDir = routesDir.replace(/\\/g, '/')
 
-  return normalizedId.includes(`/${normalizedRoutesDir}/`) || normalizedId.includes(`\\${routesDir}\\`)
+  return normalizedId.includes(`/${normalizedRoutesDir}/`)
 }
 
 /**
- * Check if a file uses the .server.ts or .server.tsx convention
- * These files are explicitly marked as server-only
- */
-function isServerFile(id: string): boolean {
-  return id.includes('.server.ts') || id.includes('.server.tsx')
-}
-
-/**
- * Check if a file is in a .server directory
- * Following Remix convention: files in .server/ directories are server-only
- */
-function isInServerDirectory(id: string): boolean {
-  const normalizedId = id.replace(/\\/g, '/')
-  return normalizedId.includes('/.server/') || normalizedId.includes('\\.server\\')
-}
-
-/**
- * Transform hook to mark server-only exports for tree-shaking
+ * Check if a file uses the .server file convention.
+ * Supports multiple file extensions: .ts, .tsx, .js, .jsx, .mts, .mjs
  *
- * This function processes route files during the CLIENT build and marks
- * server-only exports (loader, action, headers) with the `@__PURE__` annotation.
- * Rollup's tree-shaker will then remove these exports and their dependencies
- * from the client bundle.
+ * @param id - The module ID (file path) to check
+ * @returns True if the file has a .server.* extension
+ *
+ * @example
+ * isServerFile('/project/src/lib/db.server.ts') // true
+ * isServerFile('/project/src/lib/db.server.js') // true
+ * isServerFile('/project/src/lib/utils.ts') // false
+ */
+export function isServerFile(id: string): boolean {
+  const normalizedId = id.replace(/\\/g, '/')
+  // Match .server followed by common JS/TS extensions
+  return /\.server\.(ts|tsx|js|jsx|mts|mjs)$/i.test(normalizedId) ||
+         normalizedId.includes('.server.ts') ||
+         normalizedId.includes('.server.tsx') ||
+         normalizedId.includes('.server.js') ||
+         normalizedId.includes('.server.jsx')
+}
+
+/**
+ * Check if a file is in a .server directory.
+ * Following Remix convention: files in .server/ directories are server-only.
+ *
+ * @param id - The module ID (file path) to check
+ * @returns True if the file is inside a .server/ directory
+ *
+ * @example
+ * isInServerDirectory('/project/src/.server/utils.ts') // true
+ * isInServerDirectory('/project/src/lib/db.ts') // false
+ */
+export function isInServerDirectory(id: string): boolean {
+  const normalizedId = id.replace(/\\/g, '/')
+  return normalizedId.includes('/.server/')
+}
+
+/**
+ * Transform hook to remove server-only exports from client bundles.
+ *
+ * This function processes route files during the CLIENT build and replaces
+ * server-only exports (loader, action, headers) with empty stub functions.
+ * This approach is more reliable than @__PURE__ annotations because:
+ * 1. @__PURE__ only works on function calls, not function declarations
+ * 2. Stub replacement guarantees server code is removed regardless of imports
+ * 3. Empty stubs are easily tree-shaken by Rollup as dead code
  *
  * Strategy:
  * - Only processes route files (located in routesDir)
  * - Only runs during client builds (not SSR builds)
- * - Preserves the original code structure (no runtime behavior changes)
- * - Marks exports with @__PURE__ for safe removal
+ * - Replaces server exports with minimal empty stubs
+ * - Preserves component and other exports unchanged
  *
  * @param code - Source code of the module
  * @param id - Module ID (file path)
  * @param routesDir - Routes directory path
  * @param ssr - Whether this is an SSR build
- * @returns Transformed code with marked exports, or null if no transformation needed
+ * @returns Transformed code with stubbed exports, or null if no transformation needed
  */
 export function transformServerExports(
   code: string,
@@ -95,31 +126,48 @@ export function transformServerExports(
 
   // Process each server-only export
   for (const exportName of SERVER_ONLY_EXPORTS) {
-    // Pattern 1: export async function loader(...) or export function loader(...)
-    const functionRegex = new RegExp(
-      `export\\s+(?:async\\s+)?function\\s+${exportName}\\s*\\(`,
+    // Pattern 1: export async function loader(...) { ... }
+    // Replace entire function with empty stub
+    const asyncFunctionRegex = new RegExp(
+      `export\\s+async\\s+function\\s+${exportName}\\s*\\([^)]*\\)\\s*\\{[^}]*(?:\\{[^}]*\\}[^}]*)*\\}`,
       'g'
     )
 
-    if (functionRegex.test(code)) {
-      // Reset regex lastIndex for replacement
-      functionRegex.lastIndex = 0
-      transformed = transformed.replace(functionRegex, (match) => {
+    if (asyncFunctionRegex.test(transformed)) {
+      asyncFunctionRegex.lastIndex = 0
+      transformed = transformed.replace(asyncFunctionRegex, () => {
         hasTransforms = true
-        // Insert @__PURE__ annotation before the export
-        // This tells Rollup the function has no side effects and can be tree-shaken
-        return `/* @__PURE__ */ ${match}`
+        // Return empty async stub - will be tree-shaken if unused
+        return `export async function ${exportName}() { /* server-only: removed in client build */ }`
       })
     }
 
-    // Pattern 2: export const loader = ... or export const loader: Type = ...
-    const constRegex = new RegExp(`export\\s+const\\s+${exportName}\\s*[:=]`, 'g')
+    // Pattern 2: export function loader(...) { ... }
+    const syncFunctionRegex = new RegExp(
+      `export\\s+function\\s+${exportName}\\s*\\([^)]*\\)\\s*\\{[^}]*(?:\\{[^}]*\\}[^}]*)*\\}`,
+      'g'
+    )
 
-    if (constRegex.test(code)) {
-      constRegex.lastIndex = 0
-      transformed = transformed.replace(constRegex, (match) => {
+    if (syncFunctionRegex.test(transformed)) {
+      syncFunctionRegex.lastIndex = 0
+      transformed = transformed.replace(syncFunctionRegex, () => {
         hasTransforms = true
-        return `/* @__PURE__ */ ${match}`
+        return `export function ${exportName}() { /* server-only: removed in client build */ }`
+      })
+    }
+
+    // Pattern 3: export const loader = ... (arrow function or other)
+    // Match until semicolon, newline export, or end of const declaration
+    const constRegex = new RegExp(
+      `export\\s+const\\s+${exportName}\\s*(?::[^=]+)?\\s*=\\s*(?:async\\s*)?(?:\\([^)]*\\)|[^=])\\s*=>\\s*(?:\\{[^}]*(?:\\{[^}]*\\}[^}]*)*\\}|[^;\\n]+)`,
+      'g'
+    )
+
+    if (constRegex.test(transformed)) {
+      constRegex.lastIndex = 0
+      transformed = transformed.replace(constRegex, () => {
+        hasTransforms = true
+        return `export const ${exportName} = () => { /* server-only: removed in client build */ }`
       })
     }
   }

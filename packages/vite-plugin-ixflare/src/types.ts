@@ -24,4 +24,15 @@ export interface IxflarePluginOptions {
    * This keeps bundle size minimal when only using API features.
    */
   codeSplitting?: boolean | 'auto'
+  /**
+   * Enable verbose logging for debugging.
+   *
+   * When enabled, logs detailed information about:
+   * - Server-only code removal (which exports were stripped)
+   * - .server file boundary enforcement
+   * - Code splitting decisions
+   *
+   * @default false
+   */
+  verbose?: boolean
 }
