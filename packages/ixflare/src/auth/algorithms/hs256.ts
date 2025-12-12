@@ -10,13 +10,10 @@ export async function importHS256Key(secret: string): Promise<CryptoKey> {
   const encoder = new TextEncoder()
   const keyData = encoder.encode(secret)
 
-  return crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign', 'verify']
-  )
+  return crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, [
+    'sign',
+    'verify',
+  ])
 }
 
 /**

@@ -259,7 +259,10 @@ describe('fullstack-react template', () => {
     })
 
     it('should use Tailwind utility classes in components', () => {
-      const buttonContent = readFileSync(join(TEMPLATE_DIR, 'src/components/ui/button.tsx'), 'utf-8')
+      const buttonContent = readFileSync(
+        join(TEMPLATE_DIR, 'src/components/ui/button.tsx'),
+        'utf-8'
+      )
       expect(buttonContent).toContain('className')
       expect(buttonContent).toMatch(/bg-\w+/)
       expect(buttonContent).toMatch(/text-\w+/)

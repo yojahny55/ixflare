@@ -36,8 +36,7 @@ interface ViteImportMeta extends ImportMeta {
  * @internal
  */
 const IS_DEV =
-  typeof import.meta !== 'undefined' &&
-  (import.meta as ViteImportMeta).env?.MODE === 'development'
+  typeof import.meta !== 'undefined' && (import.meta as ViteImportMeta).env?.MODE === 'development'
 
 /**
  * HMR fetch timeout in milliseconds
@@ -132,10 +131,7 @@ async function fetchWithRetry(
  *
  * @internal
  */
-function morphDOMPreservingIslands(
-  newHtml: string,
-  islandMap: Map<string, Element>
-): number {
+function morphDOMPreservingIslands(newHtml: string, islandMap: Map<string, Element>): number {
   const parser = new DOMParser()
   const newDoc = parser.parseFromString(newHtml, 'text/html')
 
@@ -312,10 +308,9 @@ function setupServerComponentHMR(): void {
       // Fetch updated HTML with retry logic
       let response: Response
       try {
-        response = await fetchWithRetry(
-          window.location.pathname + window.location.search,
-          { headers: { Accept: 'text/html' } }
-        )
+        response = await fetchWithRetry(window.location.pathname + window.location.search, {
+          headers: { Accept: 'text/html' },
+        })
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Network error'
         console.error(`[ixflare] Failed to fetch updated HTML: ${message}`)

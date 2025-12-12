@@ -461,8 +461,6 @@ describe('extractRoutePathFromFile (unit tests)', () => {
 
   it('should handle similar directory names', () => {
     // Edge case: src/routes vs src/routes-backup
-    expect(
-      extractRoutePathFromFile('/project/src/routes-backup/test.tsx', 'src/routes')
-    ).toBe('/')
+    expect(extractRoutePathFromFile('/project/src/routes-backup/test.tsx', 'src/routes')).toBe('/')
   })
 })

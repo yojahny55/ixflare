@@ -130,8 +130,12 @@ describe('Templates: Cross-template verification', () => {
       const fullstackPkg = JSON.parse(
         readFileSync(join(TEMPLATES_DIR, 'fullstack-react/package.json'), 'utf-8')
       )
-      const apiPkg = JSON.parse(readFileSync(join(TEMPLATES_DIR, 'api-backend/package.json'), 'utf-8'))
-      const minimalPkg = JSON.parse(readFileSync(join(TEMPLATES_DIR, 'minimal/package.json'), 'utf-8'))
+      const apiPkg = JSON.parse(
+        readFileSync(join(TEMPLATES_DIR, 'api-backend/package.json'), 'utf-8')
+      )
+      const minimalPkg = JSON.parse(
+        readFileSync(join(TEMPLATES_DIR, 'minimal/package.json'), 'utf-8')
+      )
 
       expect(fullstackPkg.devDependencies?.['@tailwindcss/vite']).toBeDefined()
       expect(apiPkg.devDependencies?.['@tailwindcss/vite']).toBeUndefined()

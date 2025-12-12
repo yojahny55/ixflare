@@ -17,10 +17,7 @@ export function base64urlEncode(buffer: ArrayBuffer): string {
   const base64 = btoa(binary)
 
   // Convert base64 to base64url
-  return base64
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '')
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
 /**
@@ -28,9 +25,7 @@ export function base64urlEncode(buffer: ArrayBuffer): string {
  */
 export function base64urlDecode(base64url: string): ArrayBuffer {
   // Convert base64url to base64
-  let base64 = base64url
-    .replace(/-/g, '+')
-    .replace(/_/g, '/')
+  let base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
 
   // Add padding if needed
   const padding = (4 - (base64.length % 4)) % 4

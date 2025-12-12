@@ -40,8 +40,12 @@ import { routePathToChunkName } from '@/utils/chunk-naming'
 let chunkManifest: Record<string, string> | null = null
 
 // Auto-load manifest from SSR injection if available
-if (typeof window !== 'undefined' && (window as Window & { __CHUNK_MANIFEST__?: Record<string, string> }).__CHUNK_MANIFEST__) {
-  chunkManifest = (window as Window & { __CHUNK_MANIFEST__?: Record<string, string> }).__CHUNK_MANIFEST__ ?? null
+if (
+  typeof window !== 'undefined' &&
+  (window as Window & { __CHUNK_MANIFEST__?: Record<string, string> }).__CHUNK_MANIFEST__
+) {
+  chunkManifest =
+    (window as Window & { __CHUNK_MANIFEST__?: Record<string, string> }).__CHUNK_MANIFEST__ ?? null
 }
 
 /**
@@ -130,7 +134,6 @@ export function prefetchRoute(routePath: string): void {
   // Append to head
   document.head.appendChild(link)
 }
-
 
 /**
  * Options for link prefetching

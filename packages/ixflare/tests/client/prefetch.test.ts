@@ -273,7 +273,9 @@ describe('setupLinkPrefetching', () => {
     setupLinkPrefetching({ onHover: true, onViewport: false })
 
     // Simulate hover on external link
-    const externalLink = document.querySelector('a[href="https://external.com"]') as HTMLAnchorElement
+    const externalLink = document.querySelector(
+      'a[href="https://external.com"]'
+    ) as HTMLAnchorElement
     externalLink.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
 
     const links = document.querySelectorAll('link[rel="prefetch"]')

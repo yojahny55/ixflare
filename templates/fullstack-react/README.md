@@ -209,9 +209,7 @@ export function MyComponent() {
   return (
     <div className="rounded-lg shadow-md p-6 bg-white dark:bg-gray-800">
       <h2 className="text-xl font-bold mb-4">Hello World</h2>
-      <p className="text-gray-700 dark:text-gray-300">
-        Styled with Tailwind CSS v4.1
-      </p>
+      <p className="text-gray-700 dark:text-gray-300">Styled with Tailwind CSS v4.1</p>
     </div>
   )
 }
@@ -222,7 +220,7 @@ export function MyComponent() {
 Customize your design system in `src/index.css` using the `@theme` directive:
 
 ```css
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
   /* Custom brand colors - automatically generates utilities */
@@ -231,7 +229,7 @@ Customize your design system in `src/index.css` using the `@theme` directive:
   --color-brand-dark: #004499;
 
   /* Custom fonts */
-  --font-display: "Inter", system-ui, sans-serif;
+  --font-display: 'Inter', system-ui, sans-serif;
 
   /* Custom spacing */
   --spacing-128: 32rem;
@@ -239,6 +237,7 @@ Customize your design system in `src/index.css` using the `@theme` directive:
 ```
 
 This automatically generates utility classes like:
+
 - `bg-brand`, `text-brand`, `border-brand`
 - `font-display`
 - `p-128`, `m-128`, `gap-128`
@@ -268,9 +267,7 @@ Then toggle dark mode by adding the `dark` class to your `<html>` element.
 Use responsive utilities with breakpoint prefixes:
 
 ```tsx
-<div className="w-full md:w-1/2 lg:w-1/3">
-  Responsive width
-</div>
+<div className="w-full md:w-1/2 lg:w-1/3">Responsive width</div>
 ```
 
 ### JIT Mode (Just-In-Time)
@@ -278,14 +275,13 @@ Use responsive utilities with breakpoint prefixes:
 JIT is always enabled in v4.1. Use arbitrary values freely:
 
 ```tsx
-<div className="p-[13px] bg-[#1da1f2] top-[117px]">
-  Custom values work out of the box
-</div>
+<div className="p-[13px] bg-[#1da1f2] top-[117px]">Custom values work out of the box</div>
 ```
 
 ### Performance
 
 Tailwind CSS v4.1 is significantly faster than v3.x:
+
 - **5x faster** full builds
 - **100x faster** incremental builds
 - Smaller bundle sizes (only used CSS is included)

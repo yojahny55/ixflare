@@ -8,7 +8,8 @@ import { importHS256Key, signHS256, verifyHS256 } from '@/auth/algorithms/hs256'
 
 describe('HS256 Algorithm', () => {
   const testSecret = 'test-secret-key-for-hmac'
-  const testData = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEyMywiZW1haWwiOiJ0ZXN0QGV4YW1wbGUuY29tIn0'
+  const testData =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEyMywiZW1haWwiOiJ0ZXN0QGV4YW1wbGUuY29tIn0'
 
   describe('importHS256Key', () => {
     it('should import HMAC key from secret string', async () => {

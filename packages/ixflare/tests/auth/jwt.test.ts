@@ -13,11 +13,14 @@ import {
 } from '@/auth/errors'
 
 describe('JWT Module', () => {
+  // Secret must be at least 32 characters for HS256
+  const TEST_SECRET = 'test-secret-key-for-jwt-testing-minimum-32-chars'
+
   beforeEach(() => {
     // Configure JWT before each test
     jwt.configure({
       algorithm: 'HS256',
-      secret: 'test-secret-key-for-jwt-testing',
+      secret: TEST_SECRET,
       defaultExpiresIn: '15m',
     })
   })
@@ -158,10 +161,10 @@ describe('JWT Module', () => {
     it('should throw SignatureVerificationError for wrong secret', async () => {
       const token = await jwt.sign({ userId: 123 })
 
-      // Change secret
+      // Change secret (must be at least 32 characters)
       jwt.configure({
         algorithm: 'HS256',
-        secret: 'different-secret',
+        secret: 'different-secret-that-is-at-least-32-characters',
         defaultExpiresIn: '15m',
       })
 
@@ -222,6 +225,38 @@ describe('JWT Module', () => {
     })
   })
 
+  describe('jwt.configure() validation', () => {
+    it('should reject HS256 secret shorter than 32 characters', () => {
+      expect(() =>
+        jwt.configure({
+          algorithm: 'HS256',
+          secret: 'short-secret',
+          defaultExpiresIn: '15m',
+        })
+      ).toThrow('JWT secret must be at least 32 characters')
+    })
+
+    it('should reject empty HS256 secret', () => {
+      expect(() =>
+        jwt.configure({
+          algorithm: 'HS256',
+          secret: '',
+          defaultExpiresIn: '15m',
+        })
+      ).toThrow('JWT secret must be at least 32 characters')
+    })
+
+    it('should accept HS256 secret with exactly 32 characters', () => {
+      expect(() =>
+        jwt.configure({
+          algorithm: 'HS256',
+          secret: '12345678901234567890123456789012', // exactly 32 chars
+          defaultExpiresIn: '15m',
+        })
+      ).not.toThrow()
+    })
+  })
+
   describe('Security Tests (AC5, Task 12)', () => {
     it('should prevent algorithm confusion attack', async () => {
       const token = await jwt.sign({ userId: 123 })
@@ -244,14 +279,7 @@ describe('JWT Module', () => {
     })
 
     it('should handle malformed tokens safely', async () => {
-      const malformedTokens = [
-        '',
-        'a',
-        'a.b',
-        'a.b.c.d',
-        'not-base64.not-base64.not-base64',
-        '{}',
-      ]
+      const malformedTokens = ['', 'a', 'a.b', 'a.b.c.d', 'not-base64.not-base64.not-base64', '{}']
 
       for (const token of malformedTokens) {
         await expect(jwt.verify(token)).rejects.toThrow()

@@ -374,7 +374,7 @@ export default function Page({ data }) {
     expect(goodBundle['route.js'].code).not.toContain('@/lib/database')
     expect(goodBundle['route.js'].code).not.toContain(' db ')
     // Verify shared utility IS present
-    expect(goodBundle['route.js'].code).toContain('from \'@/utils\'')
+    expect(goodBundle['route.js'].code).toContain("from '@/utils'")
   })
 
   it('should detect if secret imports leaked to client bundle (BAD)', () => {

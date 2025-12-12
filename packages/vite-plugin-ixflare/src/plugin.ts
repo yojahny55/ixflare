@@ -41,12 +41,7 @@ import {
   analyzeServerCodeRemoval,
   logServerOnlyRemovalReport,
 } from './build'
-import {
-  setupHMR,
-  handleRouteHMR,
-  handleIslandHMR,
-  handleServerComponentHMR,
-} from './hmr'
+import { setupHMR, handleRouteHMR, handleIslandHMR, handleServerComponentHMR } from './hmr'
 import { discoverIslands, type DiscoveredIsland } from './island-discovery'
 import {
   generateHydrationManifest,
@@ -54,11 +49,7 @@ import {
   type HydrationManifest,
 } from './hydration-manifest'
 import { createRouteChunks } from './code-splitting'
-import {
-  transformServerExports,
-  isServerFile,
-  isInServerDirectory,
-} from './server-only-removal'
+import { transformServerExports, isServerFile, isInServerDirectory } from './server-only-removal'
 
 /**
  * Check if a directory contains frontend route files (*.tsx)
@@ -338,8 +329,7 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
           this.error({
             message: 'server-only module imported in client code',
             meta: {
-              suggestion:
-                'This import should only exist in server code (loaders, .server files)',
+              suggestion: 'This import should only exist in server code (loaders, .server files)',
             },
           })
         }

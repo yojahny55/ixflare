@@ -356,7 +356,9 @@ export function logChunkSizeReport(
   logger.info(`Total Budget: ${formatBytes(TOTAL_BUNDLE_BUDGET)}`)
 
   if (report.totalBudgetExceeded) {
-    logger.warn(`\n⚠️  Total bundle size (${report.totalSizeKB}) exceeds ${formatBytes(TOTAL_BUNDLE_BUDGET)} budget!`)
+    logger.warn(
+      `\n⚠️  Total bundle size (${report.totalSizeKB}) exceeds ${formatBytes(TOTAL_BUNDLE_BUDGET)} budget!`
+    )
   }
 
   if (report.warningCount > 0) {
@@ -539,10 +541,7 @@ export function logServerOnlyRemovalReport(
  * }
  * ```
  */
-export function generateChunkManifest(
-  bundle: OutputBundle,
-  basePath: string = '/'
-): ChunkManifest {
+export function generateChunkManifest(bundle: OutputBundle, basePath: string = '/'): ChunkManifest {
   const chunks: Record<string, string> = {}
 
   for (const [fileName, output] of Object.entries(bundle)) {

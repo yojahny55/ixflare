@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import {  transformServerExports, createServerOnlyRemovalPlugin } from '../src/server-only-removal'
+import { transformServerExports, createServerOnlyRemovalPlugin } from '../src/server-only-removal'
 import type { Plugin } from 'vite'
 
 describe('transformServerExports', () => {
@@ -30,7 +30,9 @@ export default function UserPage({ data }) {
     )
 
     expect(result).toBeTruthy()
-    expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
+    expect(result?.code).toContain(
+      'export async function loader() { /* server-only: removed in client build */ }'
+    )
     // Server code should be removed
     expect(result?.code).not.toContain('db.query')
     expect(result?.code).not.toContain('SELECT * FROM users')
@@ -43,15 +45,12 @@ export function loader() {
 }
 `
 
-    const result = transformServerExports(
-      code,
-      '/project/src/routes/test.tsx',
-      routesDir,
-      false
-    )
+    const result = transformServerExports(code, '/project/src/routes/test.tsx', routesDir, false)
 
     expect(result).toBeTruthy()
-    expect(result?.code).toContain('export function loader() { /* server-only: removed in client build */ }')
+    expect(result?.code).toContain(
+      'export function loader() { /* server-only: removed in client build */ }'
+    )
   })
 
   it('should replace const loader export with empty stub', () => {
@@ -61,15 +60,12 @@ export const loader = async ({ params }) => {
 }
 `
 
-    const result = transformServerExports(
-      code,
-      '/project/src/routes/test.tsx',
-      routesDir,
-      false
-    )
+    const result = transformServerExports(code, '/project/src/routes/test.tsx', routesDir, false)
 
     expect(result).toBeTruthy()
-    expect(result?.code).toContain('export const loader = () => { /* server-only: removed in client build */ }')
+    expect(result?.code).toContain(
+      'export const loader = () => { /* server-only: removed in client build */ }'
+    )
   })
 
   it('should replace action export with empty stub', () => {
@@ -89,7 +85,9 @@ export async function action({ request }) {
     )
 
     expect(result).toBeTruthy()
-    expect(result?.code).toContain('export async function action() { /* server-only: removed in client build */ }')
+    expect(result?.code).toContain(
+      'export async function action() { /* server-only: removed in client build */ }'
+    )
     // Server code should be removed
     expect(result?.code).not.toContain('db.insert')
   })
@@ -103,15 +101,12 @@ export function headers() {
 }
 `
 
-    const result = transformServerExports(
-      code,
-      '/project/src/routes/test.tsx',
-      routesDir,
-      false
-    )
+    const result = transformServerExports(code, '/project/src/routes/test.tsx', routesDir, false)
 
     expect(result).toBeTruthy()
-    expect(result?.code).toContain('export function headers() { /* server-only: removed in client build */ }')
+    expect(result?.code).toContain(
+      'export function headers() { /* server-only: removed in client build */ }'
+    )
   })
 
   it('should handle multiple server exports in same file', () => {
@@ -133,17 +128,18 @@ export default function Page({ data }) {
 }
 `
 
-    const result = transformServerExports(
-      code,
-      '/project/src/routes/users.tsx',
-      routesDir,
-      false
-    )
+    const result = transformServerExports(code, '/project/src/routes/users.tsx', routesDir, false)
 
     expect(result).toBeTruthy()
-    expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
-    expect(result?.code).toContain('export async function action() { /* server-only: removed in client build */ }')
-    expect(result?.code).toContain('export function headers() { /* server-only: removed in client build */ }')
+    expect(result?.code).toContain(
+      'export async function loader() { /* server-only: removed in client build */ }'
+    )
+    expect(result?.code).toContain(
+      'export async function action() { /* server-only: removed in client build */ }'
+    )
+    expect(result?.code).toContain(
+      'export function headers() { /* server-only: removed in client build */ }'
+    )
   })
 
   it('should NOT transform non-route files', () => {
@@ -195,16 +191,13 @@ export function UserCard({ user }) {
 }
 `
 
-    const result = transformServerExports(
-      code,
-      '/project/src/routes/users.tsx',
-      routesDir,
-      false
-    )
+    const result = transformServerExports(code, '/project/src/routes/users.tsx', routesDir, false)
 
     expect(result).toBeTruthy()
     // Loader should be replaced with stub
-    expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
+    expect(result?.code).toContain(
+      'export async function loader() { /* server-only: removed in client build */ }'
+    )
     // Component exports should remain unchanged
     expect(result?.code).toContain('export default function UserPage')
     expect(result?.code).toContain('export function UserCard')
@@ -220,15 +213,12 @@ export const loader: LoaderFunction = async ({ params }) => {
 }
 `
 
-    const result = transformServerExports(
-      code,
-      '/project/src/routes/test.tsx',
-      routesDir,
-      false
-    )
+    const result = transformServerExports(code, '/project/src/routes/test.tsx', routesDir, false)
 
     expect(result).toBeTruthy()
-    expect(result?.code).toContain('export const loader = () => { /* server-only: removed in client build */ }')
+    expect(result?.code).toContain(
+      'export const loader = () => { /* server-only: removed in client build */ }'
+    )
   })
 
   it('should handle complex generic type annotations', () => {
@@ -240,15 +230,12 @@ export const loader: LoaderFunction<{ user: User }, { id: string }> = async ({ p
 }
 `
 
-    const result = transformServerExports(
-      code,
-      '/project/src/routes/test.tsx',
-      routesDir,
-      false
-    )
+    const result = transformServerExports(code, '/project/src/routes/test.tsx', routesDir, false)
 
     expect(result).toBeTruthy()
-    expect(result?.code).toContain('export const loader = () => { /* server-only: removed in client build */ }')
+    expect(result?.code).toContain(
+      'export const loader = () => { /* server-only: removed in client build */ }'
+    )
     // Server code should be removed
     expect(result?.code).not.toContain('getUser')
   })
@@ -264,12 +251,7 @@ export function helper() {
 }
 `
 
-    const result = transformServerExports(
-      code,
-      '/project/src/routes/test.tsx',
-      routesDir,
-      false
-    )
+    const result = transformServerExports(code, '/project/src/routes/test.tsx', routesDir, false)
 
     // No transformations needed
     expect(result).toBeNull()
@@ -296,15 +278,12 @@ export default function Page({ data }) {
 }
 `
 
-      const result = transformServerExports(
-        code,
-        '/project/src/routes/users.tsx',
-        routesDir,
-        false
-      )
+      const result = transformServerExports(code, '/project/src/routes/users.tsx', routesDir, false)
 
       expect(result).toBeTruthy()
-      expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
+      expect(result?.code).toContain(
+        'export async function loader() { /* server-only: removed in client build */ }'
+      )
       // CRITICAL: Verify secrets are removed
       expect(result?.code).not.toContain('ADMIN_SECRET')
       expect(result?.code).not.toContain('db.getAdminData')
@@ -331,15 +310,12 @@ export async function loader({ params }) {
 }
 `
 
-      const result = transformServerExports(
-        code,
-        '/project/src/routes/data.tsx',
-        routesDir,
-        false
-      )
+      const result = transformServerExports(code, '/project/src/routes/data.tsx', routesDir, false)
 
       expect(result).toBeTruthy()
-      expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
+      expect(result?.code).toContain(
+        'export async function loader() { /* server-only: removed in client build */ }'
+      )
       expect(result?.code).not.toContain('DATABASE_URL')
       expect(result?.code).not.toContain('SELECT * FROM secrets')
     })
@@ -360,15 +336,12 @@ export async function loader() {
 }
 `
 
-      const result = transformServerExports(
-        code,
-        '/project/src/routes/admin.tsx',
-        routesDir,
-        false
-      )
+      const result = transformServerExports(code, '/project/src/routes/admin.tsx', routesDir, false)
 
       expect(result).toBeTruthy()
-      expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
+      expect(result?.code).toContain(
+        'export async function loader() { /* server-only: removed in client build */ }'
+      )
       expect(result?.code).not.toContain('API_KEY')
       expect(result?.code).not.toContain('db.query')
     })
@@ -399,15 +372,12 @@ export async function action({ request }) {
 }
 `
 
-      const result = transformServerExports(
-        code,
-        '/project/src/routes/users.tsx',
-        routesDir,
-        false
-      )
+      const result = transformServerExports(code, '/project/src/routes/users.tsx', routesDir, false)
 
       expect(result).toBeTruthy()
-      expect(result?.code).toContain('export async function action() { /* server-only: removed in client build */ }')
+      expect(result?.code).toContain(
+        'export async function action() { /* server-only: removed in client build */ }'
+      )
       expect(result?.code).not.toContain('SALT_ROUNDS')
       expect(result?.code).not.toContain('DELETE_SECRET')
       expect(result?.code).not.toContain('bcrypt.hash')
@@ -422,15 +392,12 @@ export async function loader() {
 }
 `
 
-      const result = transformServerExports(
-        code,
-        '/project/src/routes/test.tsx',
-        routesDir,
-        false
-      )
+      const result = transformServerExports(code, '/project/src/routes/test.tsx', routesDir, false)
 
       expect(result).toBeTruthy()
-      expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
+      expect(result?.code).toContain(
+        'export async function loader() { /* server-only: removed in client build */ }'
+      )
       expect(result?.code).not.toContain('SECRET')
     })
 
@@ -446,15 +413,12 @@ export async function loader() {
 }
 `
 
-      const result = transformServerExports(
-        code,
-        '/project/src/routes/test.tsx',
-        routesDir,
-        false
-      )
+      const result = transformServerExports(code, '/project/src/routes/test.tsx', routesDir, false)
 
       expect(result).toBeTruthy()
-      expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
+      expect(result?.code).toContain(
+        'export async function loader() { /* server-only: removed in client build */ }'
+      )
       expect(result?.code).not.toContain('API_SECRET')
     })
   })
@@ -593,11 +557,7 @@ describe('.server file convention', () => {
     }
 
     // SSR build can import .server files
-    const result = resolveId.call(
-      context,
-      './db.server.ts',
-      '/project/src/routes/users.tsx'
-    )
+    const result = resolveId.call(context, './db.server.ts', '/project/src/routes/users.tsx')
 
     expect(mockError).not.toHaveBeenCalled()
   })

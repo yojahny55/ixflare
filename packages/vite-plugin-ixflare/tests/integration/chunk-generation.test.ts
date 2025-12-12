@@ -188,7 +188,10 @@ describe('Route Code Splitting Integration', () => {
     it('should handle nested dynamic routes', () => {
       const manualChunks = createRouteChunks('src/routes')
 
-      const nestedChunk = manualChunks('/project/src/routes/org/[orgId]/projects/[projectId].tsx', {} as never)
+      const nestedChunk = manualChunks(
+        '/project/src/routes/org/[orgId]/projects/[projectId].tsx',
+        {} as never
+      )
 
       expect(nestedChunk).toBe('route-org-_orgId_-projects-_projectId_')
     })

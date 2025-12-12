@@ -227,10 +227,7 @@ function replaceExportFunction(
  * @param exportName - Name of the export to replace (e.g., 'loader')
  * @returns Object with transformed code and whether a change was made
  */
-function replaceExportConst(
-  code: string,
-  exportName: string
-): { code: string; changed: boolean } {
+function replaceExportConst(code: string, exportName: string): { code: string; changed: boolean } {
   // Pattern to find: export const name = or export const name: Type =
   const pattern = new RegExp(`export\\s+const\\s+${exportName}\\s*(?::[^=]+)?\\s*=`)
 
@@ -246,7 +243,9 @@ function replaceExportConst(
   const restOfCode = code.slice(afterEquals)
 
   // Check for arrow function: async? (...) => { or async? param =>
-  const arrowMatch = restOfCode.match(/^\s*(?:async\s*)?\([^)]*\)\s*=>|^\s*(?:async\s*)?[\w$]+\s*=>/)
+  const arrowMatch = restOfCode.match(
+    /^\s*(?:async\s*)?\([^)]*\)\s*=>|^\s*(?:async\s*)?[\w$]+\s*=>/
+  )
   if (!arrowMatch) {
     // Not an arrow function, could be other assignment - skip
     return { code, changed: false }
@@ -425,9 +424,7 @@ export interface ServerOnlyRemovalOptions {
  * })
  * ```
  */
-export function createServerOnlyRemovalPlugin(
-  options: ServerOnlyRemovalOptions = {}
-): Plugin {
+export function createServerOnlyRemovalPlugin(options: ServerOnlyRemovalOptions = {}): Plugin {
   const routesDir = options.routesDir || 'src/routes'
   const verbose = options.verbose || false
 

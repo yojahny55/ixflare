@@ -83,9 +83,8 @@ describe('HMR Plugin Signaling Integration', () => {
     plugin = ixflarePlugin({ routesDir: 'src/routes', componentsDir: 'src/components' }) as Plugin
 
     // Setup virtual modules
-    const modules = (
-      server.moduleGraph as unknown as { _modules: Map<string, ModuleNode> }
-    )._modules
+    const modules = (server.moduleGraph as unknown as { _modules: Map<string, ModuleNode> })
+      ._modules
     modules.set('\0virtual:ixflare-routes', createMockModule('\0virtual:ixflare-routes'))
     modules.set('\0virtual:ixflare-islands', createMockModule('\0virtual:ixflare-islands'))
   })
@@ -96,9 +95,8 @@ describe('HMR Plugin Signaling Integration', () => {
       const file = '/test/project/src/components/Counter.client.tsx'
 
       // Setup island module
-      const modules = (
-        server.moduleGraph as unknown as { _modules: Map<string, ModuleNode> }
-      )._modules
+      const modules = (server.moduleGraph as unknown as { _modules: Map<string, ModuleNode> })
+        ._modules
       modules.set(file, createMockModule(file))
 
       const result = await handleHotUpdate({ file, server })
@@ -112,9 +110,8 @@ describe('HMR Plugin Signaling Integration', () => {
       const handleHotUpdate = plugin.handleHotUpdate as Function
       const file = '/test/project/src/components/Search.client.tsx'
 
-      const modules = (
-        server.moduleGraph as unknown as { _modules: Map<string, ModuleNode> }
-      )._modules
+      const modules = (server.moduleGraph as unknown as { _modules: Map<string, ModuleNode> })
+        ._modules
       const virtualIslandsModule = modules.get('\0virtual:ixflare-islands')!
 
       await handleHotUpdate({ file, server })
@@ -211,9 +208,8 @@ describe('HMR Plugin Signaling Integration', () => {
       const handleHotUpdate = plugin.handleHotUpdate as Function
       const file = '/test/project/src/routes/about.tsx'
 
-      const modules = (
-        server.moduleGraph as unknown as { _modules: Map<string, ModuleNode> }
-      )._modules
+      const modules = (server.moduleGraph as unknown as { _modules: Map<string, ModuleNode> })
+        ._modules
       modules.set(file, createMockModule(file))
 
       const result = await handleHotUpdate({ file, server })
@@ -307,9 +303,8 @@ describe('HMR Plugin Signaling Integration', () => {
       const file = '/test/project/src/components/Orphan.client.tsx'
 
       // Remove virtual module to simulate error condition
-      const modules = (
-        server.moduleGraph as unknown as { _modules: Map<string, ModuleNode> }
-      )._modules
+      const modules = (server.moduleGraph as unknown as { _modules: Map<string, ModuleNode> })
+        ._modules
       modules.delete('\0virtual:ixflare-islands')
 
       // Should not throw

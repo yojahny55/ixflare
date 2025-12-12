@@ -25,7 +25,8 @@ MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEUf++g/OUAEwlMJ6yLU7VLExzZC5p
 WM4HLotIIEYJ0ogAKBBeXKpmg0JdeGUAmGTvY7p/gBVK3BNcaC/dH/rx/Q==
 -----END PUBLIC KEY-----`
 
-  const testData = 'eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEyMywiZW1haWwiOiJ0ZXN0QGV4YW1wbGUuY29tIn0'
+  const testData =
+    'eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEyMywiZW1haWwiOiJ0ZXN0QGV4YW1wbGUuY29tIn0'
 
   describe('importES256PrivateKey', () => {
     it('should import private key from PEM format', async () => {

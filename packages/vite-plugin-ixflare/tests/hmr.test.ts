@@ -158,9 +158,9 @@ describe('HMR Functions', () => {
         if (id === file) return createMockModule(file)
         return null
       })
-      server.moduleGraph.getModulesByFile = vi.fn().mockReturnValue(
-        new Set([createMockModule(file)])
-      )
+      server.moduleGraph.getModulesByFile = vi
+        .fn()
+        .mockReturnValue(new Set([createMockModule(file)]))
 
       const modules = handleIslandHMR(file, server)
 

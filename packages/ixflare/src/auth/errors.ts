@@ -24,10 +24,7 @@ export class TokenInvalidError extends AuthError {
 
 export class AlgorithmMismatchError extends AuthError {
   constructor(expected: string, received: string) {
-    super(
-      'ALGORITHM_MISMATCH',
-      `Algorithm mismatch: expected ${expected}, received ${received}`
-    )
+    super('ALGORITHM_MISMATCH', `Algorithm mismatch: expected ${expected}, received ${received}`)
     this.name = 'AlgorithmMismatchError'
   }
 }
