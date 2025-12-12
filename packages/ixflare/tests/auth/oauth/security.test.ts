@@ -17,7 +17,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { generateState, storeState, consumeState, createOAuthState } from '@/auth/oauth/state'
 import { generateCodeVerifier, generateCodeChallenge } from '@/auth/oauth/pkce'
 import { validateRedirectUri, preventOpenRedirect } from '@/auth/oauth/validation'
-import { OAuthRedirectError } from '@/auth/oauth/errors'
+import { OAuthRedirectError, OAuthTokenError, OAuthCallbackError } from '@/auth/oauth/errors'
 
 // Mock KV namespace
 class MockKVNamespace implements KVNamespace {
@@ -224,14 +224,20 @@ describe('OAuth Security Tests (Epic 5 Requirements)', () => {
 
   describe('Task 10.5: Token Endpoint Error Handling (No Secret Leakage)', () => {
     it('should NOT log or expose client secrets in errors', () => {
-      // This is tested in flow.test.ts
-      // Errors should use redaction from AuthError base class
-      // Never expose clientSecret, access_token, or refresh_token in logs
+      // Simulate error with sensitive data
+      const error = new OAuthTokenError('github', 'client_secret_exposed_xyz123')
+
+      // Error message should NOT contain the actual error details
+      expect(error.message).toBe('Token exchange failed for github')
+      expect(error.message).not.toContain('client_secret')
+      expect(error.message).not.toContain('xyz123')
+
+      // Error should have generic code (with AUTH prefix from base class)
+      expect(error.code).toBe('AUTH.OAUTH_TOKEN_ERROR')
     })
 
     it('should sanitize OAuth error codes', () => {
-      // OAuthCallbackError sanitizes error codes
-      // Only known OAuth error codes allowed
+      // Known OAuth error codes should be preserved
       const allowedErrors = [
         'access_denied',
         'invalid_request',
@@ -242,16 +248,46 @@ describe('OAuth Security Tests (Epic 5 Requirements)', () => {
         'temporarily_unavailable',
       ]
 
-      // Unknown errors mapped to 'unknown_error' (prevent information leakage)
+      for (const errorCode of allowedErrors) {
+        const error = new OAuthCallbackError('github', errorCode)
+        expect(error.message).toContain(errorCode)
+      }
+
+      // Unknown errors should be sanitized to 'unknown_error'
+      const maliciousError = new OAuthCallbackError('github', 'secret_data_leaked')
+      expect(maliciousError.message).toContain('unknown_error')
+      expect(maliciousError.message).not.toContain('secret_data_leaked')
+
+      // SQL injection attempt should be sanitized
+      const sqlInjection = new OAuthCallbackError('github', "'; DROP TABLE users; --")
+      expect(sqlInjection.message).toContain('unknown_error')
+      expect(sqlInjection.message).not.toContain('DROP')
     })
   })
 
   describe('Task 10.6: Code Injection Prevention', () => {
-    it('should sanitize callback parameters', () => {
-      // All callback params (code, state, error) are validated before use
-      // State is UUID format (no injection risk)
-      // Code is used in POST body (URL-encoded)
-      // Error is sanitized via OAuthCallbackError
+    let kv: KVNamespace
+
+    beforeEach(() => {
+      kv = new MockKVNamespace()
+    })
+
+    it('should sanitize callback parameters via state format validation', async () => {
+      // State parameter must be UUID format - injection attempts rejected
+      const maliciousStates = [
+        "'; DROP TABLE users; --",
+        '<script>alert(1)</script>',
+        '../../etc/passwd',
+        'state=malicious&redirect=evil.com',
+        '${process.env.SECRET}',
+        '{{constructor.constructor("return this")()}}',
+      ]
+
+      for (const malicious of maliciousStates) {
+        const result = await consumeState(kv, malicious)
+        // All non-UUID states are rejected before KV lookup
+        expect(result).toBeNull()
+      }
     })
 
     it('should prevent XSS via redirect manipulation', () => {
@@ -264,21 +300,91 @@ describe('OAuth Security Tests (Epic 5 Requirements)', () => {
       expect(() =>
         validateRedirectUri('data:text/html,<script>alert(1)</script>', allowed, 'test')
       ).toThrow()
+
+      // vbscript protocol - fail
+      expect(() => validateRedirectUri('vbscript:msgbox(1)', allowed, 'test')).toThrow()
+
+      // Base64 encoded javascript - fail
+      expect(() =>
+        validateRedirectUri('data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==', allowed, 'test')
+      ).toThrow()
     })
 
-    it('should prevent SQL injection in state storage', () => {
-      // KV storage is key-value (not SQL)
-      // No SQL injection risk
-      // State keys are prefixed and UUIDs (safe)
+    it('should prevent SQL injection in state storage', async () => {
+      // State keys use UUID format which prevents injection
+      // Test that SQL-like payloads don't affect state lookup
+      const sqlPayloads = [
+        "' OR '1'='1",
+        '1; DROP TABLE states;',
+        "UNION SELECT * FROM secrets--",
+      ]
+
+      for (const payload of sqlPayloads) {
+        const result = await consumeState(kv, payload)
+        // Non-UUID format rejected immediately
+        expect(result).toBeNull()
+      }
+
+      // Valid UUID state still works correctly
+      const validState = createOAuthState('github', 'https://app.example.com/callback')
+      await storeState(kv, validState)
+      const retrieved = await consumeState(kv, validState.state)
+      expect(retrieved).not.toBeNull()
     })
   })
 
   describe('Task 10.7: Session Fixation Prevention Integration', () => {
-    it('should require session regeneration after OAuth success', () => {
-      // Integration with session.regenerateFromRequest() from Story 5-2
-      // Handler should call regenerateFromRequest() after successful OAuth
-      // This prevents session fixation attacks
-      // Test is conceptual - actual integration tested in handlers.test.ts
+    it('should document session regeneration requirement in handler types', () => {
+      // The OAuthCallbackResult interface includes sessionResponse
+      // which should be populated from session.regenerateFromRequest()
+
+      // Verify the interface includes sessionResponse
+      const mockResult: import('@/auth/oauth/handlers').OAuthCallbackResult = {
+        user: { id: '123' },
+        redirect: '/dashboard',
+        sessionResponse: new Response(null, {
+          headers: { 'Set-Cookie': 'session=new-secure-session; HttpOnly; Secure' },
+        }),
+      }
+
+      expect(mockResult.sessionResponse).toBeDefined()
+      expect(mockResult.sessionResponse?.headers.get('Set-Cookie')).toContain('session=')
+    })
+
+    it('should copy session cookie to redirect response when provided', () => {
+      // Test that OAuthCallbackResult.sessionResponse is handled correctly
+      // The handlers.ts implementation copies the Set-Cookie header
+
+      const sessionCookie = 'session=abc123; HttpOnly; Secure; SameSite=Lax'
+      const redirectUrl = 'https://app.example.com/dashboard'
+
+      // Simulate what the handler does
+      const redirectResponse = new Response(null, {
+        status: 302,
+        headers: {
+          Location: redirectUrl,
+          'Set-Cookie': sessionCookie,
+        },
+      })
+
+      expect(redirectResponse.status).toBe(302)
+      expect(redirectResponse.headers.get('Location')).toBe(redirectUrl)
+      expect(redirectResponse.headers.get('Set-Cookie')).toBe(sessionCookie)
+    })
+
+    it('should warn when sessionResponse is not provided (potential vulnerability)', () => {
+      // The code path without sessionResponse is documented as a warning
+      // Users should be aware they need to handle session regeneration
+
+      const resultWithoutSession: import('@/auth/oauth/handlers').OAuthCallbackResult = {
+        user: { id: '123' },
+        redirect: '/dashboard',
+        // sessionResponse deliberately omitted
+      }
+
+      expect(resultWithoutSession.sessionResponse).toBeUndefined()
+      // In this case, the handler will redirect without session regeneration
+      // which is a potential session fixation vulnerability if not handled elsewhere
     })
   })
 

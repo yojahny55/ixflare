@@ -25,11 +25,11 @@ import { getProfileNormalizer } from './providers'
 
 /**
  * OAuth handler context provided to route handlers
+ * @template Env - Environment bindings type
  */
-export interface OAuthContext {
+export interface OAuthContext<Env extends Record<string, unknown> = Record<string, unknown>> {
   request: Request
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  env: Record<string, any>
+  env: Env
   kv?: KVNamespace
 }
 
@@ -45,9 +45,14 @@ export interface OAuthRedirectOptions {
  * OAuth callback handler result
  */
 export interface OAuthCallbackResult {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  user: Record<string, any>
+  user: Record<string, unknown>
   redirect: string
+  /**
+   * Response with session cookie (from session.regenerateFromRequest)
+   * SECURITY: Required for session fixation prevention per Epic 5 requirements
+   * If not provided, handler will redirect without session - caller must handle session separately
+   */
+  sessionResponse?: Response
 }
 
 /**
@@ -56,13 +61,14 @@ export interface OAuthCallbackResult {
  *
  * @param provider - Provider configuration
  * @param options - Redirect options
+ * @template Env - Environment bindings type
  */
-export function handleOAuthRedirect(
+export function handleOAuthRedirect<Env extends Record<string, unknown> = Record<string, unknown>>(
   provider: OAuthProviderConfig,
   options: OAuthRedirectOptions = {}
 ) {
-  return async (ctx: OAuthContext): Promise<Response> => {
-    const kv = ctx.env.KV || ctx.kv
+  return async (ctx: OAuthContext<Env>): Promise<Response> => {
+    const kv = (ctx.env as Record<string, unknown>).KV as KVNamespace | undefined || ctx.kv
     if (!kv) {
       throw new OAuthError(
         'KV_NOT_CONFIGURED',
@@ -112,23 +118,51 @@ export function handleOAuthRedirect(
 
 /**
  * OAuth callback handler type
+ *
+ * SECURITY: Your handler MUST call session.regenerateFromRequest() after successful OAuth
+ * and pass the response as sessionResponse to prevent session fixation attacks.
+ *
+ * @example
+ * ```typescript
+ * export const GET = handleOAuthCallback(githubProvider, async (profile, tokens, ctx) => {
+ *   let user = await User.where({ githubId: profile.id }).first()
+ *   if (!user) {
+ *     user = await User.create({ email: profile.email, githubId: profile.id })
+ *   }
+ *
+ *   // REQUIRED: Regenerate session to prevent session fixation
+ *   const sessionResponse = await session.regenerateFromRequest(ctx.request, {
+ *     userId: user.id,
+ *     provider: 'github',
+ *   })
+ *
+ *   return { user, redirect: '/dashboard', sessionResponse }
+ * })
+ * ```
  */
-export type OAuthCallbackHandler = (
+export type OAuthCallbackHandler<Env extends Record<string, unknown> = Record<string, unknown>> = (
   profile: OAuthProfile,
   tokens: OAuthTokens,
-  ctx: OAuthContext
+  ctx: OAuthContext<Env>
 ) => Promise<OAuthCallbackResult>
 
 /**
  * Create OAuth callback handler (GET /auth/{provider}/callback)
  * Handles OAuth callback, exchanges code for tokens, and calls user handler
  *
+ * SECURITY: Your handler MUST call session.regenerateFromRequest() and return
+ * the sessionResponse to prevent session fixation attacks.
+ *
  * @param provider - Provider configuration
  * @param handler - User callback handler
+ * @template Env - Environment bindings type
  */
-export function handleOAuthCallback(provider: OAuthProviderConfig, handler: OAuthCallbackHandler) {
-  return async (ctx: OAuthContext): Promise<Response> => {
-    const kv = ctx.env.KV || ctx.kv
+export function handleOAuthCallback<Env extends Record<string, unknown> = Record<string, unknown>>(
+  provider: OAuthProviderConfig,
+  handler: OAuthCallbackHandler<Env>
+) {
+  return async (ctx: OAuthContext<Env>): Promise<Response> => {
+    const kv = (ctx.env as Record<string, unknown>).KV as KVNamespace | undefined || ctx.kv
     if (!kv) {
       throw new OAuthError(
         'KV_NOT_CONFIGURED',
@@ -182,6 +216,26 @@ export function handleOAuthCallback(provider: OAuthProviderConfig, handler: OAut
       ? new URL(result.redirect, ctx.request.url).toString()
       : result.redirect
 
+    // SECURITY: Session fixation prevention (Epic 5 requirement)
+    // If sessionResponse is provided (from session.regenerateFromRequest),
+    // copy session cookies to redirect response
+    if (result.sessionResponse) {
+      const sessionCookie = result.sessionResponse.headers.get('Set-Cookie')
+      if (sessionCookie) {
+        // Create new response with session cookie
+        return new Response(null, {
+          status: 302,
+          headers: {
+            Location: redirectUrl,
+            'Set-Cookie': sessionCookie,
+          },
+        })
+      }
+    }
+
+    // WARNING: Redirecting without session regeneration
+    // Caller should use session.regenerateFromRequest() in their handler
+    // to prevent session fixation attacks
     return Response.redirect(redirectUrl, 302)
   }
 }

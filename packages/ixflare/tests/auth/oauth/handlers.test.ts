@@ -194,8 +194,8 @@ describe('OAuth Route Handlers', () => {
 
       const handler = handleOAuthCallback(mockProvider, userHandler)
 
-      // Simulate state storage
-      const stateParam = 'test-state-123'
+      // Simulate state storage (must use valid UUID v4 format)
+      const stateParam = 'a1b2c3d4-e5f6-4a7b-8c9d-ae1f2a3b4c5d'
       const state = {
         state: stateParam,
         provider: 'github',
@@ -278,8 +278,8 @@ describe('OAuth Route Handlers', () => {
         redirect: '/',
       }))
 
-      // Store state for different provider
-      const stateParam = 'test-state-123'
+      // Store state for different provider (must use valid UUID v4 format)
+      const stateParam = 'b2c3d4e5-f6a7-4b8c-9d0e-af2a3b4c5d6e'
       const state = {
         state: stateParam,
         provider: 'google', // Different provider!
@@ -330,7 +330,8 @@ describe('OAuth Route Handlers', () => {
         redirect: '/',
       }))
 
-      const stateParam = 'test-state-123'
+      // Must use valid UUID v4 format for state parameter
+      const stateParam = 'c3d4e5f6-a7b8-4c9d-8e1f-2a3b4c5d6e7f'
       const state = {
         state: stateParam,
         provider: 'github',

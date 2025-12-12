@@ -34,15 +34,26 @@ export async function storeState(kv: KVNamespace, state: OAuthState): Promise<vo
 }
 
 /**
+ * Validate state parameter format (UUID v4)
+ * Prevents timing-based enumeration attacks by validating format before KV lookup
+ */
+const STATE_FORMAT_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+/**
  * Consume OAuth state - retrieve and delete (single-use per RFC 9700)
  * @param kv - KV namespace for state storage
  * @param stateParam - State parameter from OAuth callback
- * @returns OAuth state or null if not found/expired
+ * @returns OAuth state or null if not found/expired/invalid format
  */
 export async function consumeState(
   kv: KVNamespace,
   stateParam: string
 ): Promise<OAuthState | null> {
+  // Validate state format before KV lookup to prevent timing-based enumeration attacks
+  if (!STATE_FORMAT_REGEX.test(stateParam)) {
+    return null
+  }
+
   const key = `${STATE_PREFIX}${stateParam}`
   const data = await kv.get(key)
   if (!data) return null

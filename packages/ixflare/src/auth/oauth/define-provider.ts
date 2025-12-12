@@ -9,6 +9,7 @@
  */
 
 import type { OAuthProviderConfig } from './types'
+import { OAuthError } from './errors'
 
 /**
  * Define a custom OAuth provider
@@ -20,26 +21,26 @@ export function defineOAuthProvider(
 ): Omit<OAuthProviderConfig, 'clientId' | 'clientSecret'> {
   // Validate required fields
   if (!config.id) {
-    throw new Error('Provider ID is required')
+    throw new OAuthError('OAUTH_CONFIG_INVALID', 'Provider ID is required', 'unknown')
   }
 
   if (!config.authorizationUrl) {
-    throw new Error('Authorization URL is required')
+    throw new OAuthError('OAUTH_CONFIG_INVALID', 'Authorization URL is required', config.id)
   }
 
   if (!config.tokenUrl) {
-    throw new Error('Token URL is required')
+    throw new OAuthError('OAUTH_CONFIG_INVALID', 'Token URL is required', config.id)
   }
 
   if (!config.scopes || config.scopes.length === 0) {
-    throw new Error('At least one scope is required')
+    throw new OAuthError('OAUTH_CONFIG_INVALID', 'At least one scope is required', config.id)
   }
 
   // Validate URLs are HTTPS (security requirement)
-  validateHttpsUrl(config.authorizationUrl, 'Authorization URL')
-  validateHttpsUrl(config.tokenUrl, 'Token URL')
+  validateHttpsUrl(config.authorizationUrl, 'Authorization URL', config.id)
+  validateHttpsUrl(config.tokenUrl, 'Token URL', config.id)
   if (config.userInfoUrl) {
-    validateHttpsUrl(config.userInfoUrl, 'User Info URL')
+    validateHttpsUrl(config.userInfoUrl, 'User Info URL', config.id)
   }
 
   return config
@@ -48,15 +49,15 @@ export function defineOAuthProvider(
 /**
  * Validate that URL is HTTPS
  */
-function validateHttpsUrl(url: string, field: string): void {
+function validateHttpsUrl(url: string, field: string, providerId: string): void {
   try {
     const parsed = new URL(url)
     if (parsed.protocol !== 'https:') {
-      throw new Error(`${field} must use HTTPS protocol`)
+      throw new OAuthError('OAUTH_CONFIG_INVALID', `${field} must use HTTPS protocol`, providerId)
     }
   } catch (error) {
     if (error instanceof TypeError) {
-      throw new Error(`${field} is not a valid URL`)
+      throw new OAuthError('OAUTH_CONFIG_INVALID', `${field} is not a valid URL`, providerId)
     }
     throw error
   }
@@ -74,7 +75,7 @@ export async function discoverOAuthProvider(
   id: string,
   scopes: string[]
 ): Promise<Omit<OAuthProviderConfig, 'clientId' | 'clientSecret'>> {
-  validateHttpsUrl(issuerUrl, 'Issuer URL')
+  validateHttpsUrl(issuerUrl, 'Issuer URL', id)
 
   // Construct discovery URL (.well-known/openid-configuration)
   const discoveryUrl = `${issuerUrl.replace(/\/$/, '')}/.well-known/openid-configuration`
@@ -82,7 +83,11 @@ export async function discoverOAuthProvider(
   try {
     const response = await fetch(discoveryUrl)
     if (!response.ok) {
-      throw new Error(`OIDC discovery failed: HTTP ${response.status}`)
+      throw new OAuthError(
+        'OIDC_DISCOVERY_FAILED',
+        `OIDC discovery failed: HTTP ${response.status}`,
+        id
+      )
     }
 
     const metadata = (await response.json()) as {
@@ -100,8 +105,11 @@ export async function discoverOAuthProvider(
       pkce: true, // OIDC providers typically support PKCE
     })
   } catch (error) {
+    if (error instanceof OAuthError) {
+      throw error
+    }
     if (error instanceof Error) {
-      throw new Error(`OIDC discovery failed: ${error.message}`)
+      throw new OAuthError('OIDC_DISCOVERY_FAILED', `OIDC discovery failed: ${error.message}`, id)
     }
     throw error
   }
