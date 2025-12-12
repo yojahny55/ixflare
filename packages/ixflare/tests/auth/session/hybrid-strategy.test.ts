@@ -393,14 +393,80 @@ describe('HybridSessionStrategy', () => {
         role: 'guest',
       })
 
-      // After login, regenerate session
+      // After login, regenerate session with old session ID
+      const postAuth = await strategy.regenerate(
+        {
+          userId: 'user-123',
+          role: 'admin',
+        },
+        preAuth.sessionId
+      )
+
+      // Session ID MUST be different
+      expect(postAuth.sessionId).not.toBe(preAuth.sessionId)
+    })
+
+    it('should revoke old session when regenerating (AC7: old session is invalidated)', async () => {
+      // Create pre-auth session
+      const preAuth = await strategy.create({
+        userId: 'anonymous',
+        role: 'guest',
+      })
+
+      // Create request with pre-auth token
+      const oldRequest = new Request('https://example.com', {
+        headers: {
+          Cookie: `__session=${preAuth.token}`,
+        },
+      })
+
+      // Verify old session is valid before regeneration
+      const oldSession = await strategy.get(oldRequest)
+      expect(oldSession).toBeTruthy()
+      expect(oldSession!.sessionId).toBe(preAuth.sessionId)
+
+      // Regenerate with old session ID (simulating post-login)
+      const postAuth = await strategy.regenerate(
+        {
+          userId: 'user-123',
+          role: 'admin',
+        },
+        preAuth.sessionId // Pass old session ID for revocation
+      )
+
+      // Verify new session is different
+      expect(postAuth.sessionId).not.toBe(preAuth.sessionId)
+
+      // CRITICAL: Old session MUST be revoked (AC7 requirement)
+      await expect(strategy.get(oldRequest)).rejects.toThrow(SessionRevokedError)
+    })
+
+    it('should NOT revoke old session if oldSessionId is not provided', async () => {
+      // Create pre-auth session
+      const preAuth = await strategy.create({
+        userId: 'anonymous',
+        role: 'guest',
+      })
+
+      // Regenerate WITHOUT providing old session ID
       const postAuth = await strategy.regenerate({
         userId: 'user-123',
         role: 'admin',
       })
 
-      // Session ID MUST be different
+      // New session should be different
       expect(postAuth.sessionId).not.toBe(preAuth.sessionId)
+
+      // Old session should still be valid (no revocation without oldSessionId)
+      const oldRequest = new Request('https://example.com', {
+        headers: {
+          Cookie: `__session=${preAuth.token}`,
+        },
+      })
+
+      const oldSession = await strategy.get(oldRequest)
+      expect(oldSession).toBeTruthy()
+      expect(oldSession!.sessionId).toBe(preAuth.sessionId)
     })
   })
 

@@ -194,11 +194,21 @@ export class HybridSessionStrategy implements SessionStrategy {
    * Regenerate session ID (session fixation prevention)
    * MUST be called after authentication (OWASP requirement)
    *
-   * Creates new session with new ID and optionally revokes old session
+   * Creates new session with new ID and revokes old session if provided
+   * AC7: "the old session is invalidated" - this is critical for session fixation prevention
+   *
+   * @param data - New session data
+   * @param oldSessionId - Old session ID to revoke (RECOMMENDED for proper security)
    */
   async regenerate(
-    data: Omit<SessionData, 'sessionId' | 'iat' | 'exp'>
+    data: Omit<SessionData, 'sessionId' | 'iat' | 'exp'>,
+    oldSessionId?: string
   ): Promise<{ token: string; sessionId: string }> {
+    // Revoke old session if provided (AC7 requirement: old session must be invalidated)
+    if (oldSessionId) {
+      await this.revoke(oldSessionId)
+    }
+
     // Create new session with new session ID
     return this.create(data)
   }

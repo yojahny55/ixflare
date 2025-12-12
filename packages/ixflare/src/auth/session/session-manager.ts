@@ -93,19 +93,21 @@ class SessionManager {
    * MUST be called after authentication (OWASP requirement)
    *
    * @param data - Updated session data
-   * @param response - Optional existing response to add cookie to
+   * @param options - Regeneration options
+   * @param options.oldSessionId - Old session ID to revoke (required for AC7 compliance with hybrid strategy)
+   * @param options.response - Optional existing response to add cookie to
    * @returns Response with new session cookie
    */
   async regenerate(
     data: Omit<SessionData, 'sessionId' | 'iat' | 'exp'>,
-    response?: Response
+    options?: { oldSessionId?: string; response?: Response }
   ): Promise<Response> {
     this.ensureConfigured()
 
-    const { token } = await this.strategy!.regenerate(data)
+    const { token } = await this.strategy!.regenerate(data, options?.oldSessionId)
 
     // Set cookie on response
-    const baseResponse = response || new Response(null, { status: 200 })
+    const baseResponse = options?.response || new Response(null, { status: 200 })
 
     return setCookie(baseResponse, this.config!.cookie.name, token, {
       httpOnly: this.config!.cookie.httpOnly,
@@ -114,6 +116,37 @@ class SessionManager {
       maxAge: this.config!.cookie.maxAge,
       path: this.config!.cookie.path,
       domain: this.config!.cookie.domain,
+    })
+  }
+
+  /**
+   * Regenerate session from request (convenience method)
+   * Extracts current session, revokes it, and creates new session
+   * This is the recommended method for session fixation prevention (AC7)
+   *
+   * @param request - Request with current session cookie
+   * @param data - New session data
+   * @param response - Optional existing response to add cookie to
+   * @returns Response with new session cookie, or null if no valid session exists
+   */
+  async regenerateFromRequest(
+    request: Request,
+    data: Omit<SessionData, 'sessionId' | 'iat' | 'exp'>,
+    response?: Response
+  ): Promise<Response | null> {
+    this.ensureConfigured()
+
+    // Get current session to extract sessionId
+    const currentSession = await this.get(request)
+
+    if (!currentSession) {
+      return null
+    }
+
+    // Regenerate with old session ID for revocation
+    return this.regenerate(data, {
+      oldSessionId: currentSession.sessionId,
+      response,
     })
   }
 
@@ -184,13 +217,15 @@ class SessionManager {
 
     if (session.exp - now <= threshold) {
       // Session near expiry, issue new token
+      // Note: For refresh, we don't revoke old session as both are for the same user
+      // Refresh is for convenience (sliding window), not security (like regenerate after auth)
       return this.regenerate(
         {
           userId: session.userId,
           role: session.role,
           device: session.device,
         },
-        response
+        { response }
       )
     }
 

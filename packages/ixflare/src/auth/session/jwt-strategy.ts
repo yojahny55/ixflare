@@ -109,13 +109,20 @@ export class JWTSessionStrategy implements SessionStrategy {
    * Regenerate session ID (session fixation prevention)
    * MUST be called after authentication (OWASP requirement)
    *
-   * Creates new session with new session ID, invalidating the old one
+   * Creates new session with new session ID.
+   * NOTE: JWT strategy is stateless - old tokens remain valid until expiry.
+   * For immediate revocation, use hybrid strategy instead.
+   *
+   * @param data - New session data
+   * @param _oldSessionId - Ignored for JWT strategy (no revocation support)
    */
   async regenerate(
-    data: Omit<SessionData, 'sessionId' | 'iat' | 'exp'>
+    data: Omit<SessionData, 'sessionId' | 'iat' | 'exp'>,
+    _oldSessionId?: string
   ): Promise<{ token: string; sessionId: string }> {
     // Simply create a new session with a new session ID
-    // The old token will naturally expire (stateless, no revocation needed)
+    // The old token will naturally expire (stateless, no revocation capability)
+    // For immediate revocation, use hybrid strategy
     return this.create(data)
   }
 }

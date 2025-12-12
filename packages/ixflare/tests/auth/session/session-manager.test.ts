@@ -116,10 +116,13 @@ describe('Session Manager', () => {
 
       const originalToken = original.headers.get('Set-Cookie')!.split(';')[0].split('=')[1]
 
-      const regenerated = await session.regenerate({
-        userId: 'user-123',
-        role: 'admin', // Changed role
-      })
+      const regenerated = await session.regenerate(
+        {
+          userId: 'user-123',
+          role: 'admin', // Changed role
+        }
+        // Note: oldSessionId not passed for JWT strategy (no revocation support)
+      )
 
       const regeneratedToken = regenerated.headers.get('Set-Cookie')!.split(';')[0].split('=')[1]
 
@@ -230,6 +233,87 @@ describe('Session Manager', () => {
 
       expect(await session.isValid(request1)).toBe(false)
       expect(await session.isValid(request2)).toBe(false)
+    })
+
+    describe('Session Fixation Prevention (AC7)', () => {
+      it('should revoke old session when using regenerate with oldSessionId', async () => {
+        // Create initial session
+        const createResponse = await session.create({
+          userId: 'anonymous',
+          role: 'guest',
+        })
+
+        const token = createResponse.headers.get('Set-Cookie')!.split(';')[0].split('=')[1]
+        const decoded = jwt.decode(token)
+        const oldSessionId = decoded.payload.sessionId as string
+
+        // Create request with old session
+        const oldRequest = new Request('https://example.com', {
+          headers: { Cookie: `__session=${token}` },
+        })
+
+        // Verify old session is valid
+        expect(await session.isValid(oldRequest)).toBe(true)
+
+        // Regenerate with old session ID (AC7: invalidate old session)
+        await session.regenerate(
+          { userId: 'user-123', role: 'admin' },
+          { oldSessionId }
+        )
+
+        // CRITICAL: Old session MUST be revoked
+        expect(await session.isValid(oldRequest)).toBe(false)
+      })
+
+      it('should regenerate and revoke old session using regenerateFromRequest', async () => {
+        // Create initial session
+        const createResponse = await session.create({
+          userId: 'anonymous',
+          role: 'guest',
+        })
+
+        const token = createResponse.headers.get('Set-Cookie')!.split(';')[0].split('=')[1]
+
+        // Create request with old session
+        const request = new Request('https://example.com', {
+          headers: { Cookie: `__session=${token}` },
+        })
+
+        // Verify old session is valid
+        expect(await session.isValid(request)).toBe(true)
+
+        // Use convenience method to regenerate from request
+        const newResponse = await session.regenerateFromRequest(
+          request,
+          { userId: 'user-123', role: 'admin' }
+        )
+
+        expect(newResponse).toBeTruthy()
+
+        // Get new token
+        const newToken = newResponse!.headers.get('Set-Cookie')!.split(';')[0].split('=')[1]
+        expect(newToken).not.toBe(token)
+
+        // CRITICAL: Old session MUST be revoked
+        expect(await session.isValid(request)).toBe(false)
+
+        // New session should be valid
+        const newRequest = new Request('https://example.com', {
+          headers: { Cookie: `__session=${newToken}` },
+        })
+        expect(await session.isValid(newRequest)).toBe(true)
+      })
+
+      it('should return null from regenerateFromRequest if no valid session exists', async () => {
+        const request = new Request('https://example.com')
+
+        const result = await session.regenerateFromRequest(
+          request,
+          { userId: 'user-123', role: 'admin' }
+        )
+
+        expect(result).toBeNull()
+      })
     })
   })
 

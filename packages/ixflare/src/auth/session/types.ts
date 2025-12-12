@@ -108,8 +108,14 @@ export interface SessionStrategy {
   /**
    * Regenerate session ID (session fixation prevention)
    * MUST be called after authentication
+   *
+   * @param data - New session data
+   * @param oldSessionId - Optional old session ID to revoke (required for proper fixation prevention in hybrid strategy)
    */
-  regenerate(data: Omit<SessionData, 'sessionId' | 'iat' | 'exp'>): Promise<{
+  regenerate(
+    data: Omit<SessionData, 'sessionId' | 'iat' | 'exp'>,
+    oldSessionId?: string
+  ): Promise<{
     token: string
     sessionId: string
   }>
