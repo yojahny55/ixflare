@@ -38,6 +38,8 @@ import {
   validateChunkSizes,
   logChunkSizeReport,
   generateChunkManifest,
+  analyzeServerCodeRemoval,
+  logServerOnlyRemovalReport,
 } from './build'
 import {
   setupHMR,
@@ -52,6 +54,9 @@ import {
   type HydrationManifest,
 } from './hydration-manifest'
 import { createRouteChunks } from './code-splitting'
+import {
+  transformServerExports,
+} from './server-only-removal'
 
 /**
  * Check if a directory contains frontend route files (*.tsx)
@@ -182,11 +187,16 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
   let hydrationManifest: HydrationManifest | null = null
   // Track whether code splitting is actually enabled (resolved from 'auto')
   let codeSplittingEnabled: boolean = false
+  // Track build command for transform hook
+  let isBuildCommand: boolean = false
 
   return {
     name: 'vite-plugin-ixflare',
 
     async config(config, { command }) {
+      // Store build command for transform hook
+      isBuildCommand = command === 'build'
+
       // Resolve project root early to check for frontend routes
       const root = config.root || process.cwd()
       const fullRoutesDir = join(root, routesDir)
@@ -241,13 +251,53 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
     },
 
     // Resolve virtual module ID
-    resolveId(id) {
-      if (id === VIRTUAL_MODULE_ID) {
+    resolveId(source, importer) {
+      if (source === VIRTUAL_MODULE_ID) {
         return RESOLVED_VIRTUAL_MODULE_ID
       }
-      if (id === VIRTUAL_ISLANDS_ID) {
+      if (source === VIRTUAL_ISLANDS_ID) {
         return RESOLVED_ISLANDS_ID
       }
+
+      // Server-only boundary enforcement (only during build)
+      if (isBuildCommand) {
+        // Handle server-only package imports
+        if (source === 'server-only') {
+          return '\0server-only'
+        }
+
+        // Check for .server file imports in client code
+        if (source.includes('.server') && importer) {
+          const ssr = (this as any).environment?.name === 'ssr' || (this as any).ssr
+
+          // Only enforce boundary during client build
+          if (!ssr) {
+            const normalizedImporter = importer.replace(/\\/g, '/')
+
+            // Check if the importer is also a server file - that's allowed
+            const importerIsServerFile =
+              normalizedImporter.includes('.server.ts') ||
+              normalizedImporter.includes('.server.tsx') ||
+              normalizedImporter.includes('/.server/') ||
+              normalizedImporter.includes('\\.server\\')
+
+            if (!importerIsServerFile) {
+              // Client code trying to import server-only code - this is an error!
+              const importerPath = importer.replace(projectRoot || process.cwd(), '.')
+
+              this.error({
+                message: `Cannot import server-only module "${source}" from client code`,
+                id: importerPath,
+                meta: {
+                  suggestion:
+                    'Move this import to a loader function or .server.ts file, or mark the importing file with .server.ts extension',
+                },
+              })
+            }
+          }
+        }
+      }
+
       return null
     },
 
@@ -278,6 +328,38 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
         return `import { setIslandRegistry } from 'ixflare/client'\n\n${imports}\n\nsetIslandRegistry({\n${registry}\n})`
       }
 
+      // Handle server-only module (only during build)
+      if (isBuildCommand && id === '\0server-only') {
+        const ssr = (this as any).environment?.name === 'ssr' || (this as any).ssr
+
+        // In server build: provide empty module (no-op)
+        // In client build: throw error if somehow reached
+        if (!ssr) {
+          // Build should have failed in resolveId, but add extra safety
+          this.error({
+            message: 'server-only module imported in client code',
+            meta: {
+              suggestion:
+                'This import should only exist in server code (loaders, .server files)',
+            },
+          })
+        }
+
+        // Return empty export for server builds
+        return 'export {}'
+      }
+
+      return null
+    },
+
+    // Transform hook for server-only code removal
+    transform(code, id) {
+      // Only apply during build (not dev mode)
+      if (isBuildCommand) {
+        // Get SSR mode from environment
+        const ssr = (this as any).environment?.name === 'ssr' || (this as any).ssr
+        return transformServerExports(code, id, routesDir, ssr)
+      }
       return null
     },
 
@@ -381,6 +463,15 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
 
     async writeBundle(options, bundle) {
       const outputDir = options.dir || 'dist'
+
+      // Analyze server-only code removal (always run during build)
+      if (isBuildCommand) {
+        const serverRemovalReport = analyzeServerCodeRemoval(bundle)
+        logServerOnlyRemovalReport(serverRemovalReport, {
+          info: (msg) => this.info(msg),
+          warn: (msg) => this.warn(msg),
+        })
+      }
 
       // Validate bundle sizes if code splitting is enabled
       if (codeSplittingEnabled) {
