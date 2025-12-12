@@ -54,21 +54,18 @@ export function isRouteFile(id: string, routesDir: string): boolean {
  * Supports multiple file extensions: .ts, .tsx, .js, .jsx, .mts, .mjs
  *
  * @param id - The module ID (file path) to check
- * @returns True if the file has a .server.* extension
+ * @returns True if the file has a .server.* extension at the END of the filename
  *
  * @example
  * isServerFile('/project/src/lib/db.server.ts') // true
  * isServerFile('/project/src/lib/db.server.js') // true
  * isServerFile('/project/src/lib/utils.ts') // false
+ * isServerFile('/project/src/lib/my.server.test.ts') // false (not at end)
  */
 export function isServerFile(id: string): boolean {
   const normalizedId = id.replace(/\\/g, '/')
-  // Match .server followed by common JS/TS extensions
-  return /\.server\.(ts|tsx|js|jsx|mts|mjs)$/i.test(normalizedId) ||
-         normalizedId.includes('.server.ts') ||
-         normalizedId.includes('.server.tsx') ||
-         normalizedId.includes('.server.js') ||
-         normalizedId.includes('.server.jsx')
+  // Match .server followed by common JS/TS extensions at END of filename only
+  return /\.server\.(ts|tsx|js|jsx|mts|mjs)$/i.test(normalizedId)
 }
 
 /**
@@ -88,14 +85,239 @@ export function isInServerDirectory(id: string): boolean {
 }
 
 /**
+ * Find the index of the closing brace that matches the opening brace at startIndex.
+ * Handles arbitrary nesting depth, strings, template literals, and comments.
+ *
+ * @param code - Source code string
+ * @param startIndex - Index of the opening brace '{'
+ * @returns Index of the matching closing brace '}', or -1 if not found
+ *
+ * @example
+ * findMatchingBrace('{ if (x) { return y } }', 0) // returns 22
+ * findMatchingBrace('{ nested { more { deep } } }', 0) // returns 27
+ */
+function findMatchingBrace(code: string, startIndex: number): number {
+  if (code[startIndex] !== '{') {
+    return -1
+  }
+
+  let depth = 0
+  let inString: string | null = null // Track quote type: '"', "'", or '`'
+  let inLineComment = false
+  let inBlockComment = false
+
+  for (let i = startIndex; i < code.length; i++) {
+    const char = code[i]
+    const nextChar = code[i + 1]
+    const prevChar = code[i - 1]
+
+    // Handle line comments
+    if (!inString && !inBlockComment && char === '/' && nextChar === '/') {
+      inLineComment = true
+      continue
+    }
+    if (inLineComment && char === '\n') {
+      inLineComment = false
+      continue
+    }
+    if (inLineComment) continue
+
+    // Handle block comments
+    if (!inString && !inLineComment && char === '/' && nextChar === '*') {
+      inBlockComment = true
+      i++ // Skip the '*'
+      continue
+    }
+    if (inBlockComment && char === '*' && nextChar === '/') {
+      inBlockComment = false
+      i++ // Skip the '/'
+      continue
+    }
+    if (inBlockComment) continue
+
+    // Handle strings (including template literals)
+    if (!inString && (char === '"' || char === "'" || char === '`')) {
+      inString = char
+      continue
+    }
+    if (inString && char === inString && prevChar !== '\\') {
+      inString = null
+      continue
+    }
+    if (inString) continue
+
+    // Count braces
+    if (char === '{') {
+      depth++
+    } else if (char === '}') {
+      depth--
+      if (depth === 0) {
+        return i
+      }
+    }
+  }
+
+  return -1 // No matching brace found
+}
+
+/**
+ * Find and replace a function export with an empty stub.
+ * Uses brace-counting to handle arbitrary nesting depth.
+ *
+ * @param code - Source code
+ * @param exportName - Name of the export to replace (e.g., 'loader')
+ * @param isAsync - Whether the function is async
+ * @returns Object with transformed code and whether a change was made
+ */
+function replaceExportFunction(
+  code: string,
+  exportName: string,
+  isAsync: boolean
+): { code: string; changed: boolean } {
+  // Pattern to find the start of the function: export [async] function name(
+  const pattern = isAsync
+    ? new RegExp(`export\\s+async\\s+function\\s+${exportName}\\s*\\(`)
+    : new RegExp(`export\\s+function\\s+${exportName}\\s*\\(`)
+
+  const match = pattern.exec(code)
+  if (!match) {
+    return { code, changed: false }
+  }
+
+  const startIndex = match.index
+
+  // Find the opening brace of the function body
+  let braceIndex = code.indexOf('{', startIndex + match[0].length)
+  if (braceIndex === -1) {
+    return { code, changed: false }
+  }
+
+  // Skip any type annotations between ) and {
+  // e.g., export function loader(): Promise<Data> { ... }
+  const afterParams = code.slice(startIndex + match[0].length)
+  const closingParenIndex = afterParams.indexOf(')')
+  if (closingParenIndex !== -1) {
+    braceIndex = code.indexOf('{', startIndex + match[0].length + closingParenIndex)
+    if (braceIndex === -1) {
+      return { code, changed: false }
+    }
+  }
+
+  // Find the matching closing brace
+  const endIndex = findMatchingBrace(code, braceIndex)
+  if (endIndex === -1) {
+    return { code, changed: false }
+  }
+
+  // Replace the entire function with an empty stub
+  const stub = isAsync
+    ? `export async function ${exportName}() { /* server-only: removed in client build */ }`
+    : `export function ${exportName}() { /* server-only: removed in client build */ }`
+
+  const newCode = code.slice(0, startIndex) + stub + code.slice(endIndex + 1)
+
+  return { code: newCode, changed: true }
+}
+
+/**
+ * Find and replace a const arrow function export with an empty stub.
+ * Uses brace-counting for arrow functions with body blocks.
+ *
+ * @param code - Source code
+ * @param exportName - Name of the export to replace (e.g., 'loader')
+ * @returns Object with transformed code and whether a change was made
+ */
+function replaceExportConst(
+  code: string,
+  exportName: string
+): { code: string; changed: boolean } {
+  // Pattern to find: export const name = or export const name: Type =
+  const pattern = new RegExp(`export\\s+const\\s+${exportName}\\s*(?::[^=]+)?\\s*=`)
+
+  const match = pattern.exec(code)
+  if (!match) {
+    return { code, changed: false }
+  }
+
+  const startIndex = match.index
+  const afterEquals = startIndex + match[0].length
+
+  // Find if there's an arrow function with a brace body
+  const restOfCode = code.slice(afterEquals)
+
+  // Check for arrow function: async? (...) => { or async? param =>
+  const arrowMatch = restOfCode.match(/^\s*(?:async\s*)?\([^)]*\)\s*=>|^\s*(?:async\s*)?[\w$]+\s*=>/)
+  if (!arrowMatch) {
+    // Not an arrow function, could be other assignment - skip
+    return { code, changed: false }
+  }
+
+  const arrowEnd = afterEquals + arrowMatch[0].length
+
+  // Check if the body is a block (starts with {) or expression
+  const afterArrow = code.slice(arrowEnd).trimStart()
+
+  if (afterArrow.startsWith('{')) {
+    // Block body - find matching brace
+    const braceStart = code.indexOf('{', arrowEnd)
+    const braceEnd = findMatchingBrace(code, braceStart)
+
+    if (braceEnd === -1) {
+      return { code, changed: false }
+    }
+
+    const stub = `export const ${exportName} = () => { /* server-only: removed in client build */ }`
+    const newCode = code.slice(0, startIndex) + stub + code.slice(braceEnd + 1)
+
+    return { code: newCode, changed: true }
+  } else {
+    // Expression body - find the end (next semicolon or newline with export/const/function/etc)
+    // This is trickier, look for ; or newline followed by export/const/etc
+    let endIndex = arrowEnd
+    let depth = 0
+
+    for (let i = arrowEnd; i < code.length; i++) {
+      const char = code[i]
+
+      if (char === '(' || char === '[' || char === '{') depth++
+      if (char === ')' || char === ']' || char === '}') depth--
+
+      if (depth === 0 && char === ';') {
+        endIndex = i
+        break
+      }
+
+      if (depth === 0 && char === '\n') {
+        // Check if next non-whitespace is a new statement
+        const rest = code.slice(i + 1).trimStart()
+        if (rest.match(/^(export|const|let|var|function|class|import|\/\/|\/\*)/)) {
+          endIndex = i
+          break
+        }
+      }
+
+      if (i === code.length - 1) {
+        endIndex = i + 1
+      }
+    }
+
+    const stub = `export const ${exportName} = () => { /* server-only: removed in client build */ }`
+    const newCode = code.slice(0, startIndex) + stub + code.slice(endIndex)
+
+    return { code: newCode, changed: true }
+  }
+}
+
+/**
  * Transform hook to remove server-only exports from client bundles.
  *
  * This function processes route files during the CLIENT build and replaces
  * server-only exports (loader, action, headers) with empty stub functions.
- * This approach is more reliable than @__PURE__ annotations because:
- * 1. @__PURE__ only works on function calls, not function declarations
- * 2. Stub replacement guarantees server code is removed regardless of imports
- * 3. Empty stubs are easily tree-shaken by Rollup as dead code
+ * Uses proper brace-counting to handle arbitrary nesting depth.
+ *
+ * Security: This is CRITICAL for preventing secrets from leaking to client bundles.
+ * The brace-counting approach ensures that even deeply nested code blocks
+ * (if/else, try/catch, loops) are properly handled.
  *
  * Strategy:
  * - Only processes route files (located in routesDir)
@@ -126,49 +348,27 @@ export function transformServerExports(
 
   // Process each server-only export
   for (const exportName of SERVER_ONLY_EXPORTS) {
-    // Pattern 1: export async function loader(...) { ... }
-    // Replace entire function with empty stub
-    const asyncFunctionRegex = new RegExp(
-      `export\\s+async\\s+function\\s+${exportName}\\s*\\([^)]*\\)\\s*\\{[^}]*(?:\\{[^}]*\\}[^}]*)*\\}`,
-      'g'
-    )
-
-    if (asyncFunctionRegex.test(transformed)) {
-      asyncFunctionRegex.lastIndex = 0
-      transformed = transformed.replace(asyncFunctionRegex, () => {
-        hasTransforms = true
-        // Return empty async stub - will be tree-shaken if unused
-        return `export async function ${exportName}() { /* server-only: removed in client build */ }`
-      })
+    // Try async function first
+    let result = replaceExportFunction(transformed, exportName, true)
+    if (result.changed) {
+      transformed = result.code
+      hasTransforms = true
+      continue // Move to next export name
     }
 
-    // Pattern 2: export function loader(...) { ... }
-    const syncFunctionRegex = new RegExp(
-      `export\\s+function\\s+${exportName}\\s*\\([^)]*\\)\\s*\\{[^}]*(?:\\{[^}]*\\}[^}]*)*\\}`,
-      'g'
-    )
-
-    if (syncFunctionRegex.test(transformed)) {
-      syncFunctionRegex.lastIndex = 0
-      transformed = transformed.replace(syncFunctionRegex, () => {
-        hasTransforms = true
-        return `export function ${exportName}() { /* server-only: removed in client build */ }`
-      })
+    // Try sync function
+    result = replaceExportFunction(transformed, exportName, false)
+    if (result.changed) {
+      transformed = result.code
+      hasTransforms = true
+      continue
     }
 
-    // Pattern 3: export const loader = ... (arrow function or other)
-    // Match until semicolon, newline export, or end of const declaration
-    const constRegex = new RegExp(
-      `export\\s+const\\s+${exportName}\\s*(?::[^=]+)?\\s*=\\s*(?:async\\s*)?(?:\\([^)]*\\)|[^=])\\s*=>\\s*(?:\\{[^}]*(?:\\{[^}]*\\}[^}]*)*\\}|[^;\\n]+)`,
-      'g'
-    )
-
-    if (constRegex.test(transformed)) {
-      constRegex.lastIndex = 0
-      transformed = transformed.replace(constRegex, () => {
-        hasTransforms = true
-        return `export const ${exportName} = () => { /* server-only: removed in client build */ }`
-      })
+    // Try const arrow function
+    result = replaceExportConst(transformed, exportName)
+    if (result.changed) {
+      transformed = result.code
+      hasTransforms = true
     }
   }
 

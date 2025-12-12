@@ -274,6 +274,190 @@ export function helper() {
     // No transformations needed
     expect(result).toBeNull()
   })
+
+  // CRITICAL: Tests for deeply nested code blocks (security vulnerability fix)
+  describe('deeply nested code handling (security critical)', () => {
+    it('should strip loader with nested if/else blocks', () => {
+      const code = `
+export async function loader({ params }) {
+  if (params.id) {
+    if (params.type === 'admin') {
+      const secret = process.env.ADMIN_SECRET
+      return { data: await db.getAdminData(secret) }
+    } else {
+      return { data: await db.getUserData(params.id) }
+    }
+  }
+  return { error: 'Not found' }
+}
+
+export default function Page({ data }) {
+  return <div>{data}</div>
+}
+`
+
+      const result = transformServerExports(
+        code,
+        '/project/src/routes/users.tsx',
+        routesDir,
+        false
+      )
+
+      expect(result).toBeTruthy()
+      expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
+      // CRITICAL: Verify secrets are removed
+      expect(result?.code).not.toContain('ADMIN_SECRET')
+      expect(result?.code).not.toContain('db.getAdminData')
+      expect(result?.code).not.toContain('db.getUserData')
+    })
+
+    it('should strip loader with try/catch/finally blocks', () => {
+      const code = `
+export async function loader({ params }) {
+  try {
+    const connection = await db.connect(process.env.DATABASE_URL)
+    try {
+      const result = await connection.query('SELECT * FROM secrets')
+      return { data: result }
+    } finally {
+      connection.close()
+    }
+  } catch (error) {
+    if (error.code === 'AUTH_FAILED') {
+      throw new Error('Invalid credentials')
+    }
+    throw error
+  }
+}
+`
+
+      const result = transformServerExports(
+        code,
+        '/project/src/routes/data.tsx',
+        routesDir,
+        false
+      )
+
+      expect(result).toBeTruthy()
+      expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
+      expect(result?.code).not.toContain('DATABASE_URL')
+      expect(result?.code).not.toContain('SELECT * FROM secrets')
+    })
+
+    it('should strip loader with nested loops', () => {
+      const code = `
+export async function loader() {
+  const results = []
+  for (const table of ['users', 'orders', 'secrets']) {
+    for (let i = 0; i < 10; i++) {
+      const row = await db.query(\`SELECT * FROM \${table} LIMIT 1 OFFSET \${i}\`)
+      if (row) {
+        results.push({ table, row, apiKey: process.env.API_KEY })
+      }
+    }
+  }
+  return { results }
+}
+`
+
+      const result = transformServerExports(
+        code,
+        '/project/src/routes/admin.tsx',
+        routesDir,
+        false
+      )
+
+      expect(result).toBeTruthy()
+      expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
+      expect(result?.code).not.toContain('API_KEY')
+      expect(result?.code).not.toContain('db.query')
+    })
+
+    it('should strip action with deeply nested switch/case', () => {
+      const code = `
+export async function action({ request }) {
+  const form = await request.formData()
+  const action = form.get('action')
+
+  switch (action) {
+    case 'create': {
+      const user = await db.createUser({
+        password: await bcrypt.hash(form.get('password'), process.env.SALT_ROUNDS)
+      })
+      return { user }
+    }
+    case 'delete': {
+      if (form.get('confirm') === 'yes') {
+        await db.deleteUser(form.get('id'), { secret: process.env.DELETE_SECRET })
+      }
+      return { deleted: true }
+    }
+    default: {
+      return { error: 'Unknown action' }
+    }
+  }
+}
+`
+
+      const result = transformServerExports(
+        code,
+        '/project/src/routes/users.tsx',
+        routesDir,
+        false
+      )
+
+      expect(result).toBeTruthy()
+      expect(result?.code).toContain('export async function action() { /* server-only: removed in client build */ }')
+      expect(result?.code).not.toContain('SALT_ROUNDS')
+      expect(result?.code).not.toContain('DELETE_SECRET')
+      expect(result?.code).not.toContain('bcrypt.hash')
+    })
+
+    it('should handle braces inside strings without breaking', () => {
+      const code = `
+export async function loader() {
+  const query = "SELECT * FROM users WHERE data = '{nested: {json: true}}'"
+  const template = \`Hello {name}, your data is: \${JSON.stringify({ key: 'value' })}\`
+  return { data: await db.query(query), secret: process.env.SECRET }
+}
+`
+
+      const result = transformServerExports(
+        code,
+        '/project/src/routes/test.tsx',
+        routesDir,
+        false
+      )
+
+      expect(result).toBeTruthy()
+      expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
+      expect(result?.code).not.toContain('SECRET')
+    })
+
+    it('should handle braces inside comments without breaking', () => {
+      const code = `
+export async function loader() {
+  // This comment has braces { like this }
+  /* And this block comment {
+     has multiple lines with braces { }
+  } */
+  const secret = process.env.API_SECRET
+  return { data: secret }
+}
+`
+
+      const result = transformServerExports(
+        code,
+        '/project/src/routes/test.tsx',
+        routesDir,
+        false
+      )
+
+      expect(result).toBeTruthy()
+      expect(result?.code).toContain('export async function loader() { /* server-only: removed in client build */ }')
+      expect(result?.code).not.toContain('API_SECRET')
+    })
+  })
 })
 
 describe('createServerOnlyRemovalPlugin', () => {

@@ -463,15 +463,32 @@ export function analyzeServerCodeRemoval(bundle: OutputBundle): ServerOnlyRemova
 }
 
 /**
- * Log server-only removal report
+ * Options for server-only removal report logging
+ */
+export interface ServerOnlyReportOptions {
+  /** Fail the build if server code is detected (default: true for production safety) */
+  failOnLeak?: boolean
+}
+
+/**
+ * Log server-only removal report and optionally fail the build
  *
  * @param report - Server code removal report
- * @param logger - Logger interface with info/warn methods
+ * @param logger - Logger interface with info/warn/error methods
+ * @param options - Report options
+ * @throws Error if server code is detected and failOnLeak is true
  */
 export function logServerOnlyRemovalReport(
   report: ServerOnlyRemovalReport,
-  logger: { info: (msg: string) => void; warn: (msg: string) => void }
+  logger: {
+    info: (msg: string) => void
+    warn: (msg: string) => void
+    error?: (msg: string) => never
+  },
+  options: ServerOnlyReportOptions = {}
 ): void {
+  const { failOnLeak = true } = options
+
   logger.info('\n🔒 Server-Only Code Removal Report:')
   logger.info('─'.repeat(80))
 
@@ -480,10 +497,23 @@ export function logServerOnlyRemovalReport(
     logger.info('   Loader, action, and headers functions successfully removed')
     logger.info('   Database imports, secrets, and server logic excluded')
   } else {
-    logger.warn('⚠️  WARNING: Server-only code leaked into client bundle!')
-    logger.warn(`   Leaked exports: ${report.leakedExports.join(', ')}`)
-    logger.warn('   This may expose sensitive server logic or credentials')
-    logger.warn('   Check that server code removal is configured correctly')
+    const errorMsg = `SECURITY ERROR: Server-only code leaked into client bundle!
+   Leaked exports: ${report.leakedExports.join(', ')}
+   This WILL expose sensitive server logic or credentials to the public.
+
+   To fix:
+   1. Ensure loader/action/headers functions don't have syntax errors
+   2. Check that server code removal plugin is properly configured
+   3. Review the flagged exports for any unusual patterns`
+
+    if (failOnLeak && logger.error) {
+      logger.info('─'.repeat(80) + '\n')
+      logger.error(errorMsg)
+      // logger.error should throw, but if it doesn't:
+      throw new Error(errorMsg)
+    } else {
+      logger.warn('⚠️  WARNING: ' + errorMsg)
+    }
   }
 
   logger.info('─'.repeat(80) + '\n')

@@ -472,12 +472,18 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
       const outputDir = options.dir || 'dist'
 
       // Analyze server-only code removal (always run during build)
+      // SECURITY: This will FAIL the build if server code leaks to client bundle
       if (isBuildCommand) {
         const serverRemovalReport = analyzeServerCodeRemoval(bundle)
-        logServerOnlyRemovalReport(serverRemovalReport, {
-          info: (msg) => this.info(msg),
-          warn: (msg) => this.warn(msg),
-        })
+        logServerOnlyRemovalReport(
+          serverRemovalReport,
+          {
+            info: (msg) => this.info(msg),
+            warn: (msg) => this.warn(msg),
+            error: (msg) => this.error(msg),
+          },
+          { failOnLeak: true }
+        )
 
         // Verbose logging for transformed routes
         if (verbose && transformedRoutes.length > 0) {
