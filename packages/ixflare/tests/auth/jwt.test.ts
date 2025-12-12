@@ -198,6 +198,28 @@ describe('JWT Module', () => {
     })
   })
 
+  describe('jwt.verifyComplete()', () => {
+    it('should return both header and payload', async () => {
+      const payload = { userId: 123, email: 'test@example.com' }
+      const token = await jwt.sign(payload)
+      const result = await jwt.verifyComplete(token)
+
+      expect(result.header).toBeDefined()
+      expect(result.header.alg).toBe('HS256')
+      expect(result.header.typ).toBe('JWT')
+      expect(result.payload.userId).toBe(123)
+      expect(result.payload.email).toBe('test@example.com')
+    })
+
+    it('should support kid field for key rotation', async () => {
+      const token = await jwt.sign({ userId: 123 })
+      const result = await jwt.verifyComplete(token)
+
+      // kid is optional but the field should be accessible
+      expect(result.header.kid).toBeUndefined()
+    })
+  })
+
   describe('jwt.decode()', () => {
     it('should decode token without verification', async () => {
       const payload = { userId: 123, email: 'test@example.com' }
@@ -254,6 +276,121 @@ describe('JWT Module', () => {
           defaultExpiresIn: '15m',
         })
       ).not.toThrow()
+    })
+  })
+
+  describe('ES256 Integration Tests', () => {
+    // Test key pair in PEM format (P-256, PKCS#8)
+    const privateKeyPem = `-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgQajgEQYbFWvA4JGh
+SRw/O5Bdodtaub+a3dM3wwvKl8OhRANCAARR/76D85QATCUwnrItTtUsTHNkLmlY
+zgcui0ggRgnSiAAoEF5cqmaDQl14ZQCYZO9jun+AFUrcE1xoL90f+vH9
+-----END PRIVATE KEY-----`
+
+    const publicKeyPem = `-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEUf++g/OUAEwlMJ6yLU7VLExzZC5p
+WM4HLotIIEYJ0ogAKBBeXKpmg0JdeGUAmGTvY7p/gBVK3BNcaC/dH/rx/Q==
+-----END PUBLIC KEY-----`
+
+    beforeEach(() => {
+      jwt.configure({
+        algorithm: 'ES256',
+        privateKey: privateKeyPem,
+        publicKey: publicKeyPem,
+        defaultExpiresIn: '15m',
+      })
+    })
+
+    it('should create a valid ES256 JWT token', async () => {
+      const payload = { userId: 123, email: 'test@example.com' }
+      const token = await jwt.sign(payload)
+
+      expect(token).toBeTypeOf('string')
+      expect(token.split('.')).toHaveLength(3)
+
+      const decoded = jwt.decode(token)
+      expect(decoded.header.alg).toBe('ES256')
+      expect(decoded.header.typ).toBe('JWT')
+    })
+
+    it('should verify ES256 token correctly', async () => {
+      const payload = { userId: 456, role: 'admin' }
+      const token = await jwt.sign(payload)
+      const verified = await jwt.verify(token)
+
+      expect(verified.userId).toBe(456)
+      expect(verified.role).toBe('admin')
+    })
+
+    it('should reject ES256 token with tampered payload', async () => {
+      const token = await jwt.sign({ userId: 123 })
+      const parts = token.split('.')
+      parts[1] = parts[1].slice(0, -1) + 'X'
+      const tamperedToken = parts.join('.')
+
+      await expect(jwt.verify(tamperedToken)).rejects.toThrow(SignatureVerificationError)
+    })
+
+    it('should reject HS256 token when configured for ES256', async () => {
+      // First create an HS256 token
+      jwt.configure({
+        algorithm: 'HS256',
+        secret: 'test-secret-key-for-jwt-testing-minimum-32-chars',
+        defaultExpiresIn: '15m',
+      })
+      const hs256Token = await jwt.sign({ userId: 123 })
+
+      // Switch to ES256 config
+      jwt.configure({
+        algorithm: 'ES256',
+        privateKey: privateKeyPem,
+        publicKey: publicKeyPem,
+        defaultExpiresIn: '15m',
+      })
+
+      // Should reject due to algorithm mismatch
+      await expect(jwt.verify(hs256Token)).rejects.toThrow(AlgorithmMismatchError)
+    })
+
+    it('should include iat and exp claims in ES256 tokens', async () => {
+      const token = await jwt.sign({ userId: 123 })
+      const decoded = jwt.decode(token)
+
+      expect(decoded.payload.iat).toBeTypeOf('number')
+      expect(decoded.payload.exp).toBeTypeOf('number')
+      expect(decoded.payload.exp).toBeGreaterThan(decoded.payload.iat!)
+    })
+  })
+
+  describe('ES256 Configuration Validation', () => {
+    it('should reject ES256 config without privateKey', () => {
+      expect(() =>
+        jwt.configure({
+          algorithm: 'ES256',
+          privateKey: '',
+          publicKey: `-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----`,
+        })
+      ).toThrow('ES256 requires both privateKey and publicKey')
+    })
+
+    it('should reject ES256 config without publicKey', () => {
+      expect(() =>
+        jwt.configure({
+          algorithm: 'ES256',
+          privateKey: `-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----`,
+          publicKey: '',
+        })
+      ).toThrow('ES256 requires both privateKey and publicKey')
+    })
+
+    it('should reject ES256 keys not in PEM format', () => {
+      expect(() =>
+        jwt.configure({
+          algorithm: 'ES256',
+          privateKey: 'not-a-pem-key',
+          publicKey: 'also-not-pem',
+        })
+      ).toThrow('ES256 keys must be in PEM format')
     })
   })
 

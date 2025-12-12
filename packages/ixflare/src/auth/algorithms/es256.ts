@@ -3,24 +3,71 @@
  * @description ECDSA P-256 signing and verification using WebCrypto
  */
 
+/** PEM header/footer patterns */
+const PEM_PRIVATE_KEY_HEADER = '-----BEGIN PRIVATE KEY-----'
+const PEM_PRIVATE_KEY_FOOTER = '-----END PRIVATE KEY-----'
+const PEM_PUBLIC_KEY_HEADER = '-----BEGIN PUBLIC KEY-----'
+const PEM_PUBLIC_KEY_FOOTER = '-----END PUBLIC KEY-----'
+
 /**
- * Convert PEM format to ArrayBuffer
+ * Validate and convert PEM format to ArrayBuffer
+ *
+ * @param pem - PEM-encoded key string
+ * @param expectedType - Expected key type ('private' or 'public')
+ * @throws {Error} If PEM format is invalid or doesn't match expected type
  */
-function pemToArrayBuffer(pem: string): ArrayBuffer {
-  // Remove PEM headers and whitespace
-  const pemContents = pem
+function pemToArrayBuffer(pem: string, expectedType: 'private' | 'public'): ArrayBuffer {
+  const trimmedPem = pem.trim()
+
+  // Validate PEM structure based on expected type
+  if (expectedType === 'private') {
+    if (!trimmedPem.includes(PEM_PRIVATE_KEY_HEADER)) {
+      throw new Error(
+        `Invalid private key PEM: missing "${PEM_PRIVATE_KEY_HEADER}" header. ` +
+          'Use PKCS#8 format (openssl pkcs8 -topk8 -nocrypt)'
+      )
+    }
+    if (!trimmedPem.includes(PEM_PRIVATE_KEY_FOOTER)) {
+      throw new Error(`Invalid private key PEM: missing "${PEM_PRIVATE_KEY_FOOTER}" footer`)
+    }
+  } else {
+    if (!trimmedPem.includes(PEM_PUBLIC_KEY_HEADER)) {
+      throw new Error(
+        `Invalid public key PEM: missing "${PEM_PUBLIC_KEY_HEADER}" header. ` +
+          'Use SPKI format (openssl ec -pubout)'
+      )
+    }
+    if (!trimmedPem.includes(PEM_PUBLIC_KEY_FOOTER)) {
+      throw new Error(`Invalid public key PEM: missing "${PEM_PUBLIC_KEY_FOOTER}" footer`)
+    }
+  }
+
+  // Extract base64 content between headers
+  const pemContents = trimmedPem
     .replace(/-----BEGIN.*?-----/, '')
     .replace(/-----END.*?-----/, '')
     .replace(/\s/g, '')
 
-  // Decode base64
-  const binaryString = atob(pemContents)
-  const bytes = new Uint8Array(binaryString.length)
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i)
+  if (!pemContents || pemContents.length === 0) {
+    throw new Error('Invalid PEM: no key data found between headers')
   }
 
-  return bytes.buffer
+  // Validate base64 content
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(pemContents)) {
+    throw new Error('Invalid PEM: key data is not valid base64')
+  }
+
+  // Decode base64
+  try {
+    const binaryString = atob(pemContents)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    return bytes.buffer
+  } catch {
+    throw new Error('Invalid PEM: failed to decode base64 content')
+  }
 }
 
 /**
@@ -29,7 +76,7 @@ function pemToArrayBuffer(pem: string): ArrayBuffer {
  * Generate using: openssl ecparam -name prime256v1 -genkey -noout | openssl pkcs8 -topk8 -nocrypt
  */
 export async function importES256PrivateKey(pem: string): Promise<CryptoKey> {
-  const keyData = pemToArrayBuffer(pem)
+  const keyData = pemToArrayBuffer(pem, 'private')
 
   return crypto.subtle.importKey('pkcs8', keyData, { name: 'ECDSA', namedCurve: 'P-256' }, false, [
     'sign',
@@ -37,10 +84,12 @@ export async function importES256PrivateKey(pem: string): Promise<CryptoKey> {
 }
 
 /**
- * Import ECDSA public key from PEM format
+ * Import ECDSA public key from PEM format (SPKI)
+ * Expects "-----BEGIN PUBLIC KEY-----" format
+ * Generate using: openssl ec -in private.pem -pubout
  */
 export async function importES256PublicKey(pem: string): Promise<CryptoKey> {
-  const keyData = pemToArrayBuffer(pem)
+  const keyData = pemToArrayBuffer(pem, 'public')
 
   return crypto.subtle.importKey('spki', keyData, { name: 'ECDSA', namedCurve: 'P-256' }, false, [
     'verify',

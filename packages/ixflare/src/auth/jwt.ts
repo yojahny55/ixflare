@@ -4,7 +4,7 @@
  * @size ~2KB (no jose dependency)
  */
 
-import type { JWTPayload, JWTOptions, DecodedJWT, JWTHeader } from './types'
+import type { JWTPayload, JWTOptions, DecodedJWT, JWTHeader, VerifiedJWT } from './types'
 import { encodeJson, decodeJson, parseDuration, base64urlEncode, base64urlDecode } from './utils'
 import { signHS256, verifyHS256 } from './algorithms/hs256'
 import { signES256, verifyES256 } from './algorithms/es256'
@@ -152,10 +152,19 @@ export async function sign(payload: JWTPayload, options: JWTOptions = {}): Promi
 }
 
 /**
- * Verify and decode a JWT token
+ * Verify and decode a JWT token, returning both header and payload
  * Uses the configured algorithm (HS256 or ES256)
+ *
+ * Use this when you need access to the header (e.g., for key rotation via `kid`)
+ *
+ * @param token - The JWT string to verify
+ * @returns The verified header and payload
+ * @throws {TokenInvalidError} If token format is invalid
+ * @throws {AlgorithmMismatchError} If token algorithm doesn't match configuration
+ * @throws {SignatureVerificationError} If signature is invalid
+ * @throws {TokenExpiredError} If token has expired
  */
-export async function verify(token: string): Promise<JWTPayload> {
+export async function verifyComplete(token: string): Promise<VerifiedJWT> {
   // Validate configuration
   if (jwtConfig.algorithm === 'HS256') {
     const config = jwtConfig as HS256Config
@@ -211,6 +220,20 @@ export async function verify(token: string): Promise<JWTPayload> {
     throw new TokenExpiredError(payload.exp)
   }
 
+  return { header, payload }
+}
+
+/**
+ * Verify and decode a JWT token, returning only the payload
+ * Uses the configured algorithm (HS256 or ES256)
+ *
+ * For access to the header (e.g., `kid` for key rotation), use `verifyComplete()` instead
+ *
+ * @param token - The JWT string to verify
+ * @returns The verified payload
+ */
+export async function verify(token: string): Promise<JWTPayload> {
+  const { payload } = await verifyComplete(token)
   return payload
 }
 
