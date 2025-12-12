@@ -68,6 +68,16 @@
         "types": "./dist/client.d.cts",
         "default": "./dist/client.cjs"
       }
+    },
+    "./auth": {
+      "import": {
+        "types": "./dist/auth.d.ts",
+        "default": "./dist/auth.mjs"
+      },
+      "require": {
+        "types": "./dist/auth.d.cts",
+        "default": "./dist/auth.cjs"
+      }
     }
   },
   "files": [
