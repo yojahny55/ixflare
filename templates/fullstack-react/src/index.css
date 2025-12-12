@@ -1,6 +1,19 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Custom theme tokens using @theme directive (Tailwind CSS v4.1) */
+@theme {
+  /* Custom brand colors - generates bg-brand, text-brand, etc. */
+  --color-brand: #0066cc;
+  --color-brand-light: #3399ff;
+  --color-brand-dark: #004499;
+
+  /* Custom fonts - generates font-display utility */
+  --font-display: "Inter", system-ui, sans-serif;
+}
+
+/* Dark mode configuration (optional - defaults to prefers-color-scheme) */
+/* Uncomment for class-based dark mode: */
+/* @custom-variant dark (&:where(.dark, .dark *)); */
 
 /* Custom styles */
 body {

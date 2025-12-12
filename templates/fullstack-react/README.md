@@ -23,11 +23,13 @@ This template uses a **plugin composition** pattern for local development:
 // vite.config.ts
 import { cloudflare } from '@cloudflare/vite-plugin'
 import { ixflare } from 'vite-plugin-ixflare'
+import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [
     cloudflare(), // Workers runtime: D1, KV, R2, workerd
     react(), // React JSX/TSX support
+    tailwindcss(), // Tailwind CSS v4.1
     ixflare(), // File-based routing
   ],
 })
@@ -38,6 +40,7 @@ export default defineConfig({
 - **@cloudflare/vite-plugin**: Runs actual `workerd` runtime for production parity. Provides D1, KV, R2, Durable Objects bindings. Reads configuration from `wrangler.toml`.
 - **vite-plugin-ixflare**: Discovers routes from `src/routes/`, generates route manifest, handles route-specific HMR.
 - **@vitejs/plugin-react**: React JSX/TSX compilation, Fast Refresh for component HMR.
+- **@tailwindcss/vite**: Tailwind CSS v4.1 with CSS-first configuration (no tailwind.config.js needed).
 
 ## Bindings Configuration
 
@@ -173,22 +176,125 @@ wrangler secret put API_KEY
 ├── src/
 │   ├── index.ts           # Worker entry point
 │   ├── App.tsx            # React application
-│   ├── index.css          # Global styles (Tailwind)
+│   ├── index.css          # Global styles + Tailwind v4.1 (@theme config)
 │   ├── components/        # React components
 │   └── routes/
 │       └── api/           # API routes
 ├── edge.config.ts         # Ixflare configuration
 ├── wrangler.toml          # Cloudflare configuration
-├── vite.config.ts         # Build configuration
-└── tailwind.config.js     # Tailwind CSS configuration
+└── vite.config.ts         # Build configuration
 ```
 
 ## Features
 
 - React 19 with Server Components
-- Tailwind CSS for styling
+- Tailwind CSS v4.1 for styling (CSS-first configuration)
 - API routes alongside React pages
 - SSR on Cloudflare Workers
+
+## Styling with Tailwind CSS v4.1
+
+This template includes **Tailwind CSS v4.1** with a modern CSS-first configuration approach.
+
+### Key Differences from v3.x
+
+**No `tailwind.config.js`** - Tailwind v4.1 uses CSS-first configuration via the `@theme` directive. All customization happens in your CSS files.
+
+### Quick Start
+
+Use Tailwind utility classes in your components:
+
+```tsx
+export function MyComponent() {
+  return (
+    <div className="rounded-lg shadow-md p-6 bg-white dark:bg-gray-800">
+      <h2 className="text-xl font-bold mb-4">Hello World</h2>
+      <p className="text-gray-700 dark:text-gray-300">
+        Styled with Tailwind CSS v4.1
+      </p>
+    </div>
+  )
+}
+```
+
+### Customizing Your Design System
+
+Customize your design system in `src/index.css` using the `@theme` directive:
+
+```css
+@import "tailwindcss";
+
+@theme {
+  /* Custom brand colors - automatically generates utilities */
+  --color-brand: #0066cc;
+  --color-brand-light: #3399ff;
+  --color-brand-dark: #004499;
+
+  /* Custom fonts */
+  --font-display: "Inter", system-ui, sans-serif;
+
+  /* Custom spacing */
+  --spacing-128: 32rem;
+}
+```
+
+This automatically generates utility classes like:
+- `bg-brand`, `text-brand`, `border-brand`
+- `font-display`
+- `p-128`, `m-128`, `gap-128`
+
+You can also use CSS variables directly: `var(--color-brand)`.
+
+### Dark Mode
+
+Dark mode works out of the box using the `dark:` variant with system preferences:
+
+```tsx
+<div className="bg-white dark:bg-gray-900">
+  <h1 className="text-gray-900 dark:text-gray-100">Title</h1>
+</div>
+```
+
+**For class-based dark mode**, add this to `src/index.css`:
+
+```css
+@custom-variant dark (&:where(.dark, .dark *));
+```
+
+Then toggle dark mode by adding the `dark` class to your `<html>` element.
+
+### Responsive Design
+
+Use responsive utilities with breakpoint prefixes:
+
+```tsx
+<div className="w-full md:w-1/2 lg:w-1/3">
+  Responsive width
+</div>
+```
+
+### JIT Mode (Just-In-Time)
+
+JIT is always enabled in v4.1. Use arbitrary values freely:
+
+```tsx
+<div className="p-[13px] bg-[#1da1f2] top-[117px]">
+  Custom values work out of the box
+</div>
+```
+
+### Performance
+
+Tailwind CSS v4.1 is significantly faster than v3.x:
+- **5x faster** full builds
+- **100x faster** incremental builds
+- Smaller bundle sizes (only used CSS is included)
+
+### Learn More
+
+- [Tailwind CSS v4 Documentation](https://tailwindcss.com/docs)
+- [Theme Customization](https://tailwindcss.com/docs/theme)
+- [Dark Mode Guide](https://tailwindcss.com/docs/dark-mode)
 
 ## Environment Variables
 

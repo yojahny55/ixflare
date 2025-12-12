@@ -46,7 +46,6 @@ describe('fullstack-react template', () => {
         'edge.config.ts',
         'wrangler.toml',
         'vite.config.ts',
-        'tailwind.config.js',
         'tsconfig.json',
         '_gitignore',
         '_env.example',
@@ -56,6 +55,10 @@ describe('fullstack-react template', () => {
       for (const file of requiredFiles) {
         expect(existsSync(join(TEMPLATE_DIR, file)), `Missing: ${file}`).toBe(true)
       }
+    })
+
+    it('should NOT have tailwind.config.js (v4.1 uses CSS-first config)', () => {
+      expect(existsSync(join(TEMPLATE_DIR, 'tailwind.config.js'))).toBe(false)
     })
 
     it('should have src/routes/ directory with index.tsx', () => {
@@ -201,6 +204,65 @@ describe('fullstack-react template', () => {
           expect(file.endsWith('.test.ts'), `Test file ${file} should end with .test.ts`).toBe(true)
         }
       }
+    })
+  })
+
+  describe('Tailwind CSS v4.1 integration', () => {
+    it('should have @tailwindcss/vite in devDependencies', () => {
+      const content = readFileSync(join(TEMPLATE_DIR, 'package.json'), 'utf-8')
+      const pkg = JSON.parse(content)
+      const devDeps = pkg.devDependencies as Record<string, string>
+      expect(devDeps['@tailwindcss/vite']).toBeDefined()
+      expect(devDeps['@tailwindcss/vite']).toMatch(/^\^4\./)
+    })
+
+    it('should have tailwindcss v4.1+ in devDependencies', () => {
+      const content = readFileSync(join(TEMPLATE_DIR, 'package.json'), 'utf-8')
+      const pkg = JSON.parse(content)
+      const devDeps = pkg.devDependencies as Record<string, string>
+      expect(devDeps.tailwindcss).toBeDefined()
+      expect(devDeps.tailwindcss).toMatch(/^\^4\.1/)
+    })
+
+    it('should NOT have tailwind.config.js (v4.1 CSS-first pattern)', () => {
+      expect(existsSync(join(TEMPLATE_DIR, 'tailwind.config.js'))).toBe(false)
+    })
+
+    it('should NOT have postcss.config.js (v4.1 uses Vite plugin)', () => {
+      expect(existsSync(join(TEMPLATE_DIR, 'postcss.config.js'))).toBe(false)
+    })
+
+    it('should have vite.config.ts with tailwindcss() plugin', () => {
+      const content = readFileSync(join(TEMPLATE_DIR, 'vite.config.ts'), 'utf-8')
+      expect(content).toContain("import tailwindcss from '@tailwindcss/vite'")
+      expect(content).toContain('tailwindcss()')
+    })
+
+    it('should use @import "tailwindcss" syntax in index.css', () => {
+      const content = readFileSync(join(TEMPLATE_DIR, 'src/index.css'), 'utf-8')
+      expect(content).toContain('@import "tailwindcss"')
+      // Should NOT use v3.x syntax
+      expect(content).not.toContain('@tailwind base')
+      expect(content).not.toContain('@tailwind components')
+      expect(content).not.toContain('@tailwind utilities')
+    })
+
+    it('should have @theme directive with custom design tokens', () => {
+      const content = readFileSync(join(TEMPLATE_DIR, 'src/index.css'), 'utf-8')
+      expect(content).toContain('@theme')
+      expect(content).toContain('--color-brand')
+    })
+
+    it('should have dark mode variant support in components', () => {
+      const cardContent = readFileSync(join(TEMPLATE_DIR, 'src/components/ui/card.tsx'), 'utf-8')
+      expect(cardContent).toContain('dark:')
+    })
+
+    it('should use Tailwind utility classes in components', () => {
+      const buttonContent = readFileSync(join(TEMPLATE_DIR, 'src/components/ui/button.tsx'), 'utf-8')
+      expect(buttonContent).toContain('className')
+      expect(buttonContent).toMatch(/bg-\w+/)
+      expect(buttonContent).toMatch(/text-\w+/)
     })
   })
 })
