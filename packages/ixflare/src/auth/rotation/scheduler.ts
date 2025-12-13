@@ -13,6 +13,7 @@ import {
   generateKeyId,
   exportKeyAsBase64url,
 } from './key-generator'
+import { encryptPrivateKey, deriveEncryptionKey, type EncryptedData } from './encryption'
 
 /** Minimum rotation interval: 1 day (in seconds) */
 const MIN_ROTATION_INTERVAL_SECONDS = 86400
@@ -87,29 +88,52 @@ export async function shouldRotate(config: RotationConfig, keyStore: KeyStore): 
   return keyAge >= intervalMs
 }
 
+/** Options for key rotation */
+export interface RotateKeysOptions {
+  /** Master secret for encrypting private keys at rest (recommended for production) */
+  encryptionSecret?: string
+}
+
 /**
  * Rotate keys: generate new key, move old key to grace period
  *
  * @param config - Rotation configuration
  * @param keyStore - Key store instance
  * @param algorithm - Algorithm to use for new key
+ * @param options - Optional settings including encryption
  *
  * @example
  * ```typescript
+ * // Without encryption (development)
  * await rotateKeys({ interval: '30d', gracePeriod: '24h' }, keyStore, 'ES256')
+ *
+ * // With encryption (production - recommended)
+ * await rotateKeys(
+ *   { interval: '30d', gracePeriod: '24h' },
+ *   keyStore,
+ *   'ES256',
+ *   { encryptionSecret: env.KEY_ENCRYPTION_SECRET }
+ * )
  * ```
  */
 export async function rotateKeys(
   config: RotationConfig,
   keyStore: KeyStore,
-  algorithm: 'ES256' | 'HS256'
-): Promise<{ kid: string; rotatedAt: number }> {
+  algorithm: 'ES256' | 'HS256',
+  options?: RotateKeysOptions
+): Promise<{ kid: string; rotatedAt: number; encrypted: boolean }> {
   const { intervalMs, gracePeriodMs } = validateRotationConfig(config)
 
   const now = Date.now()
   const kid = generateKeyId()
   const expiresAt = now + intervalMs // When key enters grace period
   const gracePeriodEndsAt = expiresAt + gracePeriodMs // When key is deleted
+
+  // Derive encryption key if secret provided
+  let encryptionKey: CryptoKey | null = null
+  if (options?.encryptionSecret) {
+    encryptionKey = await deriveEncryptionKey(options.encryptionSecret)
+  }
 
   if (algorithm === 'ES256') {
     // Generate ES256 key pair
@@ -119,18 +143,30 @@ export async function rotateKeys(
     const privateKeyJwk = await crypto.subtle.exportKey('jwk', privateKey)
     const privateKeyStr = JSON.stringify(privateKeyJwk)
 
+    // Encrypt private key if encryption is enabled
+    let privateKeyData: string | EncryptedData = privateKeyStr
+    if (encryptionKey) {
+      privateKeyData = await encryptPrivateKey(privateKeyStr, encryptionKey)
+    }
+
     // Store in KV
-    await keyStore.storeKey(kid, privateKeyStr, algorithm, expiresAt, gracePeriodEndsAt, publicJwk)
+    await keyStore.storeKey(kid, privateKeyData, algorithm, expiresAt, gracePeriodEndsAt, publicJwk)
   } else {
     // Generate HS256 secret
     const secret = await generateHS256Secret()
     const secretBase64url = await exportKeyAsBase64url(secret)
 
+    // Encrypt secret if encryption is enabled
+    let privateKeyData: string | EncryptedData = secretBase64url
+    if (encryptionKey) {
+      privateKeyData = await encryptPrivateKey(secretBase64url, encryptionKey)
+    }
+
     // Store in KV (no public key for symmetric)
-    await keyStore.storeKey(kid, secretBase64url, algorithm, expiresAt, gracePeriodEndsAt)
+    await keyStore.storeKey(kid, privateKeyData, algorithm, expiresAt, gracePeriodEndsAt)
   }
 
-  return { kid, rotatedAt: now }
+  return { kid, rotatedAt: now, encrypted: !!encryptionKey }
 }
 
 /**

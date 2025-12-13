@@ -3,8 +3,15 @@
  * @description JWKS endpoint handler (RFC 7517)
  */
 
-import type { JWKS } from './types'
+import type { JWKS, RotationConfig } from './types'
 import { KeyStore } from './key-store'
+import { parseDuration } from '@/auth/utils'
+
+/** Options for JWKS handler */
+export interface JWKSHandlerOptions {
+  /** Rotation config to calculate appropriate cache duration */
+  rotationConfig?: RotationConfig
+}
 
 /**
  * Handle JWKS endpoint request
@@ -13,17 +20,23 @@ import { KeyStore } from './key-store'
  * For HS256 (symmetric), returns 404 as symmetric keys must not be exposed.
  *
  * @param kv - KV namespace containing keys
+ * @param options - Optional settings including rotation config for cache calculation
  * @returns Response with JWKS JSON or 404
  *
  * @example
  * ```typescript
  * // In route handler
  * export async function GET(ctx: EdgeContext) {
- *   return handleJWKSRequest(ctx.env.KV_NAMESPACE)
+ *   return handleJWKSRequest(ctx.env.KV_NAMESPACE, {
+ *     rotationConfig: { interval: '30d', gracePeriod: '24h' }
+ *   })
  * }
  * ```
  */
-export async function handleJWKSRequest(kv: KVNamespace): Promise<Response> {
+export async function handleJWKSRequest(
+  kv: KVNamespace,
+  options?: JWKSHandlerOptions
+): Promise<Response> {
   const keyStore = new KeyStore(kv)
 
   // Get all active and grace period keys
@@ -56,10 +69,16 @@ export async function handleJWKSRequest(kv: KVNamespace): Promise<Response> {
       })),
   }
 
-  // Calculate cache max-age
-  // Set to half of the smallest rotation interval (conservative estimate)
-  // Default to 12 hours if no keys available
-  const cacheMaxAgeSeconds = keys.length > 0 ? 12 * 3600 : 3600 // 12h or 1h fallback
+  // Calculate cache max-age based on rotation config
+  // Use half the rotation interval for reasonable cache refresh
+  let cacheMaxAgeSeconds: number
+  if (options?.rotationConfig) {
+    const intervalSeconds = parseDuration(options.rotationConfig.interval)
+    cacheMaxAgeSeconds = Math.floor(intervalSeconds / 2)
+  } else {
+    // Default: 12 hours if config not provided, 1 hour if no keys
+    cacheMaxAgeSeconds = keys.length > 0 ? 12 * 3600 : 3600
+  }
 
   return Response.json(jwks, {
     headers: {

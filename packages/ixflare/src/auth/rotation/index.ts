@@ -25,9 +25,24 @@
  * ```
  */
 
-export type { JWK, KeyMetadata, StoredKey, RotationConfig, KeyStatus, JWKS } from './types'
+export type {
+  JWK,
+  KeyMetadata,
+  StoredKey,
+  RotationConfig,
+  KeyStatus,
+  JWKS,
+  EncryptedPrivateKey,
+} from './types'
 export { KeyRotationError, KeyNotFoundError, InvalidRotationConfigError } from './errors'
 export { generateES256KeyPair, generateHS256Secret, generateKeyId } from './key-generator'
 export { KeyStore } from './key-store'
-export { shouldRotate, rotateKeys, cleanupExpiredKeys } from './scheduler'
+export { shouldRotate, rotateKeys, cleanupExpiredKeys, type RotateKeysOptions } from './scheduler'
 export { handleJWKSRequest } from './jwks-handler'
+export {
+  deriveEncryptionKey,
+  encryptPrivateKey,
+  decryptPrivateKey,
+  isEncryptedData,
+  type EncryptedData,
+} from './encryption'

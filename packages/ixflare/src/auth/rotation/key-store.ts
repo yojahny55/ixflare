@@ -14,6 +14,22 @@ import { KeyNotFoundError, KeyRotationError } from './errors'
  * - `jwt:keys:{kid}` → { metadata: {...}, privateKey: "...", publicKey: {...} }
  * - `jwt:keys:list` → ["key-2024-12", "key-2024-11"]
  *
+ * ## Known Limitations
+ *
+ * **Race Condition**: Key list updates (storeKey, deleteKey) perform read-modify-write
+ * operations without distributed locking. If multiple Workers execute concurrent
+ * rotations (e.g., during deployment), the key list may become inconsistent.
+ *
+ * **Mitigations**:
+ * 1. Use a single writer pattern (API endpoint or Cron trigger for rotations)
+ * 2. For strong consistency requirements, use Durable Objects instead of KV
+ * 3. Key verification by `kid` is unaffected - individual keys are atomic
+ *
+ * **KV Eventual Consistency**: Writes may take up to 60 seconds to propagate globally.
+ * During rotation, tokens signed with the new key may fail verification in regions
+ * that haven't received the update yet. The grace period (24h default) provides
+ * sufficient buffer for this propagation delay.
+ *
  * @example
  * ```typescript
  * const keyStore = new KeyStore(env.KV_NAMESPACE)
@@ -33,7 +49,7 @@ export class KeyStore {
    * Store a key in KV with metadata
    *
    * @param kid - Key ID
-   * @param privateKey - Private key material (encrypted or base64url)
+   * @param privateKey - Private key material (encrypted object or base64url string)
    * @param algorithm - JWT algorithm
    * @param expiresAt - When key enters grace period (Unix ms)
    * @param gracePeriodEndsAt - When key is removed (Unix ms)
@@ -41,7 +57,7 @@ export class KeyStore {
    */
   async storeKey(
     kid: string,
-    privateKey: string,
+    privateKey: string | { ciphertext: string; iv: string; alg: 'A256GCM' },
     algorithm: 'ES256' | 'HS256',
     expiresAt: number,
     gracePeriodEndsAt: number,

@@ -34,10 +34,18 @@ export interface KeyMetadata {
   status: KeyStatus
 }
 
+/** Encrypted data format for private keys at rest */
+export interface EncryptedPrivateKey {
+  ciphertext: string
+  iv: string
+  alg: 'A256GCM'
+}
+
 /** Stored key with metadata and cryptographic material */
 export interface StoredKey {
   metadata: KeyMetadata
-  privateKey: string // Encrypted for ES256, base64url for HS256
+  /** Private key - encrypted (EncryptedPrivateKey) or base64url string (legacy/unencrypted) */
+  privateKey: string | EncryptedPrivateKey
   publicKey?: JWK // Only for ES256 (asymmetric)
 }
 

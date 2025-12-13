@@ -41,3 +41,25 @@ export async function verifyHS256(
 
   return crypto.subtle.verify('HMAC', key, signature, dataBuffer)
 }
+
+/**
+ * Verify HMAC-SHA256 signature using raw key bytes
+ * Used for key rotation where keys are stored as raw bytes
+ */
+export async function verifyHS256WithRawKey(
+  data: string,
+  signature: ArrayBuffer,
+  rawKeyBytes: ArrayBuffer
+): Promise<boolean> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    rawKeyBytes,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['verify']
+  )
+  const encoder = new TextEncoder()
+  const dataBuffer = encoder.encode(data)
+
+  return crypto.subtle.verify('HMAC', key, signature, dataBuffer)
+}

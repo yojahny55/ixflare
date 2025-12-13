@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { base64urlEncode, base64urlDecode, parseDuration } from '@/auth/utils'
+import { base64urlEncode, base64urlDecode, parseDuration, timingSafeEqual } from '@/auth/utils'
 
 describe('JWT Utils', () => {
   describe('base64urlEncode', () => {
@@ -109,6 +109,49 @@ describe('JWT Utils', () => {
       expect(() => parseDuration('invalid')).toThrow('Invalid duration format')
       expect(() => parseDuration('15x')).toThrow('Invalid duration format')
       expect(() => parseDuration('m15')).toThrow('Invalid duration format')
+    })
+  })
+
+  describe('timingSafeEqual', () => {
+    it('should return true for equal strings', () => {
+      expect(timingSafeEqual('hello', 'hello')).toBe(true)
+      expect(timingSafeEqual('ES256', 'ES256')).toBe(true)
+      expect(timingSafeEqual('HS256', 'HS256')).toBe(true)
+      expect(timingSafeEqual('', '')).toBe(true)
+    })
+
+    it('should return false for different strings', () => {
+      expect(timingSafeEqual('hello', 'world')).toBe(false)
+      expect(timingSafeEqual('ES256', 'HS256')).toBe(false)
+      expect(timingSafeEqual('abc', 'abd')).toBe(false)
+    })
+
+    it('should return false for different lengths', () => {
+      expect(timingSafeEqual('short', 'longer')).toBe(false)
+      expect(timingSafeEqual('abc', 'abcd')).toBe(false)
+      expect(timingSafeEqual('hello', '')).toBe(false)
+    })
+
+    it('should handle unicode strings', () => {
+      expect(timingSafeEqual('café', 'café')).toBe(true)
+      expect(timingSafeEqual('🔐', '🔐')).toBe(true)
+      expect(timingSafeEqual('中文', '中文')).toBe(true)
+      expect(timingSafeEqual('café', 'cafe')).toBe(false)
+    })
+
+    it('should return false when only one string is empty', () => {
+      expect(timingSafeEqual('', 'nonempty')).toBe(false)
+      expect(timingSafeEqual('nonempty', '')).toBe(false)
+    })
+
+    it('should handle key-like strings', () => {
+      // Test key IDs like "key-2025-12-12-a1b2"
+      const kid1 = 'key-2025-12-12-a1b2'
+      const kid2 = 'key-2025-12-12-a1b2'
+      const kid3 = 'key-2025-12-12-xxxx'
+
+      expect(timingSafeEqual(kid1, kid2)).toBe(true)
+      expect(timingSafeEqual(kid1, kid3)).toBe(false)
     })
   })
 })

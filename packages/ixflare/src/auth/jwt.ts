@@ -5,8 +5,15 @@
  */
 
 import type { JWTPayload, JWTOptions, DecodedJWT, JWTHeader, VerifiedJWT } from './types'
-import { encodeJson, decodeJson, parseDuration, base64urlEncode, base64urlDecode } from './utils'
-import { signHS256, verifyHS256 } from './algorithms/hs256'
+import {
+  encodeJson,
+  decodeJson,
+  parseDuration,
+  base64urlEncode,
+  base64urlDecode,
+  timingSafeEqual,
+} from './utils'
+import { signHS256, verifyHS256, verifyHS256WithRawKey } from './algorithms/hs256'
 import { signES256, verifyES256 } from './algorithms/es256'
 import {
   TokenExpiredError,
@@ -17,6 +24,21 @@ import {
 
 /** Minimum secret length for HS256 (256 bits = 32 bytes) */
 const MIN_HS256_SECRET_LENGTH = 32
+
+/** Key ID format regex (key-YYYY-MM-DD-xxxx) */
+const KID_FORMAT_REGEX = /^key-\d{4}-\d{2}-\d{2}-[a-f0-9]{4}$/
+
+/**
+ * Validate kid format to ensure consistent timing regardless of content
+ * This helps prevent timing attacks that could enumerate valid key IDs
+ */
+function isValidKidFormat(kid: string): boolean {
+  // Always perform regex test to maintain consistent timing
+  const isValid = KID_FORMAT_REGEX.test(kid)
+  // Additional length check (constant time)
+  const correctLength = kid.length === 19 // "key-YYYY-MM-DD-xxxx" = 19 chars
+  return isValid && correctLength
+}
 
 /** Configuration for HS256 algorithm */
 interface HS256Config {
@@ -44,7 +66,16 @@ let jwtConfig: (HS256Config | ES256Config) & { defaultExpiresIn: string } = {
 }
 
 // Rotation configuration (optional)
-let rotationKeyStore: any = null // KeyStore instance
+// KeyStore interface for rotation support (avoids circular imports)
+interface RotationKeyStore {
+  getCurrentKeyId(): Promise<string>
+  getKey(kid: string): Promise<{
+    metadata: { algorithm: string; status: string }
+    privateKey: string
+    publicKey?: Record<string, unknown>
+  }>
+}
+let rotationKeyStore: RotationKeyStore | null = null
 
 /**
  * Configure JWT settings (called by framework initialization)
@@ -112,7 +143,7 @@ export function configure(config: JWTConfig): void {
  * jwt.configureRotation(keyStore)
  * ```
  */
-export function configureRotation(keyStore: any): void {
+export function configureRotation(keyStore: RotationKeyStore): void {
   rotationKeyStore = keyStore
 }
 
@@ -231,30 +262,26 @@ export async function verifyComplete(token: string): Promise<VerifiedJWT> {
 
   // Multi-key verification if rotation is enabled and kid is present
   if (rotationKeyStore && header.kid) {
+    // Validate kid format before lookup (timing-safe: consistent path regardless of kid)
+    if (!isValidKidFormat(header.kid)) {
+      throw new SignatureVerificationError('Unknown or expired signing key')
+    }
+
     try {
       const storedKey = await rotationKeyStore.getKey(header.kid)
 
-      // Verify algorithm matches stored key
-      if (storedKey.metadata.algorithm !== header.alg) {
+      // Timing-safe algorithm comparison to prevent enumeration attacks
+      // Use timingSafeEqual to ensure consistent comparison time
+      if (!timingSafeEqual(storedKey.metadata.algorithm, header.alg)) {
         throw new AlgorithmMismatchError(storedKey.metadata.algorithm, header.alg)
       }
 
       // Verify with the specific key
       if (storedKey.metadata.algorithm === 'HS256') {
-        // Import HS256 secret from base64url
+        // Decode HS256 secret from base64url to raw bytes and verify directly
+        // This avoids string encoding issues with binary key data
         const secretBytes = base64urlDecode(storedKey.privateKey)
-        const secretKey = await crypto.subtle.importKey(
-          'raw',
-          secretBytes,
-          { name: 'HMAC', hash: 'SHA-256' },
-          false,
-          ['verify']
-        )
-        const secretBuffer = await crypto.subtle.exportKey('raw', secretKey)
-        const secretString = Array.from(new Uint8Array(secretBuffer))
-          .map((b) => String.fromCharCode(b))
-          .join('')
-        isValid = await verifyHS256(signingInput, signatureBuffer, secretString)
+        isValid = await verifyHS256WithRawKey(signingInput, signatureBuffer, secretBytes)
       } else {
         // ES256 - verify directly using JWK public key
         const publicKeyJwk = storedKey.publicKey

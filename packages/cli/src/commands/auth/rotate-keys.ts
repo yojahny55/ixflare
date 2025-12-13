@@ -2,17 +2,17 @@
  * @module commands/auth/rotate-keys
  * @description Manual key rotation CLI command
  * @node-only
+ *
+ * Note: Full CLI implementation deferred to Epic 6 (CLI Developer Experience).
+ * See docs/sprint-artifacts/deferred-items.md for details.
  */
 
 /**
  * Rotate JWT signing keys manually
  *
- * Note: This is a placeholder implementation. Full implementation requires:
- * 1. Worker API endpoint for rotation
- * 2. Wrangler integration for remote KV access
- * 3. Authenticated API calls to trigger rotation
- *
- * For now, this command provides guidance on manual rotation.
+ * This command provides guidance on manual key rotation.
+ * Full CLI implementation (wrangler integration, remote KV access)
+ * is deferred to Epic 6.
  *
  * @example
  * ```bash
@@ -22,53 +22,65 @@
 export async function rotateKeys(): Promise<void> {
   console.log(`
 ╭─────────────────────────────────────────╮
-│                                         │
 │   JWT Key Rotation                      │
-│                                         │
 ╰─────────────────────────────────────────╯
 
-⚠️  Manual key rotation via CLI is not yet fully implemented.
+ℹ️  Direct CLI rotation requires wrangler integration (Epic 6).
+   Use one of the methods below for key rotation.
 
-To rotate keys, you have two options:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. **Automatic Rotation (Recommended)**
-   - Keys rotate automatically based on your configuration
-   - Default: Every 30 days with 24h grace period
-   - No action needed from you
+1. AUTOMATIC ROTATION (Recommended)
+   Keys rotate automatically based on your configuration:
+   - Default interval: 30 days
+   - Grace period: 24 hours
+   - No manual action required
 
-2. **Manual Rotation via API**
-   - Create a protected API endpoint in your application:
+2. MANUAL ROTATION via API ENDPOINT
+   Create a protected endpoint in your application:
 
-   \`\`\`typescript
-   // src/routes/api/admin/rotate-keys.ts
-   import { rotateKeys, KeyStore } from 'ixflare/auth/rotation'
-   import type { EdgeContext } from 'ixflare'
+   ┌──────────────────────────────────────────────────────┐
+   │ // src/routes/api/admin/rotate-keys.ts              │
+   │                                                      │
+   │ import { rotateKeys, KeyStore } from 'ixflare'      │
+   │ import type { EdgeContext } from 'ixflare'          │
+   │                                                      │
+   │ export async function POST(ctx: EdgeContext) {      │
+   │   // IMPORTANT: Add authentication check here!      │
+   │   const keyStore = new KeyStore(ctx.env.JWT_KEYS)   │
+   │   const config = { interval: '30d', gracePeriod: '24h' }│
+   │                                                      │
+   │   const result = await rotateKeys(                  │
+   │     config,                                          │
+   │     keyStore,                                        │
+   │     'ES256',                                         │
+   │     { encryptionSecret: ctx.env.KEY_ENCRYPTION_SECRET }│
+   │   )                                                  │
+   │                                                      │
+   │   return Response.json({                            │
+   │     success: true,                                   │
+   │     kid: result.kid,                                 │
+   │     encrypted: result.encrypted,                    │
+   │     rotatedAt: new Date(result.rotatedAt).toISOString()│
+   │   })                                                 │
+   │ }                                                    │
+   └──────────────────────────────────────────────────────┘
 
-   export async function POST(ctx: EdgeContext) {
-     // Add authentication check here
-     const keyStore = new KeyStore(ctx.env.KV_NAMESPACE)
-     const config = { interval: '30d', gracePeriod: '24h' }
+   Trigger rotation:
+   $ curl -X POST https://your-app.workers.dev/api/admin/rotate-keys \\
+       -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
 
-     const result = await rotateKeys(config, keyStore, 'ES256')
+3. CHECK CURRENT KEY STATUS
+   View JWKS endpoint: GET /.well-known/jwks.json
+   Shows active keys and their IDs (kid)
 
-     return Response.json({
-       success: true,
-       newKeyId: result.kid,
-       rotatedAt: new Date(result.rotatedAt).toISOString(),
-     })
-   }
-   \`\`\`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-   Then trigger rotation:
-   \`\`\`bash
-   curl -X POST https://your-app.workers.dev/api/admin/rotate-keys \\
-     -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
-   \`\`\`
+🔐 Security Notes:
+   - Always protect manual rotation endpoints with authentication
+   - Use encryptionSecret to encrypt private keys at rest
+   - Set KEY_ENCRYPTION_SECRET in wrangler.toml secrets
 
-3. **Check Current Key Status**
-   - View your JWKS endpoint: \`/.well-known/jwks.json\`
-   - Inspect active keys and rotation schedule
-
-For more information, see: docs/authentication/key-rotation.md
+📖 Docs: See docs/sprint-artifacts/deferred-items.md for CLI roadmap
 `)
 }

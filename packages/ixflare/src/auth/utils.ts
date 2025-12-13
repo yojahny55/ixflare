@@ -87,3 +87,37 @@ export function decodeJson<T = unknown>(base64url: string): T {
   const json = new TextDecoder().decode(buffer)
   return JSON.parse(json) as T
 }
+
+/**
+ * Timing-safe string comparison to prevent timing attacks
+ *
+ * Compares two strings in constant time regardless of where they differ.
+ * This prevents attackers from using timing differences to enumerate valid values.
+ *
+ * @param a - First string to compare
+ * @param b - Second string to compare
+ * @returns True if strings are equal
+ */
+export function timingSafeEqual(a: string, b: string): boolean {
+  // Convert strings to Uint8Array for consistent comparison
+  const encoder = new TextEncoder()
+  const bufA = encoder.encode(a)
+  const bufB = encoder.encode(b)
+
+  // If lengths differ, compare against a same-length buffer to maintain constant time
+  // but return false after the comparison
+  const lengthMismatch = bufA.length !== bufB.length
+
+  // Use the longer length for comparison (pad shorter with comparison to self)
+  const len = Math.max(bufA.length, bufB.length)
+
+  let result = 0
+  for (let i = 0; i < len; i++) {
+    // XOR bytes - any difference will set bits in result
+    // Use modulo to handle length differences safely
+    result |= (bufA[i % bufA.length] || 0) ^ (bufB[i % bufB.length] || 0)
+  }
+
+  // Both must match exactly (result === 0) AND lengths must be same
+  return result === 0 && !lengthMismatch
+}
