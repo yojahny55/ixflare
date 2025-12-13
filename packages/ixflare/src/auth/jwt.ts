@@ -43,6 +43,9 @@ let jwtConfig: (HS256Config | ES256Config) & { defaultExpiresIn: string } = {
   defaultExpiresIn: '15m',
 }
 
+// Rotation configuration (optional)
+let rotationKeyStore: any = null // KeyStore instance
+
 /**
  * Configure JWT settings (called by framework initialization)
  *
@@ -94,6 +97,26 @@ export function configure(config: JWTConfig): void {
 }
 
 /**
+ * Configure key rotation (optional)
+ *
+ * When rotation is enabled, tokens will include a `kid` header,
+ * and verification will support multiple keys during grace periods.
+ *
+ * @param keyStore - KeyStore instance from rotation module
+ *
+ * @example
+ * ```typescript
+ * import { KeyStore } from '@/auth/rotation'
+ *
+ * const keyStore = new KeyStore(env.KV_NAMESPACE)
+ * jwt.configureRotation(keyStore)
+ * ```
+ */
+export function configureRotation(keyStore: any): void {
+  rotationKeyStore = keyStore
+}
+
+/**
  * Sign a JWT token with the given payload
  * Uses the configured algorithm (HS256 or ES256)
  */
@@ -115,6 +138,12 @@ export async function sign(payload: JWTPayload, options: JWTOptions = {}): Promi
   const header: JWTHeader = {
     alg: jwtConfig.algorithm,
     typ: 'JWT',
+  }
+
+  // Add kid if rotation is enabled
+  if (rotationKeyStore) {
+    const kid = await rotationKeyStore.getCurrentKeyId()
+    header.kid = kid
   }
 
   // Create payload with timestamps
@@ -199,12 +228,75 @@ export async function verifyComplete(token: string): Promise<VerifiedJWT> {
   const signatureBuffer = base64urlDecode(signatureEncoded)
 
   let isValid: boolean
-  if (jwtConfig.algorithm === 'HS256') {
-    const config = jwtConfig as HS256Config
-    isValid = await verifyHS256(signingInput, signatureBuffer, config.secret)
+
+  // Multi-key verification if rotation is enabled and kid is present
+  if (rotationKeyStore && header.kid) {
+    try {
+      const storedKey = await rotationKeyStore.getKey(header.kid)
+
+      // Verify algorithm matches stored key
+      if (storedKey.metadata.algorithm !== header.alg) {
+        throw new AlgorithmMismatchError(storedKey.metadata.algorithm, header.alg)
+      }
+
+      // Verify with the specific key
+      if (storedKey.metadata.algorithm === 'HS256') {
+        // Import HS256 secret from base64url
+        const secretBytes = base64urlDecode(storedKey.privateKey)
+        const secretKey = await crypto.subtle.importKey(
+          'raw',
+          secretBytes,
+          { name: 'HMAC', hash: 'SHA-256' },
+          false,
+          ['verify']
+        )
+        const secretBuffer = await crypto.subtle.exportKey('raw', secretKey)
+        const secretString = Array.from(new Uint8Array(secretBuffer))
+          .map((b) => String.fromCharCode(b))
+          .join('')
+        isValid = await verifyHS256(signingInput, signatureBuffer, secretString)
+      } else {
+        // ES256 - verify directly using JWK public key
+        const publicKeyJwk = storedKey.publicKey
+        if (!publicKeyJwk) {
+          throw new SignatureVerificationError('Public key not found for ES256 verification')
+        }
+        const publicKey = await crypto.subtle.importKey(
+          'jwk',
+          publicKeyJwk,
+          { name: 'ECDSA', namedCurve: 'P-256' },
+          false,
+          ['verify']
+        )
+        const encoder = new TextEncoder()
+        const dataBuffer = encoder.encode(signingInput)
+        isValid = await crypto.subtle.verify(
+          { name: 'ECDSA', hash: 'SHA-256' },
+          publicKey,
+          signatureBuffer,
+          dataBuffer
+        )
+      }
+
+      // Check if key is expired (past grace period)
+      if (storedKey.metadata.status === 'expired') {
+        throw new SignatureVerificationError('Signing key has expired')
+      }
+    } catch (error: any) {
+      if (error.name === 'KeyNotFoundError') {
+        throw new SignatureVerificationError('Unknown or expired signing key')
+      }
+      throw error
+    }
   } else {
-    const config = jwtConfig as ES256Config
-    isValid = await verifyES256(signingInput, signatureBuffer, config.publicKey)
+    // Standard single-key verification
+    if (jwtConfig.algorithm === 'HS256') {
+      const config = jwtConfig as HS256Config
+      isValid = await verifyHS256(signingInput, signatureBuffer, config.secret)
+    } else {
+      const config = jwtConfig as ES256Config
+      isValid = await verifyES256(signingInput, signatureBuffer, config.publicKey)
+    }
   }
 
   if (!isValid) {

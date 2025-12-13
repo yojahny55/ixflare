@@ -64,6 +64,7 @@ const commands: Record<string, () => Promise<void>> = {
   generate: () => import('./commands/generate').then((m) => m.generate()),
   'generate:env': () =>
     import('./commands/generate-env-types').then((m) => m.generateEnvCommand({})),
+  'auth:rotate-keys': () => import('./commands/auth/rotate-keys').then((m) => m.rotateKeys()),
 }
 
 async function main(): Promise<void> {
@@ -96,6 +97,7 @@ async function main(): Promise<void> {
     db:seed             Seed the database with test/development data
     generate            Generate code (model, migration, component)
     generate:env        Generate TypeScript types from .env.example
+    auth:rotate-keys    Manually rotate JWT signing keys
 
   Migration Options:
     --yes               Skip confirmation prompts
