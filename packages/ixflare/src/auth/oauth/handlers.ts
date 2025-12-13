@@ -74,7 +74,7 @@ export function handleOAuthRedirect<Env extends Record<string, unknown> = Record
   options: OAuthRedirectOptions = {}
 ) {
   return async (ctx: OAuthContext<Env>): Promise<Response> => {
-    const kv = (ctx.env as Record<string, unknown>).KV as KVNamespace | undefined || ctx.kv
+    const kv = ((ctx.env as Record<string, unknown>).KV as KVNamespace | undefined) || ctx.kv
     if (!kv) {
       throw new OAuthError(
         'KV_NOT_CONFIGURED',
@@ -172,7 +172,7 @@ export function handleOAuthCallback<Env extends Record<string, unknown> = Record
   handler: OAuthCallbackHandler<Env>
 ) {
   return async (ctx: OAuthContext<Env>): Promise<Response> => {
-    const kv = (ctx.env as Record<string, unknown>).KV as KVNamespace | undefined || ctx.kv
+    const kv = ((ctx.env as Record<string, unknown>).KV as KVNamespace | undefined) || ctx.kv
     if (!kv) {
       throw new OAuthError(
         'KV_NOT_CONFIGURED',

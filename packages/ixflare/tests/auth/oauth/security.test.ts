@@ -306,18 +306,18 @@ describe('OAuth Security Tests (Epic 5 Requirements)', () => {
 
       // Base64 encoded javascript - fail
       expect(() =>
-        validateRedirectUri('data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==', allowed, 'test')
+        validateRedirectUri(
+          'data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==',
+          allowed,
+          'test'
+        )
       ).toThrow()
     })
 
     it('should prevent SQL injection in state storage', async () => {
       // State keys use UUID format which prevents injection
       // Test that SQL-like payloads don't affect state lookup
-      const sqlPayloads = [
-        "' OR '1'='1",
-        '1; DROP TABLE states;',
-        "UNION SELECT * FROM secrets--",
-      ]
+      const sqlPayloads = ["' OR '1'='1", '1; DROP TABLE states;', 'UNION SELECT * FROM secrets--']
 
       for (const payload of sqlPayloads) {
         const result = await consumeState(kv, payload)
