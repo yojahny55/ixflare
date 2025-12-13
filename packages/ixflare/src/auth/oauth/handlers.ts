@@ -13,6 +13,11 @@
  *   return { user, redirect: '/dashboard' }
  * })
  * ```
+ *
+ * Session Binding (CSRF Protection per RFC 9700):
+ * The OAuth state is automatically bound to the current session (if configured).
+ * This prevents login CSRF attacks where an attacker initiates OAuth with their
+ * account and tricks a victim into completing the flow.
  */
 
 import type { OAuthProviderConfig, OAuthProfile, OAuthTokens } from './types'
@@ -22,6 +27,7 @@ import { buildAuthorizationUrl, exchangeCode, fetchUserProfile } from './flow'
 import { validateRedirectUri } from './validation'
 import { OAuthStateError, OAuthCallbackError, OAuthError } from './errors'
 import { getProfileNormalizer } from './providers'
+import { session } from '@/auth/session'
 
 /**
  * OAuth handler context provided to route handlers
@@ -93,10 +99,14 @@ export function handleOAuthRedirect<Env extends Record<string, unknown> = Record
       codeChallenge = await generateCodeChallenge(codeVerifier)
     }
 
-    // Create and store OAuth state
+    // Extract current session ID for session binding (CSRF protection per RFC 9700)
+    // If session manager is configured and user has a session, bind state to it
+    const sessionId = await getSessionIdFromRequest(ctx.request)
+
+    // Create and store OAuth state with session binding
     const state = createOAuthState(provider.id, redirectUri, {
       codeVerifier,
-      // Could add sessionId here for session binding if session is available
+      sessionId, // Session-bound state prevents login CSRF
     })
     await storeState(kv, state)
 
@@ -198,6 +208,20 @@ export function handleOAuthCallback<Env extends Record<string, unknown> = Record
       throw new OAuthStateError(provider.id)
     }
 
+    // Verify session binding (CSRF protection per RFC 9700)
+    // If state was bound to a session, verify the current session matches
+    if (state.sessionId) {
+      const currentSessionId = await getSessionIdFromRequest(ctx.request)
+      if (currentSessionId !== state.sessionId) {
+        // Session mismatch - possible login CSRF attack
+        throw new OAuthError(
+          'OAUTH_SESSION_MISMATCH',
+          'OAuth state session binding mismatch - possible CSRF attack',
+          provider.id
+        )
+      }
+    }
+
     // Exchange authorization code for tokens
     const tokens = await exchangeCode(provider, code, state.redirectUri, state.codeVerifier)
 
@@ -258,5 +282,24 @@ function createDefaultProfile(raw: Record<string, unknown>): OAuthProfile {
     name: (raw.name || raw.username || raw.login) as string | undefined,
     avatar: (raw.avatar || raw.avatar_url || raw.picture) as string | undefined,
     raw,
+  }
+}
+
+/**
+ * Extract current session ID from request (for session binding)
+ * Returns undefined if session manager is not configured or no valid session exists
+ *
+ * @param request - Request with potential session cookie
+ * @returns Session ID or undefined
+ */
+async function getSessionIdFromRequest(request: Request): Promise<string | undefined> {
+  try {
+    // Attempt to get current session from session manager
+    const currentSession = await session.get(request)
+    return currentSession?.sessionId
+  } catch {
+    // Session manager not configured or other error - no session binding
+    // This is expected if the user hasn't called session.configure()
+    return undefined
   }
 }

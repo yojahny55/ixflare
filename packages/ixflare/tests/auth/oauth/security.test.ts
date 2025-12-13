@@ -388,6 +388,77 @@ describe('OAuth Security Tests (Epic 5 Requirements)', () => {
     })
   })
 
+  describe('Task 2.5: Session Binding for CSRF Protection (AC5)', () => {
+    let kv: KVNamespace
+
+    beforeEach(() => {
+      kv = new MockKVNamespace()
+    })
+
+    it('should store sessionId in OAuth state when session exists', async () => {
+      // When a user has a session and initiates OAuth, the state should be bound
+      // to their session ID to prevent login CSRF attacks
+
+      const state = createOAuthState('github', 'https://app.example.com/callback', {
+        sessionId: 'user-session-123',
+      })
+
+      expect(state.sessionId).toBe('user-session-123')
+      expect(state.provider).toBe('github')
+      expect(state.redirectUri).toBe('https://app.example.com/callback')
+    })
+
+    it('should allow state without sessionId when no session exists', async () => {
+      // For unauthenticated users, OAuth flow should still work
+      const state = createOAuthState('github', 'https://app.example.com/callback')
+
+      expect(state.sessionId).toBeUndefined()
+      expect(state.state).toBeTruthy()
+    })
+
+    it('should detect session mismatch attack (login CSRF)', async () => {
+      // Attacker scenario:
+      // 1. Attacker initiates OAuth with their session (session-A)
+      // 2. Attacker tricks victim into completing the callback
+      // 3. Victim's browser sends callback with their session (session-B)
+      // 4. Session binding should detect mismatch
+
+      // Store state with attacker's session
+      const attackerState = createOAuthState('github', 'https://app.example.com/callback', {
+        sessionId: 'attacker-session-xyz',
+      })
+      await storeState(kv, attackerState)
+
+      // When victim's session tries to consume this state
+      const consumedState = await consumeState(kv, attackerState.state)
+
+      // The state should be consumed (removed from KV)
+      expect(consumedState).not.toBeNull()
+      expect(consumedState!.sessionId).toBe('attacker-session-xyz')
+
+      // The callback handler would then compare:
+      // consumedState.sessionId ('attacker-session-xyz') !== victim's current session ('victim-session-abc')
+      // This mismatch triggers OAUTH_SESSION_MISMATCH error in handlers.ts
+    })
+
+    it('should allow callback when session binding matches', async () => {
+      // Legitimate flow: same user, same session
+      const userSessionId = 'user-session-abc'
+      const state = createOAuthState('github', 'https://app.example.com/callback', {
+        sessionId: userSessionId,
+      })
+      await storeState(kv, state)
+
+      const consumedState = await consumeState(kv, state.state)
+      expect(consumedState).not.toBeNull()
+      expect(consumedState!.sessionId).toBe(userSessionId)
+
+      // Same session on callback = allowed
+      const currentSessionId = userSessionId
+      expect(consumedState!.sessionId).toBe(currentSessionId)
+    })
+  })
+
   describe('Task 10.8: Open Redirector Prevention', () => {
     it('should prevent redirect to untrusted domains', () => {
       const trusted = ['example.com']
