@@ -27,11 +27,33 @@ export const cacheConfigSchema = z.object({
 })
 
 /**
+ * CSRF configuration schema
+ */
+export const csrfConfigSchema = z.object({
+  /** Enable CSRF protection (defaults to true) */
+  enabled: z.boolean().default(true),
+  /** CSRF cookie name (defaults to '__csrf') */
+  cookie: z.string().min(1).default('__csrf'),
+  /** CSRF header name (defaults to 'X-CSRF-Token') */
+  header: z.string().min(1).default('X-CSRF-Token'),
+  /** CSRF body field name (defaults to '_csrf') */
+  bodyField: z.string().min(1).default('_csrf'),
+  /** HTTP methods requiring CSRF protection (defaults to POST, PUT, PATCH, DELETE) */
+  methods: z
+    .array(z.enum(['POST', 'PUT', 'PATCH', 'DELETE']))
+    .default(['POST', 'PUT', 'PATCH', 'DELETE']),
+  /** SameSite cookie attribute (defaults to 'strict') */
+  sameSite: z.enum(['strict', 'lax']).default('strict'),
+  /** HMAC secret for token signing (required) */
+  secret: z.string().min(1),
+})
+
+/**
  * Security configuration schema
  */
 export const securityConfigSchema = z.object({
-  /** Enable CSRF protection (defaults to true) */
-  csrf: z.boolean().default(true),
+  /** Enable CSRF protection (boolean for simple on/off, object for full configuration) */
+  csrf: z.union([z.boolean(), csrfConfigSchema]).default(true),
   /** Auto-inject security headers (defaults to true) */
   headers: z.boolean().default(true),
 })
@@ -174,6 +196,11 @@ export type DatabaseConfig = z.infer<typeof databaseConfigSchema>
  * Cache configuration type
  */
 export type CacheConfig = z.infer<typeof cacheConfigSchema>
+
+/**
+ * CSRF configuration type
+ */
+export type CSRFConfigSchema = z.infer<typeof csrfConfigSchema>
 
 /**
  * Security configuration type
