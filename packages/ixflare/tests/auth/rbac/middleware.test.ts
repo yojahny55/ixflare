@@ -298,3 +298,34 @@ describe('Deny by default (AC8, OWASP)', () => {
     await expect(middleware(ctx, mockNext)).rejects.toThrow(PermissionDeniedError)
   })
 })
+
+describe('Empty array validation', () => {
+  it('should throw when requireAnyRole is called with empty array', () => {
+    expect(() => requireAnyRole([])).toThrow('requireAnyRole requires at least one role')
+  })
+
+  it('should throw when requireAnyPermission is called with empty array', () => {
+    expect(() => requireAnyPermission([], testRoles)).toThrow(
+      'requireAnyPermission requires at least one permission'
+    )
+  })
+})
+
+describe('Timing-safe role checking', () => {
+  it('should correctly validate roles with timing-safe comparison', async () => {
+    const user: User = { id: '1', roles: ['admin'] }
+    const ctx = createMockContext(user)
+    const middleware = requireRole('admin')
+
+    const response = await middleware(ctx, mockNext)
+    expect(response.status).toBe(200)
+  })
+
+  it('should deny access with timing-safe comparison when role is missing', async () => {
+    const user: User = { id: '1', roles: ['user'] }
+    const ctx = createMockContext(user)
+    const middleware = requireRole('admin')
+
+    await expect(middleware(ctx, mockNext)).rejects.toThrow(RoleDeniedError)
+  })
+})

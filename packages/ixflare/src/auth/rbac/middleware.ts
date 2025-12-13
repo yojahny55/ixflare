@@ -5,10 +5,66 @@
  */
 
 import type { Middleware } from '@/core/middleware'
+import type { EdgeContext } from '@/types/context'
 import type { User, RolesConfig } from './types'
 import { hasPermission } from './permissions'
 import { PermissionDeniedError, RoleDeniedError } from './errors'
 import { AuthError } from '@/errors'
+
+/**
+ * Timing-safe string comparison to prevent timing attacks
+ * Used for role/permission checks to avoid leaking valid role names
+ *
+ * @param a - First string
+ * @param b - Second string
+ * @returns true if strings are equal
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  // Use the longer string's length to pad comparison
+  // This prevents timing leaks from early length check
+  const maxLength = Math.max(a.length, b.length)
+
+  let result = a.length ^ b.length // Will be non-zero if lengths differ
+
+  for (let i = 0; i < maxLength; i++) {
+    // Use 0 as default for out-of-bounds access
+    const charA = i < a.length ? a.charCodeAt(i) : 0
+    const charB = i < b.length ? b.charCodeAt(i) : 0
+    result |= charA ^ charB
+  }
+
+  return result === 0
+}
+
+/**
+ * Check if user has a role using timing-safe comparison
+ *
+ * @param userRoles - Array of user's roles
+ * @param requiredRole - Role to check for
+ * @returns true if user has the role
+ */
+function hasRoleTimingSafe(userRoles: string[], requiredRole: string): boolean {
+  let found = false
+  // Always iterate through all roles to maintain constant time
+  for (const role of userRoles) {
+    if (timingSafeEqual(role, requiredRole)) {
+      found = true
+    }
+  }
+  return found
+}
+
+/**
+ * Type-safe helper to extract user from EdgeContext
+ * Avoids `as any` casts throughout middleware
+ *
+ * @param ctx - Edge context (generic Env type)
+ * @returns User object or undefined
+ */
+function getUserFromContext<Env>(ctx: EdgeContext<Env>): User | undefined {
+  // EdgeContext is augmented with user property in session-integration.ts
+  return (ctx as EdgeContext<Env> & { user?: User }).user
+}
 
 /**
  * Require user to have a specific role
@@ -34,7 +90,7 @@ import { AuthError } from '@/errors'
  */
 export function requireRole(role: string): Middleware {
   return async (ctx, next) => {
-    const user = (ctx as any).user as User | undefined
+    const user = getUserFromContext(ctx)
 
     // Authentication check (AC2)
     if (!user) {
@@ -46,8 +102,8 @@ export function requireRole(role: string): Middleware {
       throw new AuthError('INVALID_USER', 'User object is malformed')
     }
 
-    // Role check (AC2)
-    if (!user.roles.includes(role)) {
+    // Role check using timing-safe comparison (AC2)
+    if (!hasRoleTimingSafe(user.roles, role)) {
       throw new RoleDeniedError('Insufficient permissions', role, user.roles)
     }
 
@@ -61,12 +117,18 @@ export function requireRole(role: string): Middleware {
  * @param roles - Array of role names (user needs at least one)
  * @returns Middleware function
  *
+ * @throws Error if roles array is empty
  * @throws AuthError (401) if user is not authenticated
  * @throws RoleDeniedError (403) if user has none of the required roles
  */
 export function requireAnyRole(roles: string[]): Middleware {
+  // Validate non-empty array at middleware creation time
+  if (roles.length === 0) {
+    throw new Error('requireAnyRole requires at least one role')
+  }
+
   return async (ctx, next) => {
-    const user = (ctx as any).user as User | undefined
+    const user = getUserFromContext(ctx)
 
     if (!user) {
       throw new AuthError('UNAUTHORIZED', 'Authentication required')
@@ -76,11 +138,17 @@ export function requireAnyRole(roles: string[]): Middleware {
       throw new AuthError('INVALID_USER', 'User object is malformed')
     }
 
-    // Check if user has any of the required roles
-    const hasAnyRole = roles.some((role) => user.roles.includes(role))
+    // Check if user has any of the required roles using timing-safe comparison
+    let hasAnyRole = false
+    for (const requiredRole of roles) {
+      if (hasRoleTimingSafe(user.roles, requiredRole)) {
+        hasAnyRole = true
+        // Don't break early to maintain more consistent timing
+      }
+    }
 
     if (!hasAnyRole) {
-      throw new RoleDeniedError(`Requires one of: ${roles.join(', ')}`, undefined, user.roles)
+      throw new RoleDeniedError('Insufficient permissions', undefined, user.roles)
     }
 
     return next()
@@ -98,7 +166,7 @@ export function requireAnyRole(roles: string[]): Middleware {
  */
 export function requireAllRoles(roles: string[]): Middleware {
   return async (ctx, next) => {
-    const user = (ctx as any).user as User | undefined
+    const user = getUserFromContext(ctx)
 
     if (!user) {
       throw new AuthError('UNAUTHORIZED', 'Authentication required')
@@ -108,11 +176,17 @@ export function requireAllRoles(roles: string[]): Middleware {
       throw new AuthError('INVALID_USER', 'User object is malformed')
     }
 
-    // Check if user has all of the required roles
-    const hasAllRoles = roles.every((role) => user.roles.includes(role))
+    // Check if user has all of the required roles using timing-safe comparison
+    let hasAllRoles = true
+    for (const requiredRole of roles) {
+      if (!hasRoleTimingSafe(user.roles, requiredRole)) {
+        hasAllRoles = false
+        // Don't break early to maintain more consistent timing
+      }
+    }
 
     if (!hasAllRoles) {
-      throw new RoleDeniedError(`Requires all of: ${roles.join(', ')}`, undefined, user.roles)
+      throw new RoleDeniedError('Insufficient permissions', undefined, user.roles)
     }
 
     return next()
@@ -147,7 +221,7 @@ export function requirePermission<T extends RolesConfig>(
   rolesConfig: T
 ): Middleware {
   return async (ctx, next) => {
-    const user = (ctx as any).user as User | undefined
+    const user = getUserFromContext(ctx)
 
     // Authentication check (AC3)
     if (!user) {
@@ -174,6 +248,7 @@ export function requirePermission<T extends RolesConfig>(
  * @param rolesConfig - Role configuration
  * @returns Middleware function
  *
+ * @throws Error if permissions array is empty
  * @throws AuthError (401) if user is not authenticated
  * @throws PermissionDeniedError (403) if user has none of the required permissions
  */
@@ -181,8 +256,13 @@ export function requireAnyPermission<T extends RolesConfig>(
   permissions: string[],
   rolesConfig: T
 ): Middleware {
+  // Validate non-empty array at middleware creation time
+  if (permissions.length === 0) {
+    throw new Error('requireAnyPermission requires at least one permission')
+  }
+
   return async (ctx, next) => {
-    const user = (ctx as any).user as User | undefined
+    const user = getUserFromContext(ctx)
 
     if (!user) {
       throw new AuthError('UNAUTHORIZED', 'Authentication required')
@@ -196,7 +276,7 @@ export function requireAnyPermission<T extends RolesConfig>(
     const hasAnyPerm = permissions.some((perm) => hasPermission(user, perm, rolesConfig))
 
     if (!hasAnyPerm) {
-      throw new PermissionDeniedError(`Requires one of: ${permissions.join(', ')}`, undefined, user.roles)
+      throw new PermissionDeniedError('Insufficient permissions', undefined, user.roles)
     }
 
     return next()
@@ -218,7 +298,7 @@ export function requireAllPermissions<T extends RolesConfig>(
   rolesConfig: T
 ): Middleware {
   return async (ctx, next) => {
-    const user = (ctx as any).user as User | undefined
+    const user = getUserFromContext(ctx)
 
     if (!user) {
       throw new AuthError('UNAUTHORIZED', 'Authentication required')
@@ -232,7 +312,7 @@ export function requireAllPermissions<T extends RolesConfig>(
     const hasAllPerms = permissions.every((perm) => hasPermission(user, perm, rolesConfig))
 
     if (!hasAllPerms) {
-      throw new PermissionDeniedError(`Requires all of: ${permissions.join(', ')}`, undefined, user.roles)
+      throw new PermissionDeniedError('Insufficient permissions', undefined, user.roles)
     }
 
     return next()

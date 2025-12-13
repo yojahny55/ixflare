@@ -148,7 +148,7 @@ describe('Policy.authorize()', () => {
     expect(() => postPolicy.authorize(user, 'delete', otherUserPost)).toThrow(ForbiddenError)
   })
 
-  it('should throw ForbiddenError with action name in message', () => {
+  it('should throw ForbiddenError with generic message (security best practice)', () => {
     const user: User = { id: '1', role: 'user' }
     const otherUserPost: Post = { id: 'p2', authorId: '2', title: "Other's Post" }
 
@@ -158,7 +158,8 @@ describe('Policy.authorize()', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(ForbiddenError)
       const forbiddenError = error as ForbiddenError
-      expect(forbiddenError.message).toContain('update')
+      // Generic message to avoid revealing attempted action
+      expect(forbiddenError.message).toBe('Insufficient permissions')
       expect(forbiddenError.status).toBe(403)
     }
   })

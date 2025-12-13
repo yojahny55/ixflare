@@ -78,9 +78,9 @@ export function definePolicy<TUser = any, TResource = any>(
     try {
       // Execute policy function
       return policyFn(user, resource)
-    } catch (error) {
-      // Log error but deny access (fail-safe)
-      console.error(`Policy check failed for action "${String(action)}":`, error)
+    } catch {
+      // Fail-safe: deny access on policy function errors
+      // Do not log error details to avoid information leakage (OWASP A09)
       return false
     }
   }
@@ -99,7 +99,8 @@ export function definePolicy<TUser = any, TResource = any>(
     resource: TResource
   ): void {
     if (!can(user, action, resource)) {
-      throw new ForbiddenError(`Cannot perform action: ${String(action)}`)
+      // Generic message to avoid revealing attempted action (security best practice)
+      throw new ForbiddenError('Insufficient permissions')
     }
   }
 

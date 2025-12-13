@@ -476,10 +476,11 @@ describe('Security: Input Validation (OWASP)', () => {
       })
       policy.authorize(user, 'delete', { id: 'r1', authorId: 'other' })
     } catch (error: any) {
-      // Error message should be generic (no resource details)
+      // Error message should be generic (no resource or action details)
       expect(error.message).not.toContain('r1')
       expect(error.message).not.toContain('other')
-      expect(error.message).toBe('Cannot perform action: delete')
+      expect(error.message).not.toContain('delete') // Action name not leaked
+      expect(error.message).toBe('Insufficient permissions')
     }
   })
 })

@@ -14,7 +14,11 @@ export class PermissionDeniedError extends ForbiddenError {
   readonly requiredPermission?: string
   readonly userPermissions: string[]
 
-  constructor(message: string = 'Insufficient permissions', requiredPermission?: string, userPermissions: string[] = []) {
+  constructor(
+    message: string = 'Insufficient permissions',
+    requiredPermission?: string,
+    userPermissions: string[] = []
+  ) {
     // Base message is safe for client
     super(message)
     this.name = 'PermissionDeniedError'
@@ -46,7 +50,11 @@ export class RoleDeniedError extends ForbiddenError {
   readonly requiredRole?: string
   readonly userRoles: string[]
 
-  constructor(message: string = 'Insufficient role privileges', requiredRole?: string, userRoles: string[] = []) {
+  constructor(
+    message: string = 'Insufficient role privileges',
+    requiredRole?: string,
+    userRoles: string[] = []
+  ) {
     super(message)
     this.name = 'RoleDeniedError'
     this.requiredRole = requiredRole

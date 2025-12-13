@@ -95,7 +95,11 @@ export function getRolePermissions<T extends RolesConfig>(
   // Add inherited permissions
   if (role.inherits) {
     for (const inheritedRole of role.inherits) {
-      const inheritedPermissions = getRolePermissions(config, inheritedRole as keyof T, new Set(visited))
+      const inheritedPermissions = getRolePermissions(
+        config,
+        inheritedRole as keyof T,
+        new Set(visited)
+      )
       for (const perm of inheritedPermissions) {
         permissions.add(perm)
       }

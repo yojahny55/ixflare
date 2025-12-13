@@ -113,10 +113,7 @@ export function hasAllPermissions<T extends RolesConfig>(
  * @param rolesConfig - Role configuration
  * @returns Array of unique permissions
  */
-export function getUserPermissions<T extends RolesConfig>(
-  user: User,
-  rolesConfig: T
-): string[] {
+export function getUserPermissions<T extends RolesConfig>(user: User, rolesConfig: T): string[] {
   if (!user || !user.roles || !Array.isArray(user.roles)) {
     return []
   }
