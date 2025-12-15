@@ -19,6 +19,7 @@ import {
   buildCrossOriginOpenerPolicyHeader,
   buildCrossOriginResourcePolicyHeader,
 } from './common'
+import { detectEnvironment } from '@/auth/cookie/security'
 
 import type { ContentSecurityPolicyConfig, HSTSConfig } from './types'
 
@@ -57,6 +58,7 @@ export const DEFAULT_SECURITY_HEADERS_CONFIG = {
  * Supports global config with route-level overrides.
  *
  * Features:
+ * - HTTP to HTTPS redirect (production only, enabled by default)
  * - Content-Security-Policy with nonce support
  * - HSTS with preload support
  * - X-Frame-Options for clickjacking protection
@@ -103,6 +105,49 @@ export function createSecurityHeadersMiddleware(
   globalConfig: SecurityHeadersConfig | boolean = true
 ): Middleware {
   return async (ctx, next) => {
+    // Determine effective config early for HTTPS redirect check
+    // Route config type assertion - routeConfig is dynamically added by router
+    const routeConfig = (ctx as { routeConfig?: { security?: { headers?: SecurityHeadersConfig | false } } })
+      .routeConfig?.security?.headers
+
+    // If route disabled headers entirely, skip all processing including HTTPS redirect
+    if (routeConfig === false) {
+      return next()
+    }
+
+    // Build effective config for HTTPS redirect check
+    let effectiveConfig: SecurityHeadersConfig
+
+    if (globalConfig === false) {
+      effectiveConfig = routeConfig || {}
+    } else if (globalConfig === true) {
+      effectiveConfig = {
+        ...DEFAULT_SECURITY_HEADERS_CONFIG,
+        ...(routeConfig || {}),
+      }
+    } else {
+      effectiveConfig = {
+        ...DEFAULT_SECURITY_HEADERS_CONFIG,
+        ...globalConfig,
+        ...(routeConfig || {}),
+      }
+    }
+
+    // Handle HTTPS redirect BEFORE generating nonce (to avoid unnecessary work)
+    // Only redirect in production environment
+    if (effectiveConfig.httpsRedirect !== false) {
+      const env = detectEnvironment()
+      if (env === 'production') {
+        const url = new URL(ctx.request.url)
+        if (url.protocol === 'http:') {
+          // Redirect HTTP to HTTPS with 301 Moved Permanently
+          const httpsUrl = new URL(url.href)
+          httpsUrl.protocol = 'https:'
+          return Response.redirect(httpsUrl.href, 301)
+        }
+      }
+    }
+
     // Generate nonce for this request
     const nonce = await generateNonce()
     setRequestNonce(nonce)
@@ -110,37 +155,6 @@ export function createSecurityHeadersMiddleware(
     try {
       // Get response from next middleware/handler
       const response = await next()
-
-      // Check if route has disabled security headers
-      // Route config type assertion - routeConfig is dynamically added by router
-      const routeConfig = (ctx as { routeConfig?: { security?: { headers?: SecurityHeadersConfig | false } } })
-        .routeConfig?.security?.headers
-
-      if (routeConfig === false) {
-        // Route has disabled security headers entirely
-        return response
-      }
-
-      // Merge global config with route config (route config takes precedence)
-      let effectiveConfig: SecurityHeadersConfig
-
-      if (globalConfig === false) {
-        // Global headers disabled, only use route config if provided
-        effectiveConfig = routeConfig || {}
-      } else if (globalConfig === true) {
-        // Use defaults, merge with route config
-        effectiveConfig = {
-          ...DEFAULT_SECURITY_HEADERS_CONFIG,
-          ...(routeConfig || {}),
-        }
-      } else {
-        // Custom global config, merge with route config
-        effectiveConfig = {
-          ...DEFAULT_SECURITY_HEADERS_CONFIG,
-          ...globalConfig,
-          ...(routeConfig || {}),
-        }
-      }
 
       // Clone response to add headers (Response is immutable)
       const headers = new Headers(response.headers)

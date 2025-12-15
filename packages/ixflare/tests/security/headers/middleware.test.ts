@@ -6,14 +6,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createSecurityHeadersMiddleware, DEFAULT_SECURITY_HEADERS_CONFIG } from '@/security/headers/middleware'
 import { clearRequestNonce } from '@/security/headers/csp'
+import { setEnvironment, clearEnvironment } from '@/auth/cookie/security'
 
 describe('createSecurityHeadersMiddleware', () => {
   beforeEach(() => {
     clearRequestNonce()
+    clearEnvironment()
   })
 
   afterEach(() => {
     clearRequestNonce()
+    clearEnvironment()
   })
 
   it('should add default security headers to response', async () => {
@@ -282,6 +285,115 @@ describe('createSecurityHeadersMiddleware', () => {
     // But nonce should still be cleared (via try/finally)
     const { getNonce } = await import('@/security/headers/csp')
     expect(() => getNonce()).toThrow()
+  })
+
+  describe('httpsRedirect', () => {
+    it('should redirect HTTP to HTTPS in production by default', async () => {
+      setEnvironment('production')
+
+      const middleware = createSecurityHeadersMiddleware()
+      const mockRequest = new Request('http://example.com/path?query=1')
+      const mockContext = { request: mockRequest } as any
+      const mockNext = vi.fn().mockResolvedValue(new Response('OK'))
+
+      const response = await middleware(mockContext, mockNext)
+
+      expect(response.status).toBe(301)
+      expect(response.headers.get('Location')).toBe('https://example.com/path?query=1')
+      expect(mockNext).not.toHaveBeenCalled()
+    })
+
+    it('should not redirect if already HTTPS in production', async () => {
+      setEnvironment('production')
+
+      const middleware = createSecurityHeadersMiddleware()
+      const mockRequest = new Request('https://example.com/path')
+      const mockContext = { request: mockRequest } as any
+      const mockNext = vi.fn().mockResolvedValue(new Response('OK'))
+
+      const response = await middleware(mockContext, mockNext)
+
+      expect(mockNext).toHaveBeenCalled()
+      expect(response.status).not.toBe(301)
+    })
+
+    it('should not redirect HTTP in development', async () => {
+      setEnvironment('development')
+
+      const middleware = createSecurityHeadersMiddleware()
+      const mockRequest = new Request('http://localhost:3000/path')
+      const mockContext = { request: mockRequest } as any
+      const mockNext = vi.fn().mockResolvedValue(new Response('OK'))
+
+      const response = await middleware(mockContext, mockNext)
+
+      expect(mockNext).toHaveBeenCalled()
+      expect(response.status).not.toBe(301)
+    })
+
+    it('should not redirect HTTP in test environment', async () => {
+      setEnvironment('test')
+
+      const middleware = createSecurityHeadersMiddleware()
+      const mockRequest = new Request('http://example.com/path')
+      const mockContext = { request: mockRequest } as any
+      const mockNext = vi.fn().mockResolvedValue(new Response('OK'))
+
+      const response = await middleware(mockContext, mockNext)
+
+      expect(mockNext).toHaveBeenCalled()
+      expect(response.status).not.toBe(301)
+    })
+
+    it('should not redirect when httpsRedirect is explicitly disabled', async () => {
+      setEnvironment('production')
+
+      const middleware = createSecurityHeadersMiddleware({
+        httpsRedirect: false,
+      })
+      const mockRequest = new Request('http://example.com/path')
+      const mockContext = { request: mockRequest } as any
+      const mockNext = vi.fn().mockResolvedValue(new Response('OK'))
+
+      const response = await middleware(mockContext, mockNext)
+
+      expect(mockNext).toHaveBeenCalled()
+      expect(response.status).not.toBe(301)
+    })
+
+    it('should preserve path and query string during redirect', async () => {
+      setEnvironment('production')
+
+      const middleware = createSecurityHeadersMiddleware()
+      const mockRequest = new Request('http://example.com/users/123?sort=asc&filter=active')
+      const mockContext = { request: mockRequest } as any
+      const mockNext = vi.fn()
+
+      const response = await middleware(mockContext, mockNext)
+
+      expect(response.headers.get('Location')).toBe('https://example.com/users/123?sort=asc&filter=active')
+    })
+
+    it('should skip redirect when route disables headers', async () => {
+      setEnvironment('production')
+
+      const middleware = createSecurityHeadersMiddleware()
+      const mockRequest = new Request('http://example.com/webhook')
+      const mockContext = {
+        request: mockRequest,
+        routeConfig: {
+          security: {
+            headers: false,
+          },
+        },
+      } as any
+      const mockNext = vi.fn().mockResolvedValue(new Response('OK'))
+
+      const response = await middleware(mockContext, mockNext)
+
+      expect(mockNext).toHaveBeenCalled()
+      expect(response.status).not.toBe(301)
+    })
   })
 })
 
