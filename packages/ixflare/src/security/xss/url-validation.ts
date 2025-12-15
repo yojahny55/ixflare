@@ -4,6 +4,12 @@
  * Validates URLs to prevent XSS attacks via dangerous protocols.
  * Blocks javascript:, data:, vbscript:, and other unsafe schemes.
  *
+ * This module implements comprehensive bypass prevention:
+ * - HTML entity decoding (numeric, hex, and named entities)
+ * - Control character stripping (prevents jav\tascript: bypasses)
+ * - Multi-level URL encoding decoding
+ * - Case-insensitive scheme matching
+ *
  * @see https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
  */
 
@@ -23,9 +29,72 @@ const DEFAULT_OPTIONS: Required<UrlValidationOptions> = {
 const DANGEROUS_SCHEMES = ['javascript', 'data', 'vbscript', 'file']
 
 /**
- * URL scheme pattern
+ * URL scheme pattern - matches scheme followed by colon
  */
 const SCHEME_PATTERN = /^([a-z][a-z0-9+.-]*):(.*)$/i
+
+/**
+ * Control characters pattern (ASCII 0x00-0x1F and 0x7F)
+ * These can be used to bypass scheme detection: jav\tascript:
+ * Using Unicode escapes to satisfy ESLint no-control-regex rule
+ */
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F]/g
+
+/**
+ * Named HTML entities that could be used for XSS bypass
+ * Comprehensive list including common attack vectors
+ */
+const NAMED_ENTITIES: Record<string, string> = {
+  // Critical for URL scheme bypass
+  '&colon;': ':',
+  '&Colon;': ':',
+  '&semi;': ';',
+  '&Semi;': ';',
+  '&sol;': '/',
+  '&bsol;': '\\',
+  '&period;': '.',
+  '&comma;': ',',
+  '&quest;': '?',
+  '&num;': '#',
+  '&percnt;': '%',
+  '&amp;': '&',
+  '&equals;': '=',
+  '&plus;': '+',
+  '&hyphen;': '-',
+  '&minus;': '-',
+  '&lowbar;': '_',
+
+  // Whitespace entities (used for bypasses)
+  '&nbsp;': ' ',
+  '&ensp;': ' ',
+  '&emsp;': ' ',
+  '&thinsp;': ' ',
+  '&Tab;': '\t',
+  '&tab;': '\t',
+  '&NewLine;': '\n',
+  '&newline;': '\n',
+
+  // Common HTML entities
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&apos;': "'",
+  '&lpar;': '(',
+  '&rpar;': ')',
+  '&lsqb;': '[',
+  '&rsqb;': ']',
+  '&lcub;': '{',
+  '&rcub;': '}',
+  '&vert;': '|',
+  '&ast;': '*',
+  '&Hat;': '^',
+  '&grave;': '`',
+  '&tilde;': '~',
+  '&excl;': '!',
+  '&dollar;': '$',
+  '&commat;': '@',
+}
 
 /**
  * Checks if a URL is safe to use based on its protocol scheme
@@ -39,6 +108,8 @@ const SCHEME_PATTERN = /^([a-z][a-z0-9+.-]*):(.*)$/i
  * isUrlSafe('javascript:alert(1)')  // false
  * isUrlSafe('/relative/path')       // true
  * isUrlSafe('data:text/html,<script>') // false
+ * isUrlSafe('javascript&colon;alert(1)') // false - entity decoded
+ * isUrlSafe('jav\tascript:alert(1)') // false - control chars stripped
  * ```
  *
  * @param url - URL to validate
@@ -58,12 +129,11 @@ export function isUrlSafe(
     allowedSchemes: options.allowedSchemes || DEFAULT_OPTIONS.allowedSchemes,
   }
 
-  // Trim and decode the URL to prevent encoding bypass
-  const trimmed = url.trim()
-  const decoded = decodeUrlSafely(trimmed)
+  // Normalize the URL through multiple decoding passes
+  const normalized = normalizeUrl(url)
 
-  // Extract scheme
-  const match = decoded.match(SCHEME_PATTERN)
+  // Extract scheme from normalized URL
+  const match = normalized.match(SCHEME_PATTERN)
 
   if (match) {
     const scheme = match[1].toLowerCase()
@@ -87,30 +157,72 @@ export function isUrlSafe(
 const MAX_DECODE_ITERATIONS = 10
 
 /**
- * Safely decodes a URL, handling multi-level encoding bypass attempts
+ * Normalizes a URL by decoding all possible bypass techniques
  *
- * Attackers may use triple/quadruple encoding to bypass validation:
- * %25%36%61%25%36%31... → %6a%61... → javascript:
- *
- * This function decodes until the string is stable (no more changes)
- * or max iterations reached.
+ * Process:
+ * 1. Decode HTML entities (named, numeric, hex)
+ * 2. Decode URL encoding (multi-pass)
+ * 3. Strip control characters
+ * 4. Trim whitespace
+ * 5. Lowercase for scheme comparison
  */
-function decodeUrlSafely(url: string): string {
-  let decoded = url
+function normalizeUrl(url: string): string {
+  let normalized = url
+
+  // Iteratively decode until stable
   let previous = ''
   let iterations = 0
 
-  // Loop until stable (no changes) or max iterations
-  while (decoded !== previous && iterations < MAX_DECODE_ITERATIONS) {
-    previous = decoded
+  while (normalized !== previous && iterations < MAX_DECODE_ITERATIONS) {
+    previous = normalized
+
+    // Step 1: Decode HTML entities
+    normalized = decodeHtmlEntities(normalized)
+
+    // Step 2: Decode URL encoding
     try {
-      decoded = decodeURIComponent(decoded)
+      normalized = decodeURIComponent(normalized)
     } catch {
-      // Malformed encoding - stop decoding, use current state
-      break
+      // Invalid encoding, continue with current value
     }
+
     iterations++
   }
 
-  return decoded
+  // Step 3: Strip ALL control characters (prevents jav\tascript: bypass)
+  normalized = normalized.replace(CONTROL_CHARS_PATTERN, '')
+
+  // Step 4: Trim whitespace from ends
+  normalized = normalized.trim()
+
+  return normalized
+}
+
+/**
+ * Decodes all HTML entities (named, numeric decimal, numeric hex)
+ */
+function decodeHtmlEntities(str: string): string {
+  let result = str
+
+  // Decode numeric decimal entities: &#106; -> j
+  result = result.replace(/&#(\d+);?/gi, (_, dec) => {
+    const code = parseInt(dec, 10)
+    return code > 0 && code < 0x10ffff ? String.fromCodePoint(code) : ''
+  })
+
+  // Decode numeric hex entities: &#x6a; -> j
+  result = result.replace(/&#x([0-9a-f]+);?/gi, (_, hex) => {
+    const code = parseInt(hex, 16)
+    return code > 0 && code < 0x10ffff ? String.fromCodePoint(code) : ''
+  })
+
+  // Decode named entities (case-sensitive for most, case-insensitive for common)
+  for (const [entity, char] of Object.entries(NAMED_ENTITIES)) {
+    // Create case-insensitive regex for this entity
+    const escapedEntity = entity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(escapedEntity, 'gi')
+    result = result.replace(regex, char)
+  }
+
+  return result
 }

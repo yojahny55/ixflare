@@ -31,6 +31,7 @@
 
 import type { SanitizeOptions } from './types'
 import { escapeHtml } from './escape'
+import { isUrlSafe as validateUrlSafe } from './url-validation'
 
 /**
  * Default sanitization options - text only (safest)
@@ -42,11 +43,6 @@ const DEFAULT_OPTIONS: Required<SanitizeOptions> = {
   stripDisallowedTags: true,
   allowComments: false,
 }
-
-/**
- * Dangerous URL schemes that should always be blocked
- */
-const DANGEROUS_SCHEMES = ['javascript', 'data', 'vbscript', 'file']
 
 /**
  * Event handler attributes that should always be stripped
@@ -72,9 +68,17 @@ const URL_ATTRIBUTES = new Set([
 ])
 
 /**
- * HTML tag pattern
+ * HTML tag pattern - handles > inside quoted attribute values
+ * Captures: tag name and attributes string
+ * Pattern breakdown:
+ * - <\/? - opening < with optional /
+ * - ([a-z][a-z0-9]*) - tag name (captured)
+ * - \b - word boundary
+ * - ((?:[^>"']|"[^"]*"|'[^']*')*) - attributes (handles > inside quotes)
+ * - \/? - optional self-closing /
+ * - > - closing >
  */
-const TAG_PATTERN = /<\/?([a-z][a-z0-9]*)\b([^>]*)>/gi
+const TAG_PATTERN = /<\/?([a-z][a-z0-9]*)\b((?:[^>"']|"[^"]*"|'[^']*')*)\/?>/gi
 
 /**
  * HTML comment pattern
@@ -82,14 +86,9 @@ const TAG_PATTERN = /<\/?([a-z][a-z0-9]*)\b([^>]*)>/gi
 const COMMENT_PATTERN = /<!--[\s\S]*?-->/g
 
 /**
- * Attribute pattern
+ * Attribute pattern - extracts name and value
  */
 const ATTR_PATTERN = /([a-z][a-z0-9-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]*))/gi
-
-/**
- * URL scheme pattern
- */
-const SCHEME_PATTERN = /^([a-z][a-z0-9+.-]*):(.*)$/i
 
 /**
  * Sanitizes HTML by removing disallowed tags and attributes
@@ -225,51 +224,10 @@ function sanitizeAttributes(
 
 /**
  * Checks if a URL is safe based on allowed schemes
+ * Delegates to the comprehensive URL validator in url-validation.ts
  */
 function isUrlSafe(url: string, allowedSchemes: string[]): boolean {
-  if (!url) return false
-
-  // Decode HTML entities to check the actual URL
-  // Trim AFTER decoding to catch &#9; (tab) and other whitespace entities
-  const decoded = decodeHtmlEntities(url.trim()).trim()
-
-  // Check for dangerous schemes
-  const match = decoded.match(SCHEME_PATTERN)
-
-  if (match) {
-    const scheme = match[1].toLowerCase()
-
-    // Block explicitly dangerous schemes
-    if (DANGEROUS_SCHEMES.includes(scheme)) {
-      return false
-    }
-
-    // Check against allowed schemes
-    return allowedSchemes.includes(scheme)
-  }
-
-  // Relative URLs are allowed by default (no scheme)
-  return true
-}
-
-/**
- * Decodes common HTML entities
- */
-function decodeHtmlEntities(str: string): string {
-  return str
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) =>
-      String.fromCharCode(parseInt(hex, 16))
-    )
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#x27;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&tab;/gi, '\t')
-    .replace(/&newline;/gi, '\n')
-    .replace(/&apos;/g, "'")
+  return validateUrlSafe(url, { allowedSchemes, allowRelative: true })
 }
 
 /**
