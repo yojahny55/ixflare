@@ -16,4 +16,5 @@ export {
 } from './token'
 export { setCSRFCookie, getCSRFCookie } from './cookie'
 export { csrf } from './middleware'
-export { csrfToken, getCsrfToken, CSRFInput } from './client'
+export type { CSRFInputProps } from './client'
+export { csrfToken, getCsrfToken, getCSRFInputProps, CSRFInput } from './client'

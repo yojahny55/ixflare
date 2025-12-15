@@ -8,6 +8,9 @@
  * Must be tree-shaken for server-side builds
  */
 
+import React from 'react'
+import type { ReactElement } from 'react'
+
 /**
  * Get CSRF token from cookie (browser-only)
  *
@@ -81,12 +84,79 @@ export function csrfToken(): string {
 }
 
 /**
+ * Props for creating a CSRF hidden input element
+ *
+ * Use these props to create a hidden input in your preferred way:
+ * - Spread into JSX: <input {...getCSRFInputProps()} />
+ * - Use with React.createElement
+ * - Render as HTML string in SSR
+ *
+ * @example
+ * ```tsx
+ * import { getCSRFInputProps } from 'ixflare/auth'
+ *
+ * // Option 1: Spread into JSX
+ * <input {...getCSRFInputProps()} />
+ *
+ * // Option 2: With custom field name
+ * <input {...getCSRFInputProps('csrf_token')} />
+ * ```
+ */
+export interface CSRFInputProps {
+  type: 'hidden'
+  name: string
+  value: string
+}
+
+/**
+ * Get props for a CSRF hidden input element
+ *
+ * Returns an object with type, name, and value that can be spread
+ * into a JSX input element or used with React.createElement
+ *
+ * @param fieldName - Form field name (default: _csrf)
+ * @returns Props object for hidden input, or null if no token available
+ *
+ * @example
+ * ```tsx
+ * import { getCSRFInputProps } from 'ixflare/auth'
+ *
+ * export default function CreatePostForm() {
+ *   const csrfProps = getCSRFInputProps()
+ *   return (
+ *     <form method="POST" action="/api/posts">
+ *       {csrfProps && <input {...csrfProps} />}
+ *       <input type="text" name="title" />
+ *       <button type="submit">Create</button>
+ *     </form>
+ *   )
+ * }
+ * ```
+ */
+export function getCSRFInputProps(fieldName: string = '_csrf'): CSRFInputProps | null {
+  const token = csrfToken()
+
+  if (!token) {
+    // No token available - return null for conditional rendering
+    return null
+  }
+
+  return {
+    type: 'hidden',
+    name: fieldName,
+    value: token,
+  }
+}
+
+/**
  * React component for CSRF token hidden input
  *
- * Automatically includes CSRF token in forms
+ * Automatically includes CSRF token in forms as a hidden input.
+ * Returns null if no token is available (safe for SSR).
  *
  * @param props - Component props
  * @param props.fieldName - Form field name (default: _csrf)
+ * @returns Hidden input React element or null
  *
  * @example
  * ```tsx
@@ -103,17 +173,8 @@ export function csrfToken(): string {
  * }
  * ```
  */
-export function CSRFInput({ fieldName = '_csrf' }: { fieldName?: string }) {
-  const token = csrfToken()
-
-  if (!token) {
-    // No token available - skip rendering
-    // This prevents form submission errors during SSR
-    return null
-  }
-
-  // For React environments, this would return a proper element
-  // For now, return null and rely on manual token inclusion
-  // or server-side rendering with context
-  return null
+export function CSRFInput({ fieldName = '_csrf' }: { fieldName?: string }): ReactElement | null {
+  const props = getCSRFInputProps(fieldName)
+  if (!props) return null
+  return <input {...props} />
 }
