@@ -1,9 +1,14 @@
 /**
  * Security Module
- * Story 5-8: Security Headers Auto-Injection
  *
- * Main security module barrel export
+ * Comprehensive security utilities for XSS prevention, CSRF protection,
+ * security headers, and more.
+ *
+ * @module security
  */
 
-// Re-export everything from headers module
+// Story 5-8: Security Headers Auto-Injection
 export * from './headers'
+
+// Story 5-9: XSS Prevention & Auto-Sanitization
+export * from './xss'
