@@ -8,6 +8,8 @@
  */
 
 import { InvalidAttributeError } from './errors'
+import { sanitizeHtml } from './sanitizer'
+import type { SanitizeOptions } from './types'
 
 /**
  * Event handler attribute pattern
@@ -69,4 +71,34 @@ export function setAttribute(
 
   // Use safe setAttribute method
   element.setAttribute(name, value)
+}
+
+/**
+ * Safely sets innerHTML on an element after sanitizing the content
+ *
+ * This is the SAFE way to set innerHTML with untrusted HTML.
+ * Combines sanitization and assignment in one step to prevent mistakes.
+ *
+ * @example
+ * ```typescript
+ * import { setInnerHTML, presets } from 'ixflare/security'
+ *
+ * // Safe - sanitizes before setting
+ * setInnerHTML(element, userHtml, presets.rich)
+ *
+ * // Dangerous - DON'T DO THIS
+ * element.innerHTML = userHtml
+ * ```
+ *
+ * @param element - DOM element to update
+ * @param content - Untrusted HTML content (will be sanitized)
+ * @param options - Sanitization options (use presets for common cases)
+ */
+export function setInnerHTML(
+  element: HTMLElement,
+  content: string,
+  options: SanitizeOptions
+): void {
+  const sanitized = sanitizeHtml(content, options)
+  element.innerHTML = sanitized
 }

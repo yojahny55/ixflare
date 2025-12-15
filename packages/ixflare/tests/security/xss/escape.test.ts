@@ -128,6 +128,27 @@ describe('escapeJavaScript', () => {
     expect(escapeJavaScript('\u2028')).toBe('\\u2028')
     expect(escapeJavaScript('\u2029')).toBe('\\u2029')
   })
+
+  it('should escape backticks for template literals', () => {
+    expect(escapeJavaScript('`template`')).toBe('\\`template\\`')
+    expect(escapeJavaScript('Say `hello`')).toBe('Say \\`hello\\`')
+  })
+
+  it('should escape dollar signs for template interpolation', () => {
+    // $ is escaped to prevent ${} interpolation in template literals
+    expect(escapeJavaScript('${evil}')).toBe('\\${evil}')
+    expect(escapeJavaScript('Price: $100')).toBe('Price: \\$100')
+  })
+
+  it('should prevent template literal injection', () => {
+    const payload = '` + alert(1) + `'
+    const escaped = escapeJavaScript(payload)
+    // Backticks should be escaped with backslashes
+    expect(escaped).toBe('\\` + alert(1) + \\`')
+    // Verify the escaping pattern
+    expect(escaped.startsWith('\\`')).toBe(true)
+    expect(escaped.endsWith('\\`')).toBe(true)
+  })
 })
 
 describe('escapeUrl', () => {

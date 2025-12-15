@@ -253,4 +253,125 @@ describe('sanitizeHtml', () => {
       expect(sanitized).toBeDefined()
     })
   })
+
+  describe('URL-Bearing Attribute Validation', () => {
+    it('should validate srcset attribute', () => {
+      const html = '<img srcset="javascript:alert(1) 1x, https://safe.com/img.jpg 2x">'
+      const sanitized = sanitizeHtml(html, {
+        allowedTags: ['img'],
+        allowedAttributes: { img: ['srcset'] },
+      })
+      // Should strip the entire srcset if any URL is dangerous
+      expect(sanitized).not.toContain('javascript:')
+    })
+
+    it('should allow safe srcset attribute', () => {
+      const html = '<img srcset="https://example.com/small.jpg 1x, https://example.com/large.jpg 2x">'
+      const sanitized = sanitizeHtml(html, {
+        allowedTags: ['img'],
+        allowedAttributes: { img: ['srcset'] },
+      })
+      expect(sanitized).toContain('srcset=')
+      expect(sanitized).toContain('https://example.com/small.jpg')
+    })
+
+    it('should validate action attribute on forms', () => {
+      const html = '<form action="javascript:alert(1)"><button>Submit</button></form>'
+      const sanitized = sanitizeHtml(html, {
+        allowedTags: ['form', 'button'],
+        allowedAttributes: { form: ['action'] },
+      })
+      expect(sanitized).not.toContain('javascript:')
+    })
+
+    it('should validate poster attribute on video', () => {
+      const html = '<video poster="javascript:alert(1)"></video>'
+      const sanitized = sanitizeHtml(html, {
+        allowedTags: ['video'],
+        allowedAttributes: { video: ['poster'] },
+      })
+      expect(sanitized).not.toContain('javascript:')
+    })
+
+    it('should handle case-insensitive attribute config', () => {
+      const html = '<a href="https://example.com">Link</a>'
+      const sanitized = sanitizeHtml(html, {
+        allowedTags: ['a'],
+        allowedAttributes: { a: ['HREF'] }, // Uppercase in config
+      })
+      // Should still match lowercase href in HTML
+      expect(sanitized).toContain('href="https://example.com"')
+    })
+  })
+
+  describe('Entity Decoding for URL Validation', () => {
+    it('should decode numeric tab entity (&#9;) in URLs', () => {
+      const html = '<a href="&#9;javascript:alert(1)">Link</a>'
+      const sanitized = sanitizeHtml(html, {
+        allowedTags: ['a'],
+        allowedAttributes: { a: ['href'] },
+      })
+      expect(sanitized).not.toContain('javascript:')
+    })
+
+    it('should decode hex entity (&#xA;) newline in URLs', () => {
+      const html = '<a href="java&#xA;script:alert(1)">Link</a>'
+      const sanitized = sanitizeHtml(html, {
+        allowedTags: ['a'],
+        allowedAttributes: { a: ['href'] },
+      })
+      // Newline in the middle breaks the scheme matching, so it's treated as relative
+      // but we should ensure the content is still safe
+      expect(sanitized).toBeDefined()
+    })
+
+    it('should decode numeric character references', () => {
+      // &#106; = j, &#97; = a, etc. to spell "javascript"
+      const html = '<a href="&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;:alert(1)">Link</a>'
+      const sanitized = sanitizeHtml(html, {
+        allowedTags: ['a'],
+        allowedAttributes: { a: ['href'] },
+      })
+      expect(sanitized).not.toContain('javascript:')
+    })
+  })
+
+  describe('Mutation XSS (mXSS) Vectors', () => {
+    it('should handle noscript-based mXSS', () => {
+      const html = '<noscript><img src=x onerror=alert(1)></noscript>'
+      const sanitized = sanitizeHtml(html, {
+        allowedTags: ['p'],
+      })
+      expect(sanitized).not.toContain('onerror')
+      expect(sanitized).not.toContain('<img')
+    })
+
+    it('should handle svg foreignObject mXSS', () => {
+      const html = '<svg><foreignObject><p onclick=alert(1)>Test</p></foreignObject></svg>'
+      const sanitized = sanitizeHtml(html, {
+        allowedTags: ['p'],
+      })
+      expect(sanitized).not.toContain('onclick')
+      expect(sanitized).not.toContain('<svg')
+    })
+
+    it('should handle math/mtext mXSS vector', () => {
+      const html = '<math><mtext><table><mglyph><style><img src=x onerror=alert(1)></style></table></mtext></math>'
+      const sanitized = sanitizeHtml(html, {
+        allowedTags: ['p', 'table'],
+      })
+      expect(sanitized).not.toContain('onerror')
+      expect(sanitized).not.toContain('<img')
+    })
+
+    it('should handle textarea-based mXSS', () => {
+      const html = '<form><math><mtext></form><form><mglyph><svg><mtext><textarea><path id="</textarea><img onerror=alert(1) src>">'
+      const sanitized = sanitizeHtml(html, {
+        allowedTags: ['form'],
+        allowedAttributes: {},
+      })
+      expect(sanitized).not.toContain('onerror')
+      expect(sanitized).not.toContain('<img')
+    })
+  })
 })

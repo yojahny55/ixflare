@@ -103,6 +103,23 @@ describe('isUrlSafe', () => {
     it('should handle mixed encoding', () => {
       expect(isUrlSafe('java%73cript:alert(1)')).toBe(false)
     })
+
+    it('should handle double encoding', () => {
+      // %25 = %, so %256a = %6a after first decode
+      expect(isUrlSafe('%256a%2561%2576%2561%2573%2563%2572%2569%2570%2574:alert(1)')).toBe(false)
+    })
+
+    it('should handle triple encoding', () => {
+      // Triple-encoded 'javascript'
+      // j = %6a -> %256a -> %25256a
+      expect(isUrlSafe('%25256a%252561%252576%252561%252573%252563%252572%252569%252570%252574:alert(1)')).toBe(false)
+    })
+
+    it('should prevent infinite decoding loops', () => {
+      // Malformed but shouldn't hang
+      const malformed = '%'.repeat(100) + 'javascript:alert(1)'
+      expect(() => isUrlSafe(malformed)).not.toThrow()
+    })
   })
 
   describe('Edge Cases', () => {

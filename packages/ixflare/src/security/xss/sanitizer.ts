@@ -4,6 +4,28 @@
  * Lightweight, DOM-free HTML sanitizer for edge environments.
  * Uses allowlist-based approach per OWASP recommendations.
  *
+ * ## Security Notice
+ *
+ * This sanitizer uses regex-based parsing for edge runtime compatibility
+ * (no DOM APIs available in Cloudflare Workers). While this handles most
+ * common XSS attack vectors, regex-based HTML parsing has inherent limitations:
+ *
+ * **Known Limitations:**
+ * - May not catch all mutation XSS (mXSS) vectors where browsers parse
+ *   malformed HTML differently than the regex expects
+ * - Nullbyte injection and some Unicode edge cases may not be fully handled
+ * - CDATA sections are not explicitly processed
+ *
+ * **Defense in Depth Recommendations:**
+ * 1. Always use Content Security Policy (CSP) as a secondary defense
+ * 2. Prefer React's built-in JSX escaping for most use cases
+ * 3. For high-security contexts, consider DOMPurify in browser/Node environments
+ * 4. Never modify sanitized output before rendering
+ *
+ * For most user-generated content (comments, posts), this sanitizer provides
+ * robust protection. For extremely high-risk contexts (e.g., embedding arbitrary
+ * HTML from untrusted sources), additional server-side validation is recommended.
+ *
  * @see https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
  */
 
@@ -30,6 +52,24 @@ const DANGEROUS_SCHEMES = ['javascript', 'data', 'vbscript', 'file']
  * Event handler attributes that should always be stripped
  */
 const EVENT_HANDLERS = /^on[a-z]+$/i
+
+/**
+ * Attributes that contain URLs and need scheme validation
+ */
+const URL_ATTRIBUTES = new Set([
+  'href',
+  'src',
+  'srcset',
+  'action',
+  'formaction',
+  'poster',
+  'data',
+  'cite',
+  'background',
+  'longdesc',
+  'usemap',
+  'xlink:href',
+])
 
 /**
  * HTML tag pattern
@@ -140,6 +180,9 @@ function sanitizeAttributes(
     return ''
   }
 
+  // Normalize allowedAttrs to lowercase for case-insensitive matching
+  const normalizedAllowedAttrs = allowedAttrs.map((attr) => attr.toLowerCase())
+
   const sanitized: string[] = []
 
   // Reset regex state
@@ -155,14 +198,19 @@ function sanitizeAttributes(
       continue
     }
 
-    // Check if attribute is allowed
-    if (!allowedAttrs.includes(attrName)) {
+    // Check if attribute is allowed (case-insensitive)
+    if (!normalizedAllowedAttrs.includes(attrName)) {
       continue
     }
 
     // Validate URL attributes
-    if (attrName === 'href' || attrName === 'src') {
-      if (!isUrlSafe(attrValue, allowedSchemes)) {
+    if (URL_ATTRIBUTES.has(attrName)) {
+      // Handle srcset specially (contains multiple URLs)
+      if (attrName === 'srcset') {
+        if (!isSrcsetSafe(attrValue, allowedSchemes)) {
+          continue
+        }
+      } else if (!isUrlSafe(attrValue, allowedSchemes)) {
         // Skip unsafe URLs
         continue
       }
@@ -182,7 +230,8 @@ function isUrlSafe(url: string, allowedSchemes: string[]): boolean {
   if (!url) return false
 
   // Decode HTML entities to check the actual URL
-  const decoded = decodeHtmlEntities(url.trim())
+  // Trim AFTER decoding to catch &#9; (tab) and other whitespace entities
+  const decoded = decodeHtmlEntities(url.trim()).trim()
 
   // Check for dangerous schemes
   const match = decoded.match(SCHEME_PATTERN)
@@ -217,4 +266,32 @@ function decodeHtmlEntities(str: string): string {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#x27;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&tab;/gi, '\t')
+    .replace(/&newline;/gi, '\n')
+    .replace(/&apos;/g, "'")
+}
+
+/**
+ * Validates srcset attribute which contains multiple URLs
+ * Format: "url1 1x, url2 2x" or "url1 100w, url2 200w"
+ */
+function isSrcsetSafe(srcset: string, allowedSchemes: string[]): boolean {
+  if (!srcset) return false
+
+  // Split by comma to get individual sources
+  const sources = srcset.split(',')
+
+  for (const source of sources) {
+    // Each source is "url [descriptor]" - extract the URL part
+    const trimmed = source.trim()
+    const spaceIndex = trimmed.search(/\s/)
+    const url = spaceIndex > 0 ? trimmed.substring(0, spaceIndex) : trimmed
+
+    if (!isUrlSafe(url, allowedSchemes)) {
+      return false
+    }
+  }
+
+  return true
 }

@@ -78,9 +78,11 @@ export function escapeHtmlAttribute(str: string): string {
  * Use when inserting untrusted data into JavaScript string literals:
  * ```typescript
  * const msg = "{escapeJavaScript(userInput)}";
+ * const tmpl = `Hello ${escapeJavaScript(userInput)}`;
  * ```
  *
- * Escapes quotes, backslashes, newlines, and HTML script terminators.
+ * Escapes quotes (single, double, backtick), backslashes, newlines,
+ * and HTML script terminators.
  *
  * WARNING: This does NOT make data safe for execution contexts.
  * Never use untrusted data in: eval(), setTimeout(), Function(), etc.
@@ -95,6 +97,8 @@ export function escapeJavaScript(str: string): string {
     .replace(/\\/g, '\\\\') // Backslash must be first
     .replace(/"/g, '\\"') // Double quote
     .replace(/'/g, "\\'") // Single quote
+    .replace(/`/g, '\\`') // Backtick (template literals)
+    .replace(/\$/g, '\\$') // Dollar sign (template literal interpolation)
     .replace(/\n/g, '\\n') // Newline
     .replace(/\r/g, '\\r') // Carriage return
     .replace(/\t/g, '\\t') // Tab

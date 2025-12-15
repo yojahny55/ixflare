@@ -2,7 +2,8 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach } from 'vitest'
-import { setTextContent, setAttribute } from '../../../src/security/xss/dom-utils'
+import { setTextContent, setAttribute, setInnerHTML } from '../../../src/security/xss/dom-utils'
+import { presets } from '../../../src/security/xss/presets'
 
 describe('DOM-Safe Utilities', () => {
   let element: HTMLElement
@@ -98,6 +99,59 @@ describe('DOM-Safe Utilities', () => {
     it('should handle empty attribute values', () => {
       setAttribute(element, 'data-empty', '')
       expect(element.getAttribute('data-empty')).toBe('')
+    })
+  })
+
+  describe('setInnerHTML', () => {
+    it('should sanitize HTML before setting innerHTML', () => {
+      const malicious = '<p>Safe</p><script>alert(1)</script>'
+      setInnerHTML(element, malicious, presets.rich)
+
+      expect(element.innerHTML).toContain('<p>Safe</p>')
+      expect(element.innerHTML).not.toContain('<script>')
+    })
+
+    it('should strip event handlers', () => {
+      const malicious = '<div onclick="alert(1)">Click me</div>'
+      setInnerHTML(element, malicious, {
+        allowedTags: ['div'],
+        allowedAttributes: {},
+      })
+
+      expect(element.innerHTML).toContain('<div>')
+      expect(element.innerHTML).not.toContain('onclick')
+    })
+
+    it('should block dangerous URL schemes', () => {
+      const malicious = '<a href="javascript:alert(1)">Click</a>'
+      setInnerHTML(element, malicious, presets.basic)
+
+      expect(element.innerHTML).toContain('<a>')
+      expect(element.innerHTML).not.toContain('javascript:')
+    })
+
+    it('should preserve safe content with rich preset', () => {
+      const content = '<h1>Title</h1><p>Para</p><ul><li>Item</li></ul>'
+      setInnerHTML(element, content, presets.rich)
+
+      expect(element.innerHTML).toContain('<h1>Title</h1>')
+      expect(element.innerHTML).toContain('<p>Para</p>')
+      expect(element.innerHTML).toContain('<ul><li>Item</li></ul>')
+    })
+
+    it('should strip all HTML with text preset', () => {
+      const content = '<p>Hello <b>World</b></p>'
+      setInnerHTML(element, content, presets.text)
+
+      expect(element.innerHTML).toBe('Hello World')
+      expect(element.innerHTML).not.toContain('<')
+    })
+
+    it('should handle empty content', () => {
+      element.innerHTML = 'existing'
+      setInnerHTML(element, '', presets.basic)
+
+      expect(element.innerHTML).toBe('')
     })
   })
 })

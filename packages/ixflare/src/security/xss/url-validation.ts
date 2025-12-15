@@ -82,21 +82,35 @@ export function isUrlSafe(
 }
 
 /**
- * Safely decodes a URL, handling encoding bypass attempts
+ * Maximum number of decoding iterations to prevent infinite loops
+ */
+const MAX_DECODE_ITERATIONS = 10
+
+/**
+ * Safely decodes a URL, handling multi-level encoding bypass attempts
+ *
+ * Attackers may use triple/quadruple encoding to bypass validation:
+ * %25%36%61%25%36%31... → %6a%61... → javascript:
+ *
+ * This function decodes until the string is stable (no more changes)
+ * or max iterations reached.
  */
 function decodeUrlSafely(url: string): string {
-  try {
-    // Decode URL encoding
-    let decoded = decodeURIComponent(url)
+  let decoded = url
+  let previous = ''
+  let iterations = 0
 
-    // Decode again to catch double encoding
-    if (decoded !== url) {
+  // Loop until stable (no changes) or max iterations
+  while (decoded !== previous && iterations < MAX_DECODE_ITERATIONS) {
+    previous = decoded
+    try {
       decoded = decodeURIComponent(decoded)
+    } catch {
+      // Malformed encoding - stop decoding, use current state
+      break
     }
-
-    return decoded
-  } catch {
-    // If decoding fails, return original (malformed URL)
-    return url
+    iterations++
   }
+
+  return decoded
 }

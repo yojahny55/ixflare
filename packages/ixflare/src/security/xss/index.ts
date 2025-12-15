@@ -40,7 +40,7 @@ export { presets } from './presets'
 export { isUrlSafe } from './url-validation'
 
 // DOM-safe utilities
-export { setTextContent, setAttribute } from './dom-utils'
+export { setTextContent, setAttribute, setInnerHTML } from './dom-utils'
 
 // Error classes
 export { XSSError, UnsafeUrlError, InvalidAttributeError } from './errors'
