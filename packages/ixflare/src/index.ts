@@ -26,6 +26,19 @@ export { logging, type LoggingConfig } from './middleware/logging'
 export { timing, type TimingConfig } from './middleware/timing'
 export { errorHandler, type ErrorHandlerConfig } from './middleware/error-handler'
 
+// Security Headers (Story 5-8)
+export {
+  createSecurityHeadersMiddleware,
+  createHttpsRedirectMiddleware,
+  getNonce,
+  type SecurityHeadersConfig,
+  type ContentSecurityPolicyConfig,
+  type HSTSConfig,
+  type PermissionsPolicyConfig,
+  type ReferrerPolicy,
+  type XFrameOptions,
+} from './security/headers'
+
 // Rate limiting exports
 export {
   rateLimit,

@@ -49,13 +49,112 @@ export const csrfConfigSchema = z.object({
 })
 
 /**
+ * Content-Security-Policy configuration schema
+ */
+export const cspConfigSchema = z.object({
+  defaultSrc: z.array(z.string()).optional(),
+  scriptSrc: z.array(z.string()).optional(),
+  styleSrc: z.array(z.string()).optional(),
+  imgSrc: z.array(z.string()).optional(),
+  fontSrc: z.array(z.string()).optional(),
+  connectSrc: z.array(z.string()).optional(),
+  mediaSrc: z.array(z.string()).optional(),
+  objectSrc: z.array(z.string()).optional(),
+  frameSrc: z.array(z.string()).optional(),
+  frameAncestors: z.array(z.string()).optional(),
+  formAction: z.array(z.string()).optional(),
+  baseUri: z.array(z.string()).optional(),
+  workerSrc: z.array(z.string()).optional(),
+  manifestSrc: z.array(z.string()).optional(),
+  prefetchSrc: z.array(z.string()).optional(),
+  childSrc: z.array(z.string()).optional(),
+  reportUri: z.string().optional(),
+  reportTo: z.string().optional(),
+  reportOnly: z.boolean().optional(),
+  upgradeInsecureRequests: z.boolean().optional(),
+  blockAllMixedContent: z.boolean().optional(),
+})
+
+/**
+ * HSTS configuration schema
+ */
+export const hstsConfigSchema = z.object({
+  maxAge: z.number().int().positive().optional(),
+  includeSubDomains: z.boolean().optional(),
+  preload: z.boolean().optional(),
+})
+
+/**
+ * Permissions-Policy configuration schema
+ */
+export const permissionsPolicyConfigSchema = z.object({
+  accelerometer: z.array(z.string()).optional(),
+  ambientLightSensor: z.array(z.string()).optional(),
+  autoplay: z.array(z.string()).optional(),
+  battery: z.array(z.string()).optional(),
+  camera: z.array(z.string()).optional(),
+  crossOriginIsolated: z.array(z.string()).optional(),
+  displayCapture: z.array(z.string()).optional(),
+  documentDomain: z.array(z.string()).optional(),
+  encryptedMedia: z.array(z.string()).optional(),
+  executionWhileNotRendered: z.array(z.string()).optional(),
+  executionWhileOutOfViewport: z.array(z.string()).optional(),
+  fullscreen: z.array(z.string()).optional(),
+  geolocation: z.array(z.string()).optional(),
+  gyroscope: z.array(z.string()).optional(),
+  magnetometer: z.array(z.string()).optional(),
+  microphone: z.array(z.string()).optional(),
+  midi: z.array(z.string()).optional(),
+  navigationOverride: z.array(z.string()).optional(),
+  payment: z.array(z.string()).optional(),
+  pictureInPicture: z.array(z.string()).optional(),
+  publickeyCredentialsGet: z.array(z.string()).optional(),
+  screenWakeLock: z.array(z.string()).optional(),
+  syncXhr: z.array(z.string()).optional(),
+  usb: z.array(z.string()).optional(),
+  webShare: z.array(z.string()).optional(),
+  xrSpatialTracking: z.array(z.string()).optional(),
+})
+
+/**
+ * Security headers configuration schema
+ */
+export const securityHeadersConfigSchema = z.object({
+  contentSecurityPolicy: z.union([cspConfigSchema, z.literal(false)]).optional(),
+  strictTransportSecurity: z.union([hstsConfigSchema, z.boolean()]).optional(),
+  xContentTypeOptions: z.boolean().optional(),
+  xFrameOptions: z.union([z.enum(['DENY', 'SAMEORIGIN']), z.literal(false)]).optional(),
+  referrerPolicy: z
+    .union([
+      z.enum([
+        'no-referrer',
+        'no-referrer-when-downgrade',
+        'origin',
+        'origin-when-cross-origin',
+        'same-origin',
+        'strict-origin',
+        'strict-origin-when-cross-origin',
+        'unsafe-url',
+      ]),
+      z.literal(false),
+    ])
+    .optional(),
+  xXssProtection: z.boolean().optional(),
+  permissionsPolicy: permissionsPolicyConfigSchema.optional(),
+  crossOriginEmbedderPolicy: z.enum(['unsafe-none', 'require-corp', 'credentialless']).optional(),
+  crossOriginOpenerPolicy: z.enum(['unsafe-none', 'same-origin-allow-popups', 'same-origin']).optional(),
+  crossOriginResourcePolicy: z.enum(['same-site', 'same-origin', 'cross-origin']).optional(),
+  httpsRedirect: z.boolean().optional(),
+})
+
+/**
  * Security configuration schema
  */
 export const securityConfigSchema = z.object({
   /** Enable CSRF protection (boolean for simple on/off, object for full configuration) */
   csrf: z.union([z.boolean(), csrfConfigSchema]).default(true),
-  /** Auto-inject security headers (defaults to true) */
-  headers: z.boolean().default(true),
+  /** Auto-inject security headers (boolean for on/off, object for configuration, false to disable) */
+  headers: z.union([z.boolean(), securityHeadersConfigSchema, z.literal(false)]).default(true),
 })
 
 /**
