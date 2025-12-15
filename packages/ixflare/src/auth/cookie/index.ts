@@ -30,6 +30,8 @@ export {
 export {
   enforceSecureDefaults,
   detectEnvironment,
+  setEnvironment,
+  clearEnvironment,
   validateSecurityRequirements,
 } from './security'
 

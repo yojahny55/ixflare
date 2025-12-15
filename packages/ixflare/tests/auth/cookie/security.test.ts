@@ -7,12 +7,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   enforceSecureDefaults,
   detectEnvironment,
+  setEnvironment,
+  clearEnvironment,
   validateSecurityRequirements,
 } from '@/auth/cookie/security'
 import { CookieSecurityError } from '@/auth/cookie/errors'
 import type { CookieOptions } from '@/auth/cookie/types'
 
 describe('detectEnvironment', () => {
+  afterEach(() => {
+    // Clean up environment override after each test
+    clearEnvironment()
+  })
+
   it('should detect environment correctly', () => {
     const env = detectEnvironment()
 
@@ -23,6 +30,54 @@ describe('detectEnvironment', () => {
 
   // Note: Environment detection varies by runtime
   // These tests verify the function works, actual environment depends on test setup
+})
+
+describe('setEnvironment / clearEnvironment', () => {
+  afterEach(() => {
+    clearEnvironment()
+  })
+
+  it('should allow explicit environment override', () => {
+    setEnvironment('development')
+    expect(detectEnvironment()).toBe('development')
+
+    setEnvironment('production')
+    expect(detectEnvironment()).toBe('production')
+
+    setEnvironment('test')
+    expect(detectEnvironment()).toBe('test')
+  })
+
+  it('should clear environment override', () => {
+    setEnvironment('development')
+    expect(detectEnvironment()).toBe('development')
+
+    clearEnvironment()
+    // After clearing, should fall back to NODE_ENV
+    expect(['production', 'development', 'test']).toContain(detectEnvironment())
+  })
+
+  it('should use override in enforceSecureDefaults', () => {
+    // Set to development mode
+    setEnvironment('development')
+
+    const options: CookieOptions = { secure: false }
+    const enforced = enforceSecureDefaults('session', options)
+
+    // Development allows insecure cookies
+    expect(enforced.secure).toBe(false)
+  })
+
+  it('should use override in production to enforce security', () => {
+    // Set to production mode
+    setEnvironment('production')
+
+    const options: CookieOptions = { secure: false }
+    const enforced = enforceSecureDefaults('session', options)
+
+    // Production enforces secure=true
+    expect(enforced.secure).toBe(true)
+  })
 })
 
 describe('enforceSecureDefaults - Production', () => {

@@ -349,14 +349,53 @@ describe('parseCookies', () => {
   })
 })
 
+describe('Cookie Name Validation', () => {
+  it('should reject empty cookie name', () => {
+    const response = new Response('OK')
+
+    expect(() => {
+      setCookie(response, '', 'value')
+    }).toThrow(CookieValidationError)
+  })
+
+  it('should reject cookie name with spaces', () => {
+    const response = new Response('OK')
+
+    expect(() => {
+      setCookie(response, 'my cookie', 'value')
+    }).toThrow(CookieValidationError)
+  })
+
+  it('should reject cookie name with special characters', () => {
+    const response = new Response('OK')
+    const invalidNames = ['cookie=value', 'cookie;path', 'cookie,name', 'cookie(test)', 'cookie[0]']
+
+    for (const name of invalidNames) {
+      expect(() => setCookie(response, name, 'value')).toThrow(CookieValidationError)
+    }
+  })
+
+  it('should accept valid cookie names with hyphen and underscore', () => {
+    const response = new Response('OK')
+    const validNames = ['session', 'my-cookie', 'my_cookie', '__Host-session', '__Secure-token']
+
+    for (const name of validNames) {
+      expect(() =>
+        setCookie(response, name, 'value', { secure: true, path: '/' })
+      ).not.toThrow()
+    }
+  })
+})
+
 describe('deleteCookie', () => {
-  it('should delete cookie by setting Max-Age=0', () => {
+  it('should delete cookie by setting Max-Age=0 and Expires', () => {
     const response = new Response('OK')
     const result = deleteCookie(response, 'session')
 
     const cookie = result.headers.get('Set-Cookie')
     expect(cookie).toContain('session=')
     expect(cookie).toContain('Max-Age=0')
+    expect(cookie).toContain('Expires=Thu, 01 Jan 1970 00:00:00 GMT')
     expect(cookie).toContain('Path=/')
   })
 

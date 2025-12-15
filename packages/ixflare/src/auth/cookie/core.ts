@@ -6,9 +6,53 @@
  * Reference: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
  */
 
+import { CookieValidationError } from './errors'
 import { validateCookiePrefix } from './prefix-validator'
 import { enforceSecureDefaults } from './security'
 import type { CookieOptions } from './types'
+
+/**
+ * RFC 6265 compliant cookie name validation
+ *
+ * Cookie names must be valid tokens per RFC 2616:
+ * - US-ASCII characters except control characters and separators
+ * - Separators: ( ) < > @ , ; : \ " / [ ] ? = { }
+ *
+ * @param name - Cookie name to validate
+ * @throws {CookieValidationError} If name contains invalid characters
+ */
+function validateCookieName(name: string): void {
+  if (!name || name.length === 0) {
+    throw new CookieValidationError('NAME_EMPTY', 'Cookie name cannot be empty')
+  }
+
+  // RFC 6265: cookie-name = token
+  // token = 1*<any CHAR except CTLs or separators>
+  // CTL = <any US-ASCII control character (0-31) and DEL (127)>
+  // separators = ( ) < > @ , ; : \ " / [ ] ? = { } SP HT
+  const separators = '()<>@,;:\\"/[]?={}'
+
+  for (let i = 0; i < name.length; i++) {
+    const charCode = name.charCodeAt(i)
+    const char = name[i]
+
+    // Check for control characters (0-31) and DEL (127)
+    if (charCode <= 31 || charCode === 127) {
+      throw new CookieValidationError(
+        'NAME_INVALID_CHARS',
+        'Cookie name contains invalid characters (control chars, spaces, or separators)'
+      )
+    }
+
+    // Check for whitespace or separators
+    if (char === ' ' || char === '\t' || separators.includes(char)) {
+      throw new CookieValidationError(
+        'NAME_INVALID_CHARS',
+        'Cookie name contains invalid characters (control chars, spaces, or separators)'
+      )
+    }
+  }
+}
 
 /**
  * Set cookie on response with secure defaults and validation
@@ -41,6 +85,9 @@ export function setCookie(
   value: string,
   options: CookieOptions = {}
 ): Response {
+  // Validate cookie name per RFC 6265
+  validateCookieName(name)
+
   // Enforce secure defaults based on environment
   const enforcedOptions = enforceSecureDefaults(name, options)
 
@@ -210,8 +257,9 @@ export function deleteCookie(
 ): Response {
   const { path = '/', domain } = options
 
-  // Set Max-Age=0 to delete immediately
-  let cookie = `${name}=; Max-Age=0; Path=${path}`
+  // Set both Max-Age=0 and Expires to epoch for maximum browser compatibility
+  // Some older browsers only support Expires, modern browsers prefer Max-Age
+  let cookie = `${name}=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=${path}`
 
   if (domain) {
     cookie += `; Domain=${domain}`

@@ -3,13 +3,14 @@
  * Story 5-7: Secure Cookie Handling
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   signCookieValue,
   verifyCookieSignature,
   setSignedCookie,
   getSignedCookie,
 } from '@/auth/cookie/signed'
+import { CookieSignatureError } from '@/auth/cookie/errors'
 
 const TEST_SECRET = 'test-secret-key-minimum-32-chars-long-for-security'
 
@@ -69,6 +70,32 @@ describe('signCookieValue', () => {
     const [value] = signed.split('.')
     expect(value).toBe(testValue)
   })
+
+  it('should throw CookieSignatureError for empty secret', async () => {
+    await expect(signCookieValue('session', 'user123', '')).rejects.toThrow(
+      CookieSignatureError
+    )
+  })
+
+  it('should warn for short secret but still sign', async () => {
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const shortSecret = 'short-secret' // Less than 32 chars
+    const signed = await signCookieValue('session', 'user123', shortSecret)
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[COOKIE SECURITY]')
+    )
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('recommended minimum')
+    )
+
+    // Should still produce a valid signature
+    const verified = await verifyCookieSignature('session', signed, shortSecret)
+    expect(verified).toBe('user123')
+
+    consoleSpy.mockRestore()
+  })
 })
 
 describe('verifyCookieSignature', () => {
@@ -118,10 +145,16 @@ describe('verifyCookieSignature', () => {
     expect(verified).toBeNull()
   })
 
-  it('should return null for invalid format (multiple dots)', async () => {
-    const verified = await verifyCookieSignature('session', 'user.123.signature', TEST_SECRET)
+  it('should handle values with multiple dots correctly', async () => {
+    // Values with dots are now supported via lastIndexOf parsing
+    const valueWithDots = 'user.123.data'
+    const signed = await signCookieValue('session', valueWithDots, TEST_SECRET)
 
-    expect(verified).toBeNull()
+    // Format is: value.signature, so "user.123.data.signature"
+    expect(signed.split('.').length).toBe(4)
+
+    const verified = await verifyCookieSignature('session', signed, TEST_SECRET)
+    expect(verified).toBe(valueWithDots)
   })
 
   it('should return null for invalid format (empty signature)', async () => {
@@ -327,5 +360,45 @@ describe('Integration: Signed Cookie Round-trip', () => {
     const verified = await getSignedCookie(request, '__Host-session', TEST_SECRET)
 
     expect(verified).toBe('user-id-12345')
+  })
+
+  it('should handle concurrent cookie operations correctly', async () => {
+    // Simulate concurrent requests setting and verifying cookies
+    const operations = Array.from({ length: 10 }, async (_, i) => {
+      const cookieName = `cookie-${i}`
+      const cookieValue = `value-${i}-${Date.now()}`
+
+      // Sign the cookie
+      const signed = await signCookieValue(cookieName, cookieValue, TEST_SECRET)
+
+      // Verify immediately
+      const verified = await verifyCookieSignature(cookieName, signed, TEST_SECRET)
+
+      return { cookieName, cookieValue, verified }
+    })
+
+    const results = await Promise.all(operations)
+
+    // All cookies should verify correctly
+    for (const result of results) {
+      expect(result.verified).toBe(result.cookieValue)
+    }
+  })
+
+  it('should handle values containing dots correctly', async () => {
+    // Values with dots should work (common in JWTs, UUIDs, etc.)
+    const testCases = [
+      'user.role.admin',
+      'a.b.c.d.e',
+      '1.2.3',
+      'config.setting.value.nested',
+    ]
+
+    for (const value of testCases) {
+      const signed = await signCookieValue('test', value, TEST_SECRET)
+      const verified = await verifyCookieSignature('test', signed, TEST_SECRET)
+
+      expect(verified).toBe(value)
+    }
   })
 })

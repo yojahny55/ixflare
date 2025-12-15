@@ -8,7 +8,29 @@
  */
 
 import { base64urlEncode, timingSafeEqual } from '@/auth/utils'
+import { CookieSignatureError } from './errors'
 import type { CookieOptions } from './types'
+
+/** Minimum recommended secret length for HMAC-SHA256 */
+const MIN_SECRET_LENGTH = 32
+
+/**
+ * Validate signing secret
+ *
+ * @param secret - Secret to validate
+ * @throws {CookieSignatureError} If secret is empty or too short
+ */
+function validateSecret(secret: string): void {
+  if (!secret || secret.length === 0) {
+    throw new CookieSignatureError('Cookie signing secret cannot be empty')
+  }
+
+  if (secret.length < MIN_SECRET_LENGTH) {
+    console.warn(
+      `[COOKIE SECURITY] Signing secret is ${secret.length} chars, recommended minimum is ${MIN_SECRET_LENGTH} chars for HMAC-SHA256`
+    )
+  }
+}
 
 /**
  * Sign a cookie value with HMAC-SHA256
@@ -18,14 +40,18 @@ import type { CookieOptions } from './types'
  *
  * @param name - Cookie name (included in signature)
  * @param value - Cookie value to sign
- * @param secret - HMAC secret key
+ * @param secret - HMAC secret key (minimum 32 chars recommended)
  * @returns Signed value in format "value.signature"
+ * @throws {CookieSignatureError} If secret is empty
  */
 export async function signCookieValue(
   name: string,
   value: string,
   secret: string
 ): Promise<string> {
+  // Validate secret configuration
+  validateSecret(secret)
+
   const encoder = new TextEncoder()
 
   // Import HMAC secret key
@@ -60,16 +86,22 @@ export async function verifyCookieSignature(
   secret: string
 ): Promise<string | null> {
   // Parse signed value format: value.signature
-  const parts = signedValue.split('.')
-  if (parts.length !== 2) {
+  // Use lastIndexOf to support values containing dots (e.g., "user.role.admin.signature")
+  const lastDotIndex = signedValue.lastIndexOf('.')
+
+  // Must have at least one dot, and it can't be at the end
+  // Note: lastDotIndex === 0 is valid for empty values (format: ".signature")
+  if (lastDotIndex < 0 || lastDotIndex === signedValue.length - 1) {
     return null // Invalid format, don't throw
   }
 
-  const [value, providedSignature] = parts
+  const value = signedValue.substring(0, lastDotIndex)
+  const providedSignature = signedValue.substring(lastDotIndex + 1)
 
   // Re-compute expected signature
   const expectedSignedValue = await signCookieValue(name, value, secret)
-  const [, expectedSignature] = expectedSignedValue.split('.')
+  const expectedLastDot = expectedSignedValue.lastIndexOf('.')
+  const expectedSignature = expectedSignedValue.substring(expectedLastDot + 1)
 
   // Timing-safe comparison prevents timing attacks
   if (!timingSafeEqual(providedSignature, expectedSignature)) {

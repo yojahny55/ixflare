@@ -94,6 +94,11 @@ export function decodeJson<T = unknown>(base64url: string): T {
  * Compares two strings in constant time regardless of where they differ.
  * This prevents attackers from using timing differences to enumerate valid values.
  *
+ * Implementation notes:
+ * - Both buffers are padded to the same length to prevent length-based timing leaks
+ * - XOR comparison runs over the full padded length
+ * - Length mismatch is tracked separately and combined at the end
+ *
  * @param a - First string to compare
  * @param b - Second string to compare
  * @returns True if strings are equal
@@ -104,18 +109,23 @@ export function timingSafeEqual(a: string, b: string): boolean {
   const bufA = encoder.encode(a)
   const bufB = encoder.encode(b)
 
-  // If lengths differ, compare against a same-length buffer to maintain constant time
-  // but return false after the comparison
+  // Track length mismatch but don't early return (would leak timing info)
   const lengthMismatch = bufA.length !== bufB.length
 
-  // Use the longer length for comparison (pad shorter with comparison to self)
-  const len = Math.max(bufA.length, bufB.length)
+  // Pad both buffers to the same length to ensure constant-time comparison
+  // This prevents timing leaks from different loop iteration counts
+  const maxLen = Math.max(bufA.length, bufB.length)
+  const paddedA = new Uint8Array(maxLen)
+  const paddedB = new Uint8Array(maxLen)
 
+  // Copy original data into padded buffers (rest remains 0)
+  paddedA.set(bufA)
+  paddedB.set(bufB)
+
+  // XOR all bytes - any difference will set bits in result
   let result = 0
-  for (let i = 0; i < len; i++) {
-    // XOR bytes - any difference will set bits in result
-    // Use modulo to handle length differences safely
-    result |= (bufA[i % bufA.length] || 0) ^ (bufB[i % bufB.length] || 0)
+  for (let i = 0; i < maxLen; i++) {
+    result |= paddedA[i] ^ paddedB[i]
   }
 
   // Both must match exactly (result === 0) AND lengths must be same

@@ -9,19 +9,57 @@ import { CookieSecurityError } from './errors'
 import type { CookieOptions, Environment } from './types'
 
 /**
- * Detect environment from Cloudflare Workers context or NODE_ENV
+ * Global environment override for Workers runtime
+ * Set this via setEnvironment() to explicitly configure environment in Workers
+ */
+let environmentOverride: Environment | null = null
+
+/**
+ * Set environment explicitly for Workers runtime
+ *
+ * Use this in your Worker's entry point to configure the environment:
+ * ```typescript
+ * import { setEnvironment } from 'ixflare/auth'
+ *
+ * export default {
+ *   async fetch(request, env) {
+ *     // Set based on your Workers environment binding
+ *     setEnvironment(env.ENVIRONMENT || 'production')
+ *     // ... handle request
+ *   }
+ * }
+ * ```
+ *
+ * @param env - Environment to use ('production' | 'development' | 'test')
+ */
+export function setEnvironment(env: Environment): void {
+  environmentOverride = env
+}
+
+/**
+ * Clear environment override (useful for testing)
+ */
+export function clearEnvironment(): void {
+  environmentOverride = null
+}
+
+/**
+ * Detect environment from explicit override, Cloudflare Workers context, or NODE_ENV
+ *
+ * Priority:
+ * 1. Explicit override via setEnvironment()
+ * 2. NODE_ENV environment variable
+ * 3. Default to production for safety
  *
  * @returns Environment type
  */
 export function detectEnvironment(): Environment {
-  // Check if running in Cloudflare Workers
-  if (typeof globalThis !== 'undefined' && 'caches' in globalThis) {
-    // In Workers, check environment from bindings or hostname patterns
-    // Default to production for safety
-    return 'production'
+  // Check for explicit override first (for Workers)
+  if (environmentOverride !== null) {
+    return environmentOverride
   }
 
-  // Node.js environment
+  // Node.js environment (works in miniflare/vitest too)
   if (typeof process !== 'undefined' && process.env?.NODE_ENV) {
     const env = process.env.NODE_ENV.toLowerCase()
     if (env === 'development' || env === 'dev') return 'development'
