@@ -75,16 +75,20 @@ const commands: Record<string, () => Promise<void>> = {
       return index !== -1 && args[index + 1] ? args[index + 1] : undefined
     }
 
+    // Validate --audit-level input
+    const validAuditLevels = ['low', 'moderate', 'high', 'critical'] as const
+    const auditLevelArg = getArgValue('--audit-level')
+    if (auditLevelArg && !validAuditLevels.includes(auditLevelArg as typeof validAuditLevels[number])) {
+      console.error(`Error: Invalid audit level "${auditLevelArg}"`)
+      console.error(`Valid levels: ${validAuditLevels.join(', ')}`)
+      process.exit(1)
+    }
+
     await m.audit({
       json: args.includes('--json'),
       fix: args.includes('--fix'),
       ci: args.includes('--ci'),
-      auditLevel: getArgValue('--audit-level') as
-        | 'low'
-        | 'moderate'
-        | 'high'
-        | 'critical'
-        | undefined,
+      auditLevel: auditLevelArg as 'low' | 'moderate' | 'high' | 'critical' | undefined,
       prod: args.includes('--prod'),
       dev: args.includes('--dev'),
     })

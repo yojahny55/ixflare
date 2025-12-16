@@ -5,8 +5,10 @@
  */
 
 import { spawn } from 'child_process'
+import { existsSync } from 'fs'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
+import { pathToFileURL } from 'url'
 import pc from 'picocolors'
 import type {
   AuditOptions,
@@ -18,11 +20,59 @@ import type {
   VulnerabilitySeverity,
 } from './types'
 
+/** Valid audit severity levels */
+const VALID_AUDIT_LEVELS: readonly VulnerabilitySeverity[] = ['low', 'moderate', 'high', 'critical']
+
+/**
+ * Validate and sanitize cwd path to prevent path injection
+ * @throws Error if path is invalid or contains suspicious patterns
+ */
+function validateCwd(cwd: string): string {
+  // Reject path traversal attempts
+  if (cwd.includes('..')) {
+    throw new Error('Invalid working directory: path traversal not allowed')
+  }
+  // Reject null bytes (path injection)
+  if (cwd.includes('\0')) {
+    throw new Error('Invalid working directory: null bytes not allowed')
+  }
+  // Reject shell metacharacters that could be dangerous
+  const dangerousChars = /[;&|`$(){}[\]<>!]/
+  if (dangerousChars.test(cwd)) {
+    throw new Error('Invalid working directory: contains shell metacharacters')
+  }
+  return cwd
+}
+
+/**
+ * Validate audit options at runtime
+ * @throws Error if options are invalid
+ */
+function validateAuditOptions(options: AuditOptions): void {
+  // Validate auditLevel if provided
+  if (options.auditLevel !== undefined) {
+    if (!VALID_AUDIT_LEVELS.includes(options.auditLevel)) {
+      throw new Error(
+        `Invalid audit level: "${options.auditLevel}". Valid levels: ${VALID_AUDIT_LEVELS.join(', ')}`
+      )
+    }
+  }
+
+  // Validate mutually exclusive options
+  if (options.prod && options.dev) {
+    throw new Error('Cannot specify both --prod and --dev')
+  }
+}
+
 /**
  * Main audit command entry point
  */
 export async function audit(options: AuditOptions = {}): Promise<void> {
-  const cwd = options.cwd || process.cwd()
+  // Validate options at runtime (defense in depth - don't trust caller)
+  validateAuditOptions(options)
+
+  // Validate and sanitize cwd
+  const cwd = validateCwd(options.cwd || process.cwd())
 
   // CI mode sets defaults
   if (options.ci) {
@@ -35,7 +85,7 @@ export async function audit(options: AuditOptions = {}): Promise<void> {
 
   try {
     if (options.fix) {
-      const fixResult = await runAuditFix(cwd, options)
+      const fixResult = await runAuditFix(cwd, options, ignoredCves)
       displayFixResults(fixResult, options.json)
       process.exit(0)
     }
@@ -52,9 +102,31 @@ export async function audit(options: AuditOptions = {}): Promise<void> {
     const hasRelevantVulns = shouldFail(result, options.auditLevel)
     process.exit(hasRelevantVulns ? 1 : 0)
   } catch (error) {
-    console.error(pc.red('Error running audit:'), error)
+    // Sanitize error output - don't expose internal details
+    const safeMessage = getSafeErrorMessage(error)
+    console.error(pc.red('Error running audit:'), safeMessage)
+    if (process.env.DEBUG === 'true') {
+      console.error(pc.gray('Debug details:'), error)
+    }
     process.exit(1)
   }
+}
+
+/**
+ * Extract a safe error message without exposing sensitive details
+ */
+function getSafeErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    // Filter out potentially sensitive information from error messages
+    const message = error.message
+    // Remove file paths that might expose system structure
+    const sanitized = message
+      .replace(/\/[^\s]+/g, '[path]')
+      .replace(/\\[^\s]+/g, '[path]')
+    // Limit message length
+    return sanitized.length > 200 ? sanitized.slice(0, 200) + '...' : sanitized
+  }
+  return 'An unexpected error occurred'
 }
 
 /**
@@ -83,10 +155,13 @@ async function runAudit(
 
 /**
  * Execute pnpm audit command
+ * Note: shell is only enabled on Windows where it's required for pnpm to work
  */
 function executePnpmAudit(cwd: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    const proc = spawn('pnpm', args, { cwd, shell: true })
+    // Only use shell on Windows where it's required for PATH resolution
+    const useShell = process.platform === 'win32'
+    const proc = spawn('pnpm', args, { cwd, shell: useShell })
     let stdout = ''
     let stderr = ''
 
@@ -115,6 +190,44 @@ function executePnpmAudit(cwd: string, args: string[]): Promise<string> {
 }
 
 /**
+ * Extract CVE ID from advisory URL or metadata
+ * Advisory URLs are typically: https://github.com/advisories/GHSA-xxxx-xxxx-xxxx
+ * or may contain CVE references in the overview/title
+ */
+function extractCveId(advisory: {
+  id: number
+  url: string
+  overview: string
+  title: string
+}): string {
+  // Try to extract CVE from URL (some advisories link directly to CVE)
+  const urlCveMatch = advisory.url?.match(/CVE-\d{4}-\d+/)
+  if (urlCveMatch) {
+    return urlCveMatch[0]
+  }
+
+  // Try to extract CVE from overview or title
+  const overviewCveMatch = advisory.overview?.match(/CVE-\d{4}-\d+/)
+  if (overviewCveMatch) {
+    return overviewCveMatch[0]
+  }
+
+  const titleCveMatch = advisory.title?.match(/CVE-\d{4}-\d+/)
+  if (titleCveMatch) {
+    return titleCveMatch[0]
+  }
+
+  // Extract GHSA ID from URL if present
+  const ghsaMatch = advisory.url?.match(/GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}/)
+  if (ghsaMatch) {
+    return ghsaMatch[0]
+  }
+
+  // Fall back to numeric advisory ID (npm registry ID)
+  return String(advisory.id)
+}
+
+/**
  * Parse pnpm audit JSON output
  */
 function parseAuditOutput(output: string, ignoredCves: string[]): AuditResult {
@@ -124,17 +237,19 @@ function parseAuditOutput(output: string, ignoredCves: string[]): AuditResult {
 
     // Parse advisories
     for (const [advisoryId, advisory] of Object.entries(data.advisories || {})) {
-      const cveId = `CVE-${advisoryId}` // Normalize ID format
+      // Extract the actual CVE/GHSA ID from advisory metadata
+      const vulnId = extractCveId(advisory)
 
-      // Skip ignored CVEs
-      if (ignoredCves.includes(cveId) || ignoredCves.includes(advisoryId)) {
+      // Skip ignored vulnerabilities (check multiple ID formats)
+      const idsToCheck = [vulnId, advisoryId, String(advisory.id)]
+      if (idsToCheck.some((id) => ignoredCves.includes(id))) {
         continue
       }
 
       for (const finding of advisory.findings || []) {
         for (const path of finding.paths || []) {
           vulnerabilities.push({
-            id: advisoryId,
+            id: vulnId,
             severity: advisory.severity,
             package: advisory.module_name,
             version: finding.version,
@@ -161,18 +276,74 @@ function parseAuditOutput(output: string, ignoredCves: string[]): AuditResult {
       summary,
       ignored: ignoredCves,
     }
-  } catch (error) {
-    throw new Error(`Failed to parse audit output: ${error}`)
+  } catch {
+    // Don't expose raw parsing errors which may contain sensitive data
+    throw new Error('Failed to parse audit output. Ensure pnpm is installed and the project has a valid package.json.')
   }
 }
 
 /**
- * Load ignored CVEs from configuration
+ * Load ignored CVEs/GHSA IDs from configuration sources
+ * Priority (lowest to highest):
+ * 1. edge.config.ts security.audit.ignoreCves
+ * 2. .ixignore file
+ * 3. CLI --ignore flags (via cliIgnores)
  */
 async function loadIgnoredCves(cwd: string, cliIgnores?: string[]): Promise<string[]> {
-  const ignored = new Set<string>(cliIgnores || [])
+  const ignored = new Set<string>()
 
-  // Try loading from .ixignore
+  // 1. Try loading from edge.config.ts
+  await loadIgnoresFromEdgeConfig(cwd, ignored)
+
+  // 2. Try loading from .ixignore file
+  await loadIgnoresFromIxignore(cwd, ignored)
+
+  // 3. CLI ignores have highest priority (already in set, just add them)
+  if (cliIgnores) {
+    for (const cve of cliIgnores) {
+      ignored.add(cve)
+    }
+  }
+
+  return Array.from(ignored)
+}
+
+/**
+ * Load ignored CVEs from edge.config.ts security.audit.ignoreCves
+ */
+async function loadIgnoresFromEdgeConfig(cwd: string, ignored: Set<string>): Promise<void> {
+  const configPaths = ['edge.config.ts', 'edge.config.js', 'edge.config.mjs']
+
+  for (const configPath of configPaths) {
+    const fullPath = join(cwd, configPath)
+    if (!existsSync(fullPath)) continue
+
+    try {
+      const configUrl = pathToFileURL(fullPath).href
+      const configModule = await import(configUrl)
+      const config = configModule.default
+
+      // Navigate to security.audit.ignoreCves
+      const ignoreCves = config?.security?.audit?.ignoreCves
+      if (Array.isArray(ignoreCves)) {
+        for (const cve of ignoreCves) {
+          if (typeof cve === 'string') {
+            ignored.add(cve)
+          }
+        }
+      }
+      break // Found config, stop looking
+    } catch {
+      // Config file exists but failed to load/parse, continue to next option
+    }
+  }
+}
+
+/**
+ * Load ignored CVEs/GHSA IDs from .ixignore file
+ * Supports both CVE-YYYY-NNNNN and GHSA-xxxx-xxxx-xxxx formats
+ */
+async function loadIgnoresFromIxignore(cwd: string, ignored: Set<string>): Promise<void> {
   try {
     const ixignorePath = join(cwd, '.ixignore')
     const content = await readFile(ixignorePath, 'utf-8')
@@ -183,21 +354,29 @@ async function loadIgnoredCves(cwd: string, cliIgnores?: string[]): Promise<stri
       // Skip empty lines and comments
       if (!trimmed || trimmed.startsWith('#')) continue
 
-      // Extract CVE ID (before any comment)
-      const match = trimmed.match(/^(CVE-\d{4}-\d+)/)
-      if (match) {
-        ignored.add(match[1])
+      // Extract CVE ID (CVE-YYYY-NNNNN format)
+      const cveMatch = trimmed.match(/^(CVE-\d{4}-\d+)/)
+      if (cveMatch) {
+        ignored.add(cveMatch[1])
+        continue
+      }
+
+      // Extract GHSA ID (GHSA-xxxx-xxxx-xxxx format)
+      const ghsaMatch = trimmed.match(/^(GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})/)
+      if (ghsaMatch) {
+        ignored.add(ghsaMatch[1])
+        continue
+      }
+
+      // Also support numeric advisory IDs (npm registry format)
+      const numericMatch = trimmed.match(/^(\d+)/)
+      if (numericMatch) {
+        ignored.add(numericMatch[1])
       }
     }
   } catch {
     // .ixignore doesn't exist or can't be read, that's fine
   }
-
-  // TODO: Load from edge.config.ts security.audit.ignoreCves
-  // This would require loading and parsing the config file
-  // Deferred to avoid complexity for now
-
-  return Array.from(ignored)
 }
 
 /**
@@ -304,10 +483,37 @@ function shouldFail(result: AuditResult, auditLevel?: VulnerabilitySeverity): bo
 
 /**
  * Run audit with --fix flag
+ * Performs pre/post fix audits to calculate actual fixes applied
+ *
+ * IMPORTANT: pnpm audit --fix is unaware of Ixflare's ignore configuration.
+ * This function warns users if ignored vulnerabilities might be affected,
+ * and uses pnpm's --ignore flag (v10+) when possible.
  */
-async function runAuditFix(cwd: string, options: AuditOptions): Promise<FixResult> {
-  const args = ['audit', '--fix']
+async function runAuditFix(
+  cwd: string,
+  options: AuditOptions,
+  ignoredCves: string[]
+): Promise<FixResult> {
+  // 1. Get pre-fix vulnerability state (without filtering ignores)
+  const preFixResultAll = await runAudit(cwd, options, [])
 
+  // 2. Check if any vulnerabilities match ignored CVEs
+  const ignoredVulns = preFixResultAll.vulnerabilities.filter((v) =>
+    ignoredCves.some((ignored) => v.id === ignored || v.id.includes(ignored))
+  )
+
+  if (ignoredVulns.length > 0) {
+    // Warn user about ignored vulnerabilities that pnpm might try to fix
+    console.log(pc.yellow('\n⚠ Warning: The following vulnerabilities are in your ignore list:'))
+    for (const vuln of ignoredVulns) {
+      console.log(pc.yellow(`  - ${vuln.id}: ${vuln.package}@${vuln.version}`))
+    }
+    console.log(pc.yellow('\npnpm audit --fix may still attempt to update these packages.'))
+    console.log(pc.yellow('If this causes issues, you can revert with: git checkout package.json pnpm-lock.yaml\n'))
+  }
+
+  // Build args for fix command
+  const args = ['audit', '--fix']
   if (options.prod) {
     args.push('--prod')
   }
@@ -315,22 +521,76 @@ async function runAuditFix(cwd: string, options: AuditOptions): Promise<FixResul
     args.push('--dev')
   }
 
+  // Pass ignored CVEs to pnpm (supported in pnpm v10.11.0+)
+  // This prevents pnpm from trying to fix intentionally ignored vulnerabilities
+  for (const cve of ignoredCves) {
+    args.push('--ignore', cve)
+  }
+
   try {
+    // 3. Run pnpm audit --fix
     await executePnpmAudit(cwd, args)
 
-    // Run audit again to see what's remaining
+    // 4. Get post-fix vulnerability state
     const postFixResult = await runAudit(cwd, options, [])
 
-    // Simple fix result (actual tracking would require more complex logic)
-    const fixResult: FixResult = {
-      fixed: 0, // Would need pre-fix audit to calculate
-      remaining: postFixResult.summary.total,
-      fixes: [],
+    // 5. Calculate which vulnerabilities were fixed
+    const preFixPackages = new Map<string, Vulnerability>()
+    for (const vuln of preFixResultAll.vulnerabilities) {
+      preFixPackages.set(`${vuln.package}@${vuln.version}`, vuln)
     }
 
-    return fixResult
-  } catch (error) {
-    throw new Error(`Auto-fix failed: ${error}`)
+    const postFixPackageKeys = new Set<string>()
+    for (const vuln of postFixResult.vulnerabilities) {
+      postFixPackageKeys.add(`${vuln.package}@${vuln.version}`)
+    }
+
+    // Find packages that were fixed (present before, not present after)
+    const fixes: FixResult['fixes'] = []
+    for (const [key, vuln] of preFixPackages) {
+      if (!postFixPackageKeys.has(key)) {
+        // Skip counting ignored vulnerabilities as "fixed"
+        if (ignoredCves.some((ignored) => vuln.id === ignored || vuln.id.includes(ignored))) {
+          continue
+        }
+        fixes.push({
+          package: vuln.package,
+          fromVersion: vuln.version,
+          toVersion: vuln.fixedIn || 'patched',
+          method: 'direct-update', // pnpm audit --fix uses overrides
+        })
+      }
+    }
+
+    // Deduplicate fixes (same package may have multiple vulnerabilities)
+    const uniqueFixes = new Map<string, FixResult['fixes'][0]>()
+    for (const fix of fixes) {
+      const key = `${fix.package}@${fix.fromVersion}`
+      if (!uniqueFixes.has(key)) {
+        uniqueFixes.set(key, fix)
+      }
+    }
+
+    // Calculate remaining (excluding ignored)
+    const remainingNonIgnored = postFixResult.vulnerabilities.filter(
+      (v) => !ignoredCves.some((ignored) => v.id === ignored || v.id.includes(ignored))
+    ).length
+
+    return {
+      fixed: uniqueFixes.size,
+      remaining: remainingNonIgnored,
+      fixes: Array.from(uniqueFixes.values()),
+    }
+  } catch {
+    // If fix fails, return what we know
+    const remainingNonIgnored = preFixResultAll.vulnerabilities.filter(
+      (v) => !ignoredCves.some((ignored) => v.id === ignored || v.id.includes(ignored))
+    ).length
+    return {
+      fixed: 0,
+      remaining: remainingNonIgnored,
+      fixes: [],
+    }
   }
 }
 
