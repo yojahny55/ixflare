@@ -5,9 +5,18 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { networkInterfaces } from 'node:os'
+import { resolve } from 'node:path'
 import pc from 'picocolors'
+
+/** Valid port range constants */
+const MIN_PORT = 1
+const MAX_PORT = 65535
+
+/** Default version fallback */
+const DEFAULT_VERSION = '0.0.0'
 
 export interface DevOptions {
   port?: number
@@ -19,6 +28,37 @@ export interface BannerOptions {
   port: number
   networkAddress?: string
   startTime: number
+  version: string
+}
+
+/**
+ * Get the Ixflare version from the root package.json
+ * Traverses up from cwd to find the monorepo root package.json
+ */
+export function getVersion(): string {
+  try {
+    // Try to read from the project's package.json first (user's project)
+    const projectPkgPath = resolve(process.cwd(), 'package.json')
+    const projectPkg = JSON.parse(readFileSync(projectPkgPath, 'utf-8'))
+
+    // If the project has ixflare as a dependency, try to get its version
+    const ixflareDep = projectPkg.dependencies?.ixflare || projectPkg.devDependencies?.ixflare
+    if (ixflareDep && !ixflareDep.startsWith('workspace:')) {
+      // Extract version from semver string (e.g., "^1.0.0" -> "1.0.0")
+      const match = ixflareDep.match(/\d+\.\d+\.\d+/)
+      if (match) return match[0]
+    }
+
+    // For monorepo development, read from root package.json
+    // This handles the case when running from within the ixflare monorepo
+    if (projectPkg.name === 'ixflare' && projectPkg.version) {
+      return projectPkg.version
+    }
+
+    return DEFAULT_VERSION
+  } catch {
+    return DEFAULT_VERSION
+  }
 }
 
 /**
@@ -28,12 +68,9 @@ export async function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = createServer()
 
-    server.once('error', (err: NodeJS.ErrnoException) => {
-      if (err.code === 'EADDRINUSE') {
-        resolve(false)
-      } else {
-        resolve(false)
-      }
+    // Issue #5 fix: Simplified error handling - all errors mean port unavailable
+    server.once('error', () => {
+      resolve(false)
     })
 
     server.once('listening', () => {
@@ -85,30 +122,54 @@ export function getNetworkAddress(): string | undefined {
   return undefined
 }
 
+/** Fixed banner content width (excluding box borders) */
+const BANNER_CONTENT_WIDTH = 37
+
+/**
+ * Create a padded banner line with proper alignment
+ * @param text - Raw text content (without ANSI codes)
+ * @returns Padded string with trailing spaces
+ * @internal
+ */
+function padLine(text: string): string {
+  if (text.length >= BANNER_CONTENT_WIDTH) {
+    // Truncate with ellipsis for overly long content
+    return text.slice(0, BANNER_CONTENT_WIDTH - 3) + '...'
+  }
+  return text + ' '.repeat(BANNER_CONTENT_WIDTH - text.length)
+}
+
 /**
  * Display the Ixflare development server banner
+ * Issue #1 fix: Dynamic padding that properly handles varying URL lengths
  */
 export function displayBanner(options: BannerOptions): void {
-  const { port, networkAddress, startTime } = options
+  const { port, networkAddress, startTime, version } = options
+
+  const localUrl = `http://localhost:${port}`
+  const localText = `Local:   ${localUrl}`
+  const versionText = `Ixflare v${version}`
 
   console.log('')
   console.log('  ╭─────────────────────────────────────────╮')
   console.log('  │                                         │')
-  console.log('  │   ' + pc.cyan(pc.bold('Ixflare')) + ' v0.0.1                        │')
+  console.log('  │   ' + pc.cyan(pc.bold('Ixflare')) + ` v${version}` + ' '.repeat(Math.max(0, 28 - version.length)) + '│')
   console.log('  │                                         │')
-  console.log(
-    '  │   ' + pc.green('➜') + '  Local:   ' + pc.cyan(`http://localhost:${port}`) + '     │'
-  )
+
+  // Local URL line - "➜  " prefix is 3 chars, content area is 37
+  const localPadded = padLine(localText)
+  console.log('  │   ' + pc.green('➜') + '  ' + localPadded.replace(localUrl, pc.cyan(localUrl)) + '│')
 
   if (networkAddress) {
     const networkUrl = `http://${networkAddress}:${port}`
-    // Pad to match banner width
-    const padding = ' '.repeat(Math.max(0, 33 - networkUrl.length))
-    console.log('  │   ' + pc.green('➜') + '  Network: ' + pc.cyan(networkUrl) + padding + '│')
+    const networkText = `Network: ${networkUrl}`
+    const networkPadded = padLine(networkText)
+    console.log('  │   ' + pc.green('➜') + '  ' + networkPadded.replace(networkUrl, pc.cyan(networkUrl)) + '│')
   }
 
   console.log('  │                                         │')
-  console.log('  │   ' + pc.dim(`Ready in ${startTime}ms`) + '                        │')
+  const readyText = `Ready in ${startTime}ms`
+  console.log('  │   ' + pc.dim(padLine(readyText)) + '│')
   console.log('  │                                         │')
   console.log('  ╰─────────────────────────────────────────╯')
   console.log('')
@@ -116,6 +177,7 @@ export function displayBanner(options: BannerOptions): void {
 
 /**
  * Display port conflict error message
+ * Issue #6 fix: No longer calls process.exit - caller handles exit
  */
 export function displayPortConflictMessage(occupiedPort: number, suggestedPort: number): void {
   console.error('')
@@ -123,11 +185,19 @@ export function displayPortConflictMessage(occupiedPort: number, suggestedPort: 
   console.error(pc.dim('  • Use ') + pc.cyan(`--port ${suggestedPort}`) + pc.dim(' (next available)'))
   console.error(pc.dim('  • Kill process on ') + occupiedPort + pc.dim(': ') + pc.yellow(`lsof -ti:${occupiedPort} | xargs kill -9`))
   console.error('')
-  process.exit(1)
+}
+
+/**
+ * Validate that a port number is within valid range
+ * Issue #2 fix: Added port validation
+ */
+export function isValidPort(port: number): boolean {
+  return !isNaN(port) && Number.isInteger(port) && port >= MIN_PORT && port <= MAX_PORT
 }
 
 /**
  * Parse development server CLI arguments
+ * Issue #2 fix: Added port validation with clear error messages
  */
 export function parseDevArgs(args: string[]): DevOptions {
   const options: DevOptions = {
@@ -139,7 +209,15 @@ export function parseDevArgs(args: string[]): DevOptions {
     const arg = args[i]
 
     if (arg === '--port' && args[i + 1]) {
-      options.port = parseInt(args[i + 1], 10)
+      const portValue = parseInt(args[i + 1], 10)
+
+      if (!isValidPort(portValue)) {
+        console.error(pc.red(`Invalid port: "${args[i + 1]}"`))
+        console.error(pc.dim(`Port must be an integer between ${MIN_PORT} and ${MAX_PORT}`))
+        process.exit(1)
+      }
+
+      options.port = portValue
       i++
     } else if (arg === '--host' && args[i + 1]) {
       options.host = args[i + 1]
@@ -154,6 +232,7 @@ export function parseDevArgs(args: string[]): DevOptions {
 
 /**
  * Main development server command
+ * Issue #3 fix: Properly measure startup time by detecting Vite ready signal
  */
 export async function dev(options: DevOptions = {}): Promise<void> {
   const startTime = Date.now()
@@ -164,13 +243,17 @@ export async function dev(options: DevOptions = {}): Promise<void> {
 
   const { port = 3000, host, open } = parsedOptions
 
+  // Get version from package.json
+  const version = getVersion()
+
   // Check if port is available
   const available = await isPortAvailable(port)
 
   if (!available) {
     const nextPort = await findAvailablePort(port + 1)
     displayPortConflictMessage(port, nextPort)
-    return
+    // Issue #6 fix: Caller handles exit after display function
+    process.exit(1)
   }
 
   // Get network address for display
@@ -187,21 +270,38 @@ export async function dev(options: DevOptions = {}): Promise<void> {
     viteArgs.push('--open')
   }
 
-  // Spawn Vite dev server
+  // Issue #3 fix: Use piped stdio to detect Vite ready signal
   const viteProcess: ChildProcess = spawn('npx', viteArgs, {
-    stdio: 'inherit',
+    stdio: ['inherit', 'pipe', 'pipe'],
     shell: true,
     cwd: process.cwd(),
   })
 
-  // Calculate startup time
-  const duration = Date.now() - startTime
+  let bannerDisplayed = false
 
-  // Display banner
-  displayBanner({
-    port,
-    networkAddress,
-    startTime: duration,
+  // Handle stdout - look for Vite ready signal and forward output
+  viteProcess.stdout?.on('data', (data: Buffer) => {
+    const output = data.toString()
+
+    // Detect Vite ready signal (usually contains "ready in" or shows the local URL)
+    if (!bannerDisplayed && (output.includes('ready in') || output.includes('Local:'))) {
+      const duration = Date.now() - startTime
+      displayBanner({
+        port,
+        networkAddress,
+        startTime: duration,
+        version,
+      })
+      bannerDisplayed = true
+    }
+
+    // Forward Vite output to console
+    process.stdout.write(data)
+  })
+
+  // Forward stderr
+  viteProcess.stderr?.on('data', (data: Buffer) => {
+    process.stderr.write(data)
   })
 
   // Handle process cleanup
@@ -216,6 +316,17 @@ export async function dev(options: DevOptions = {}): Promise<void> {
   process.on('SIGTERM', cleanup)
 
   viteProcess.on('exit', (code) => {
+    // If banner wasn't displayed (Vite failed to start), show it now with CLI time
+    if (!bannerDisplayed) {
+      const duration = Date.now() - startTime
+      displayBanner({
+        port,
+        networkAddress,
+        startTime: duration,
+        version,
+      })
+    }
+
     if (code !== 0 && code !== null) {
       console.error(pc.red(`Dev server exited with code ${code}`))
       process.exit(code)

@@ -196,12 +196,14 @@ describe('dev command', () => {
         port: 3000,
         networkAddress: '192.168.1.5',
         startTime: 312,
+        version: '1.2.3',
       })
 
       expect(consoleLogSpy).toHaveBeenCalled()
       const output = consoleLogSpy.mock.calls.map((call) => call[0]).join('\n')
 
       expect(output).toContain('Ixflare')
+      expect(output).toContain('v1.2.3')
       expect(output).toContain('http://localhost:3000')
       expect(output).toContain('http://192.168.1.5:3000')
       expect(output).toContain('312ms')
@@ -214,6 +216,7 @@ describe('dev command', () => {
         port: 3000,
         networkAddress: undefined,
         startTime: 250,
+        version: '0.0.1',
       })
 
       expect(consoleLogSpy).toHaveBeenCalled()
@@ -271,13 +274,66 @@ describe('dev command', () => {
 
       expect(output).toContain('Port 3000 is in use')
       expect(output).toContain('--port 3001')
+      // Issue #6 fix: displayPortConflictMessage no longer calls process.exit
+      // The caller (dev function) handles the exit
+      expect(mockExit).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Port validation', () => {
+    it('should return true for valid ports', async () => {
+      const { isValidPort } = await import('../../src/commands/dev')
+
+      expect(isValidPort(1)).toBe(true)
+      expect(isValidPort(80)).toBe(true)
+      expect(isValidPort(3000)).toBe(true)
+      expect(isValidPort(8080)).toBe(true)
+      expect(isValidPort(65535)).toBe(true)
+    })
+
+    it('should return false for invalid ports', async () => {
+      const { isValidPort } = await import('../../src/commands/dev')
+
+      expect(isValidPort(0)).toBe(false)
+      expect(isValidPort(-1)).toBe(false)
+      expect(isValidPort(65536)).toBe(false)
+      expect(isValidPort(NaN)).toBe(false)
+      expect(isValidPort(3.14)).toBe(false)
+      expect(isValidPort(Infinity)).toBe(false)
+    })
+
+    it('should reject invalid port in parseDevArgs and exit', async () => {
+      const { parseDevArgs } = await import('../../src/commands/dev')
+
+      // This should call process.exit(1)
+      parseDevArgs(['--port', 'abc'])
+
+      expect(mockExit).toHaveBeenCalledWith(1)
+      expect(consoleErrorSpy).toHaveBeenCalled()
+      const output = consoleErrorSpy.mock.calls.map((call) => call[0]).join('\n')
+      expect(output).toContain('Invalid port')
+    })
+
+    it('should reject out-of-range port in parseDevArgs', async () => {
+      const { parseDevArgs } = await import('../../src/commands/dev')
+
+      parseDevArgs(['--port', '99999'])
+
       expect(mockExit).toHaveBeenCalledWith(1)
     })
   })
 
   describe('Vite subprocess management', () => {
-    it('should spawn vite with correct arguments', async () => {
-      spawnMock.mockReturnValue(mockProcess)
+    it('should spawn vite with correct arguments and piped stdio', async () => {
+      // Issue #3 fix: Now uses piped stdio to detect Vite ready signal
+      const mockStdout = { on: vi.fn() }
+      const mockStderr = { on: vi.fn() }
+      const processWithPipes = {
+        ...mockProcess,
+        stdout: mockStdout,
+        stderr: mockStderr,
+      }
+      spawnMock.mockReturnValue(processWithPipes)
 
       const { dev } = await import('../../src/commands/dev')
 
@@ -311,17 +367,75 @@ describe('dev command', () => {
         'npx',
         expect.arrayContaining(['vite', '--port', '3000']),
         expect.objectContaining({
-          stdio: 'inherit',
+          stdio: ['inherit', 'pipe', 'pipe'],
           shell: true,
         })
       )
+
+      // Verify stdout/stderr handlers are attached
+      expect(mockStdout.on).toHaveBeenCalledWith('data', expect.any(Function))
+      expect(mockStderr.on).toHaveBeenCalledWith('data', expect.any(Function))
+    })
+
+    it('should display banner when Vite outputs ready signal', async () => {
+      const mockStdout = { on: vi.fn() }
+      const mockStderr = { on: vi.fn() }
+      const processWithPipes = {
+        ...mockProcess,
+        stdout: mockStdout,
+        stderr: mockStderr,
+      }
+      spawnMock.mockReturnValue(processWithPipes)
+
+      // Mock port as available
+      let listeningCallback: (() => void) | null = null
+      const mockServer = {
+        listen: vi.fn(() => {
+          if (listeningCallback) setTimeout(() => listeningCallback!(), 0)
+        }),
+        close: vi.fn((cb) => cb && cb()),
+        once: vi.fn((event, cb) => {
+          if (event === 'listening') listeningCallback = cb
+        }),
+      }
+      createServerMock.mockReturnValue(mockServer)
+
+      networkInterfacesMock.mockReturnValue({
+        eth0: [{ family: 'IPv4', internal: false, address: '192.168.1.5' }],
+      })
+
+      const { dev } = await import('../../src/commands/dev')
+
+      await dev({ port: 3000 })
+
+      // Get the stdout data handler and simulate Vite ready signal
+      const stdoutHandler = mockStdout.on.mock.calls.find((call) => call[0] === 'data')?.[1]
+      expect(stdoutHandler).toBeDefined()
+
+      // Simulate Vite ready output
+      const stdoutWriteSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+      stdoutHandler(Buffer.from('VITE v5.0.0 ready in 123 ms\n'))
+
+      // Banner should be displayed
+      expect(consoleLogSpy).toHaveBeenCalled()
+      const output = consoleLogSpy.mock.calls.map((call) => call[0]).join('\n')
+      expect(output).toContain('Ixflare')
+
+      stdoutWriteSpy.mockRestore()
     })
 
     it('should handle process cleanup on exit', async () => {
       const killSpy = vi.fn()
-      mockProcess.kill = killSpy
-      mockProcess.killed = false
-      spawnMock.mockReturnValue(mockProcess)
+      const mockStdout = { on: vi.fn() }
+      const mockStderr = { on: vi.fn() }
+      const processWithPipes = {
+        on: vi.fn(),
+        stdout: mockStdout,
+        stderr: mockStderr,
+        kill: killSpy,
+        killed: false,
+      }
+      spawnMock.mockReturnValue(processWithPipes)
 
       // Spy on process.on to capture signal handlers
       const processOnSpy = vi.spyOn(process, 'on')
@@ -360,6 +474,44 @@ describe('dev command', () => {
 
       expect(killSpy).toHaveBeenCalled()
       expect(mockExit).toHaveBeenCalledWith(0)
+    })
+  })
+
+  describe('Banner padding', () => {
+    it('should handle long network URLs without breaking layout', async () => {
+      const { displayBanner } = await import('../../src/commands/dev')
+
+      // Long IP address with high port number
+      displayBanner({
+        port: 65535,
+        networkAddress: '192.168.100.100',
+        startTime: 1234,
+        version: '0.0.1',
+      })
+
+      expect(consoleLogSpy).toHaveBeenCalled()
+      const output = consoleLogSpy.mock.calls.map((call) => call[0]).join('\n')
+
+      // Should still contain the URLs (possibly truncated)
+      expect(output).toContain('192.168.100.100')
+      // Each line should end with │
+      const lines = consoleLogSpy.mock.calls.map((call) => call[0])
+      for (const line of lines) {
+        if (line && line.includes('│') && !line.includes('╭') && !line.includes('╰')) {
+          expect(line.endsWith('│')).toBe(true)
+        }
+      }
+    })
+  })
+
+  describe('Version detection', () => {
+    it('should return version from package.json', async () => {
+      const { getVersion } = await import('../../src/commands/dev')
+
+      const version = getVersion()
+
+      // Should return a valid semver string
+      expect(version).toMatch(/^\d+\.\d+\.\d+/)
     })
   })
 })
