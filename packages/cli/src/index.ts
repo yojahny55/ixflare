@@ -65,6 +65,30 @@ const commands: Record<string, () => Promise<void>> = {
   'generate:env': () =>
     import('./commands/generate-env-types').then((m) => m.generateEnvCommand({})),
   'auth:rotate-keys': () => import('./commands/auth/rotate-keys').then((m) => m.rotateKeys()),
+  'security:audit': async () => {
+    const args = process.argv.slice(3)
+    const m = await import('./commands/security/audit')
+
+    // Parse arguments
+    const getArgValue = (flag: string): string | undefined => {
+      const index = args.indexOf(flag)
+      return index !== -1 && args[index + 1] ? args[index + 1] : undefined
+    }
+
+    await m.audit({
+      json: args.includes('--json'),
+      fix: args.includes('--fix'),
+      ci: args.includes('--ci'),
+      auditLevel: getArgValue('--audit-level') as
+        | 'low'
+        | 'moderate'
+        | 'high'
+        | 'critical'
+        | undefined,
+      prod: args.includes('--prod'),
+      dev: args.includes('--dev'),
+    })
+  },
 }
 
 async function main(): Promise<void> {
@@ -98,6 +122,7 @@ async function main(): Promise<void> {
     generate            Generate code (model, migration, component)
     generate:env        Generate TypeScript types from .env.example
     auth:rotate-keys    Manually rotate JWT signing keys
+    security:audit      Scan dependencies for vulnerabilities
 
   Migration Options:
     --yes               Skip confirmation prompts
@@ -111,6 +136,14 @@ async function main(): Promise<void> {
     --force             Skip confirmation prompts
     --env <env>         Environment (development, test, production)
     --remote            Target remote database (default: local)
+
+  Security Audit Options:
+    --json              Output in JSON format
+    --fix               Auto-fix vulnerabilities where possible
+    --ci                CI mode (fail on high/critical, production deps only)
+    --audit-level <l>   Minimum severity (low, moderate, high, critical)
+    --prod              Scan production dependencies only
+    --dev               Scan development dependencies only
 ${customCommandsList ? '\n  Custom Commands:\n' + customCommandsList : ''}
 
   Options:

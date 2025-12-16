@@ -1,1 +1,0 @@
-{"tables":[{"name":"users","columns":[{"name":"id","type":"INTEGER PRIMARY KEY AUTOINCREMENT"},{"name":"email","type":"TEXT NOT NULL UNIQUE"},{"name":"name","type":"TEXT NOT NULL"}]}]}
