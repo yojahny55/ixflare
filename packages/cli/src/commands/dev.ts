@@ -165,7 +165,6 @@ export function displayBanner(options: BannerOptions): void {
 
   const localUrl = `http://localhost:${port}`
   const localText = `Local:   ${localUrl}`
-  const versionText = `Ixflare v${version}`
 
   console.log('')
   console.log('  ╭─────────────────────────────────────────╮')
