@@ -16,6 +16,9 @@ import { showFirstTimeGuide } from './deploy/first-time-guide'
 export interface DeployOptions {
   skipFirstTime?: boolean
   environment?: string
+  dryRun?: boolean
+  minify?: boolean
+  vars?: Record<string, string>
 }
 
 export interface DeployResult {
@@ -25,16 +28,56 @@ export interface DeployResult {
   exitCode: number
 }
 
+/**
+ * Parse deploy command CLI arguments
+ */
+export function parseDeployArgs(args: string[]): DeployOptions {
+  const options: DeployOptions = {
+    environment: undefined,
+    dryRun: false,
+    skipFirstTime: false,
+    minify: false,
+    vars: {},
+  }
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+
+    if (arg === '--env' && args[i + 1]) {
+      options.environment = args[i + 1]
+      i++
+    } else if (arg === '--dry-run') {
+      options.dryRun = true
+    } else if (arg === '--skip-first-time') {
+      options.skipFirstTime = true
+    } else if (arg === '--minify') {
+      options.minify = true
+    } else if (arg === '--var' && args[i + 1]) {
+      const [key, value] = args[i + 1].split(':')
+      if (key && value) {
+        options.vars![key] = value
+      }
+      i++
+    }
+  }
+
+  return options
+}
+
 export async function deploy(options: DeployOptions = {}): Promise<DeployResult> {
   const projectRoot = process.cwd()
   const runner = new HooksRunner()
 
+  // Parse CLI args and merge with provided options
+  const cliArgs = process.argv.slice(3)
+  const parsedOptions = { ...parseDeployArgs(cliArgs), ...options }
+
   // Detect environment from options, env vars, or default to production
   const environment =
-    options.environment || process.env.IXFLARE_ENV || process.env.NODE_ENV || 'production'
+    parsedOptions.environment || process.env.IXFLARE_ENV || process.env.NODE_ENV || 'production'
 
   // First-time deployment check (unless skipped for CI/CD)
-  if (!options.skipFirstTime) {
+  if (!parsedOptions.skipFirstTime) {
     const authMethod = detectAuthMethod()
     if (authMethod === 'none') {
       const setupSuccess = await showFirstTimeGuide()
@@ -72,6 +115,15 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
     } else {
       console.log(formatValidationIssues([bundleIssue]))
     }
+  }
+
+  // Dry-run mode: show deployment plan without executing
+  if (parsedOptions.dryRun) {
+    console.log('\n🔍 Dry run - no changes will be made:\n')
+    console.log(`Environment: ${environment}`)
+    console.log('\n✅ Deployment would proceed with these settings.\n')
+    console.log('To deploy for real, run without --dry-run flag.\n')
+    return { success: true, exitCode: 0 }
   }
 
   try {

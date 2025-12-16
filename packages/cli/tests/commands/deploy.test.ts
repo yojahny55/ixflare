@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { deploy } from '../../src/commands/deploy'
+import { deploy, parseDeployArgs } from '../../src/commands/deploy'
 import * as wrangler from '../../src/utils/wrangler'
 import * as wranglerExec from '../../src/utils/wrangler-exec'
 import * as validation from '../../src/commands/deploy/validation'
@@ -219,6 +219,91 @@ describe('deploy command', () => {
       const result = await deploy()
 
       expect(result.success).toBe(true)
+    })
+  })
+
+  describe('dry-run mode', () => {
+    it('should not execute wrangler deploy in dry-run mode', async () => {
+      const result = await deploy({ dryRun: true })
+
+      expect(wranglerExec.executeWranglerDeploy).not.toHaveBeenCalled()
+      expect(result.success).toBe(true)
+      expect(result.exitCode).toBe(0)
+    })
+
+    it('should perform validation checks before dry-run', async () => {
+      await deploy({ dryRun: true })
+
+      expect(validation.verifyDeploymentReadiness).toHaveBeenCalled()
+      expect(validation.validateBundleSize).toHaveBeenCalled()
+    })
+
+    it('should fail dry-run if validation fails', async () => {
+      vi.mocked(validation.verifyDeploymentReadiness).mockResolvedValue({
+        ready: false,
+        issues: [
+          {
+            type: 'error',
+            code: 'WRANGLER_NOT_FOUND',
+            message: 'Wrangler CLI not found',
+          },
+        ],
+      })
+
+      const result = await deploy({ dryRun: true })
+
+      expect(result.success).toBe(false)
+      expect(result.exitCode).toBe(1)
+    })
+  })
+
+  describe('CLI argument parsing', () => {
+    it('should parse --env flag', () => {
+      const options = parseDeployArgs(['--env', 'staging'])
+
+      expect(options.environment).toBe('staging')
+    })
+
+    it('should parse --dry-run flag', () => {
+      const options = parseDeployArgs(['--dry-run'])
+
+      expect(options.dryRun).toBe(true)
+    })
+
+    it('should parse --skip-first-time flag', () => {
+      const options = parseDeployArgs(['--skip-first-time'])
+
+      expect(options.skipFirstTime).toBe(true)
+    })
+
+    it('should parse --minify flag', () => {
+      const options = parseDeployArgs(['--minify'])
+
+      expect(options.minify).toBe(true)
+    })
+
+    it('should parse --var flag with KEY:VALUE', () => {
+      const options = parseDeployArgs(['--var', 'API_KEY:secret123', '--var', 'DEBUG:true'])
+
+      expect(options.vars).toEqual({ API_KEY: 'secret123', DEBUG: 'true' })
+    })
+
+    it('should parse multiple flags together', () => {
+      const options = parseDeployArgs(['--env', 'production', '--dry-run', '--minify'])
+
+      expect(options.environment).toBe('production')
+      expect(options.dryRun).toBe(true)
+      expect(options.minify).toBe(true)
+    })
+
+    it('should return default values when no flags provided', () => {
+      const options = parseDeployArgs([])
+
+      expect(options.environment).toBeUndefined()
+      expect(options.dryRun).toBe(false)
+      expect(options.skipFirstTime).toBe(false)
+      expect(options.minify).toBe(false)
+      expect(options.vars).toEqual({})
     })
   })
 })
