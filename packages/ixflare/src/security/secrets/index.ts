@@ -20,7 +20,9 @@ export {
 
 export { redactValue, redactString, redactObject } from './redactor'
 
-export { SecretTracker, getSecretTracker } from './tracker'
+export { SecretTracker, getSecretTracker, autoTrackSecrets } from './tracker'
+
+export { patchConsole, unpatchConsole, isConsolePatched } from './console-patch'
 
 export {
   sanitizeError,

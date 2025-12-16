@@ -176,6 +176,36 @@ export type {
 
 // Utility exports
 export { redactSecrets, redactString, isSensitiveKey } from './utils/redact'
+
+// Secret management and log redaction (Story 5-11)
+export {
+  redactValue,
+  redactObject,
+  redactString as redactSecretPatterns,
+  SecretTracker,
+  getSecretTracker,
+  autoTrackSecrets,
+  patchConsole,
+  unpatchConsole,
+  isConsolePatched,
+  sanitizeError,
+  sanitizeFetchError,
+  createSafeError,
+  Logger as SecretLogger,
+  createLogger as createSecretLogger,
+  getLogger as getSecretLogger,
+  DEFAULT_REDACT_FIELDS,
+  DEFAULT_REDACT_PATTERNS,
+  shouldRedactField,
+  getRedactionPatterns,
+} from './security/secrets'
+export type {
+  RedactionConfig,
+  SecretConfig,
+  SecretInfo,
+  RedactionResult,
+  LoggerConfig as SecretLoggerConfig,
+} from './security/secrets'
 export { filePathToChunkName, routePathToChunkName } from './utils/chunk-naming'
 
 // EdgeRecord ORM exports

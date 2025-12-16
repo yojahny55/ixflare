@@ -87,7 +87,8 @@ export const DEFAULT_REDACT_PATTERNS: RegExp[] = [
   // Generic API keys (long alphanumeric strings)
   // Be careful with this one - it might catch UUIDs or other IDs
   // Only match if it looks like a secret context
-  /(?:key|token|secret|password)[\s:=]["']?([a-zA-Z0-9_-]{32,})["']?/gi,
+  // NOTE: Max length of 128 added to prevent ReDoS attacks
+  /(?:key|token|secret|password)[\s:=]["']?([a-zA-Z0-9_-]{32,128})["']?/gi,
 ]
 
 /**

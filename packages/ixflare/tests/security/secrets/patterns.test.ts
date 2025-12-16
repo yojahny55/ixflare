@@ -5,6 +5,7 @@ import {
   shouldRedactField,
   getRedactionPatterns,
 } from '../../../src/security/secrets/patterns'
+import { redactString } from '../../../src/security/secrets/redactor'
 
 describe('DEFAULT_REDACT_FIELDS', () => {
   it('should include common password field names', () => {
@@ -35,52 +36,60 @@ describe('DEFAULT_REDACT_FIELDS', () => {
 })
 
 describe('DEFAULT_REDACT_PATTERNS', () => {
-  it('should match JWT tokens', () => {
+  it('should redact JWT tokens completely', () => {
     const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U'
-    const pattern = DEFAULT_REDACT_PATTERNS.find(p => p.test(jwt))
-    expect(pattern).toBeDefined()
+    const result = redactString(jwt, DEFAULT_REDACT_PATTERNS)
+    expect(result).toBe('[REDACTED]')
+    expect(result).not.toContain('eyJ')
   })
 
-  it('should match Stripe live secret keys', () => {
+  it('should redact Stripe live secret keys', () => {
     const stripeKey = 'sk_live_51HvI9aB2C3D4E5F6G7H8I9J'
-    const pattern = DEFAULT_REDACT_PATTERNS.find(p => p.test(stripeKey))
-    expect(pattern).toBeDefined()
+    const result = redactString(stripeKey, DEFAULT_REDACT_PATTERNS)
+    expect(result).toBe('[REDACTED]')
+    expect(result).not.toContain('sk_live_')
   })
 
-  it('should match Stripe test secret keys', () => {
+  it('should redact Stripe test secret keys', () => {
     const stripeKey = 'sk_test_51HvI9aB2C3D4E5F6G7H8I9J'
-    const pattern = DEFAULT_REDACT_PATTERNS.find(p => p.test(stripeKey))
-    expect(pattern).toBeDefined()
+    const result = redactString(stripeKey, DEFAULT_REDACT_PATTERNS)
+    expect(result).toBe('[REDACTED]')
+    expect(result).not.toContain('sk_test_')
   })
 
-  it('should match Stripe publishable keys', () => {
+  it('should redact Stripe publishable keys', () => {
     const stripePubKey = 'pk_live_51HvI9aB2C3D4E5F6G7H8I9J'
-    const pattern = DEFAULT_REDACT_PATTERNS.find(p => p.test(stripePubKey))
-    expect(pattern).toBeDefined()
+    const result = redactString(stripePubKey, DEFAULT_REDACT_PATTERNS)
+    expect(result).toBe('[REDACTED]')
+    expect(result).not.toContain('pk_live_')
   })
 
-  it('should match AWS access key IDs', () => {
+  it('should redact AWS access key IDs', () => {
     const awsKey = 'AKIAIOSFODNN7EXAMPLE'
-    const pattern = DEFAULT_REDACT_PATTERNS.find(p => p.test(awsKey))
-    expect(pattern).toBeDefined()
+    const result = redactString(awsKey, DEFAULT_REDACT_PATTERNS)
+    expect(result).toBe('[REDACTED]')
+    expect(result).not.toContain('AKIA')
   })
 
-  it('should match GitHub tokens', () => {
+  it('should redact GitHub tokens', () => {
     const ghToken = 'ghp_1234567890abcdefghijklmnopqrstuvwxyz'
-    const pattern = DEFAULT_REDACT_PATTERNS.find(p => p.test(ghToken))
-    expect(pattern).toBeDefined()
+    const result = redactString(ghToken, DEFAULT_REDACT_PATTERNS)
+    expect(result).toBe('[REDACTED]')
+    expect(result).not.toContain('ghp_')
   })
 
-  it('should match Bearer tokens', () => {
+  it('should redact Bearer tokens', () => {
     const bearerToken = 'Bearer abc123def456ghi789jkl012mno345'
-    const pattern = DEFAULT_REDACT_PATTERNS.find(p => p.test(bearerToken))
-    expect(pattern).toBeDefined()
+    const result = redactString(bearerToken, DEFAULT_REDACT_PATTERNS)
+    expect(result).toContain('[REDACTED]')
+    expect(result).not.toContain('abc123')
   })
 
-  it('should match Basic auth', () => {
+  it('should redact Basic auth', () => {
     const basicAuth = 'Basic dXNlcjpwYXNzd29yZA=='
-    const pattern = DEFAULT_REDACT_PATTERNS.find(p => p.test(basicAuth))
-    expect(pattern).toBeDefined()
+    const result = redactString(basicAuth, DEFAULT_REDACT_PATTERNS)
+    expect(result).toContain('[REDACTED]')
+    expect(result).not.toContain('dXNlcjpwYXNzd29yZA')
   })
 
   it('should NOT match regular text', () => {

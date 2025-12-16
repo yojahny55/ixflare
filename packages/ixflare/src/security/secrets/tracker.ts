@@ -152,3 +152,125 @@ export function getSecretTracker(): SecretTracker {
 export function resetGlobalTracker(): void {
   globalTracker = null
 }
+
+/**
+ * Patterns that identify secret-like environment variable names
+ */
+const SECRET_NAME_PATTERNS = [
+  /API[_-]?KEY/i,
+  /SECRET/i,
+  /TOKEN/i,
+  /PASSWORD/i,
+  /CREDENTIAL/i,
+  /PRIVATE[_-]?KEY/i,
+  /AUTH/i,
+  /BEARER/i,
+  /JWT/i,
+  /SESSION/i,
+  /DATABASE.*URL/i,
+  /CONNECTION.*STRING/i,
+  /SIGNING/i,
+  /ENCRYPTION/i,
+]
+
+/**
+ * Automatically track all secret-like values from an environment object
+ *
+ * This function scans an environment object and automatically registers
+ * any values whose keys match common secret naming patterns (API_KEY,
+ * SECRET, TOKEN, PASSWORD, etc.)
+ *
+ * IMPORTANT: Call this early in your request handler to ensure all
+ * secrets are tracked before any logging occurs.
+ *
+ * @param env - Environment object (e.g., Cloudflare Worker env bindings)
+ * @param options - Configuration options
+ * @returns Object with tracking results
+ *
+ * @example
+ * ```typescript
+ * import { autoTrackSecrets, patchConsole } from 'ixflare'
+ *
+ * export default {
+ *   async fetch(request: Request, env: Env) {
+ *     // Auto-track all secrets from env
+ *     const { tracked } = autoTrackSecrets(env)
+ *     console.log(`Tracked ${tracked.length} secrets:`, tracked)
+ *
+ *     // Now any console.log will redact these values
+ *     console.log('Using API key:', env.STRIPE_SECRET_KEY)
+ *     // Output: 'Using API key: [REDACTED:STRIPE_SECRET_KEY]'
+ *   }
+ * }
+ * ```
+ */
+export function autoTrackSecrets(
+  env: Record<string, unknown>,
+  options: {
+    /**
+     * Additional key patterns to treat as secrets
+     */
+    additionalPatterns?: RegExp[]
+    /**
+     * Keys to explicitly exclude from tracking
+     */
+    exclude?: string[]
+    /**
+     * Keys to explicitly include (overrides pattern matching)
+     */
+    include?: string[]
+  } = {}
+): {
+  /**
+   * Names of secrets that were tracked
+   */
+  tracked: string[]
+  /**
+   * Names of keys that were skipped (non-string values, excluded, etc.)
+   */
+  skipped: string[]
+} {
+  const tracker = getSecretTracker()
+  const tracked: string[] = []
+  const skipped: string[] = []
+
+  const allPatterns = [
+    ...SECRET_NAME_PATTERNS,
+    ...(options.additionalPatterns || []),
+  ]
+  const excludeSet = new Set(options.exclude || [])
+  const includeSet = new Set(options.include || [])
+
+  for (const [key, value] of Object.entries(env)) {
+    // Skip non-string values (bindings like KV, D1, etc.)
+    if (typeof value !== 'string') {
+      skipped.push(key)
+      continue
+    }
+
+    // Skip empty values
+    if (!value) {
+      skipped.push(key)
+      continue
+    }
+
+    // Skip explicitly excluded keys
+    if (excludeSet.has(key)) {
+      skipped.push(key)
+      continue
+    }
+
+    // Check if key should be tracked
+    const shouldTrack =
+      includeSet.has(key) || allPatterns.some((pattern) => pattern.test(key))
+
+    if (shouldTrack) {
+      tracker.track(key, value)
+      tracked.push(key)
+    } else {
+      skipped.push(key)
+    }
+  }
+
+  return { tracked, skipped }
+}
