@@ -469,6 +469,21 @@ Supported extensions (in order of precedence):
 
 ## Development
 
+### Local Development Server
+
+Start the development server with instant HMR:
+
+```bash
+ix dev
+```
+
+The dev server uses Vite with `@cloudflare/vite-plugin` for Workers runtime simulation and provides:
+
+- **Frontend HMR (<200ms target)** - React components update with state preservation via Fast Refresh
+- **Server-side HMR** - Route handlers reload automatically
+- **Route manifest updates** - New routes are immediately accessible
+- **Cloudflare bindings** - D1, KV, R2, Durable Objects work locally via wrangler.toml
+
 ### File Watching
 
 The plugin automatically watches for route file changes:
@@ -478,9 +493,92 @@ The plugin automatically watches for route file changes:
 - **File deleted** → Route removed from manifest
 - **File renamed** → Treated as delete + add
 
-### Hot Module Replacement
+### Hot Module Replacement (HMR)
 
-Route changes trigger HMR updates automatically. No manual refresh needed.
+Three types of HMR updates:
+
+1. **Frontend Islands (.client.tsx)** - React Fast Refresh handles component updates with state preservation
+2. **Server Components (routes/*.tsx)** - Custom `ixflare:server-update` event swaps HTML while preserving island state
+3. **Route Manifest** - Virtual module invalidation for new/deleted routes
+
+**HMR Performance Monitoring:**
+
+The plugin logs HMR update timing:
+
+```
+[ixflare] island updated: counter.client.tsx (state preserved) (45ms)
+[ixflare] server-component updated: dashboard.tsx (route: /dashboard) (68ms)
+⚠️ [ixflare] route updated: heavy-page.tsx (1250ms) ⚠️ Slow HMR update
+```
+
+HMR updates exceeding 1000ms trigger a performance warning.
+
+### Cloudflare Bindings Configuration
+
+Configure D1, KV, R2, and Durable Objects in `wrangler.toml`:
+
+```toml
+name = "my-app"
+main = "./src/index.ts"
+compatibility_date = "2025-01-01"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "my-app-db"
+database_id = "local"  # Use "local" for local dev, or real ID for remote bindings
+
+# KV Namespace
+[[kv_namespaces]]
+binding = "KV_CACHE"
+id = "local"  # Use "local" for local dev
+
+# R2 Bucket
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "my-app-storage"
+
+# Durable Objects (advanced)
+[[durable_objects.bindings]]
+name = "COUNTER"
+class_name = "Counter"
+script_name = "my-app"
+```
+
+**Remote Bindings (GA September 2025):**
+
+Connect to deployed resources during local development by using real IDs instead of "local":
+
+```toml
+[[d1_databases]]
+binding = "DB"
+database_name = "my-app-prod-db"
+database_id = "a1b2c3d4-5678-90ab-cdef-1234567890ab"  # Real Cloudflare DB ID
+```
+
+**Accessing Bindings in Code:**
+
+```typescript
+// src/routes/api/users.ts
+import type { EdgeContext } from 'ixflare'
+
+export async function GET({ env }: EdgeContext) {
+  // D1 Database
+  const users = await env.DB.prepare('SELECT * FROM users').all()
+
+  // KV Cache
+  const cached = await env.KV_CACHE.get('user-list')
+
+  // R2 Storage
+  const avatar = await env.STORAGE.get('avatars/user-1.jpg')
+
+  return Response.json({ users: users.results })
+}
+```
+
+**Local Persistence:**
+
+Data persists between dev server restarts in `.wrangler/state/` directory. To reset local data, delete this directory.
 
 ## Architecture Notes
 
