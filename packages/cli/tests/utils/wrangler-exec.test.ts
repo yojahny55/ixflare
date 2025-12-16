@@ -48,7 +48,7 @@ describe('wrangler-exec', () => {
 
       vi.mocked(spawn).mockReturnValue(mockProcess as any)
 
-      const deployPromise = executeWranglerDeploy('staging')
+      const deployPromise = executeWranglerDeploy({ environment: 'staging' })
 
       mockProcess.emit('close', 0)
 
@@ -65,7 +65,7 @@ describe('wrangler-exec', () => {
 
       vi.mocked(spawn).mockReturnValue(mockProcess as any)
 
-      const deployPromise = executeWranglerDeploy('production')
+      const deployPromise = executeWranglerDeploy({ environment: 'production' })
 
       mockProcess.emit('close', 0)
 
@@ -75,6 +75,71 @@ describe('wrangler-exec', () => {
         cwd: process.cwd(),
         stdio: 'pipe',
       })
+    })
+
+    it('should add minify flag when specified', async () => {
+      const mockProcess = createMockChildProcess()
+
+      vi.mocked(spawn).mockReturnValue(mockProcess as any)
+
+      const deployPromise = executeWranglerDeploy({ minify: true })
+
+      mockProcess.emit('close', 0)
+
+      await deployPromise
+
+      expect(spawn).toHaveBeenCalledWith('wrangler', ['deploy', '--minify'], {
+        cwd: process.cwd(),
+        stdio: 'pipe',
+      })
+    })
+
+    it('should add var flags when specified', async () => {
+      const mockProcess = createMockChildProcess()
+
+      vi.mocked(spawn).mockReturnValue(mockProcess as any)
+
+      const deployPromise = executeWranglerDeploy({
+        vars: { API_KEY: 'secret123', DEBUG: 'true' },
+      })
+
+      mockProcess.emit('close', 0)
+
+      await deployPromise
+
+      expect(spawn).toHaveBeenCalledWith(
+        'wrangler',
+        ['deploy', '--var', 'API_KEY:secret123', '--var', 'DEBUG:true'],
+        {
+          cwd: process.cwd(),
+          stdio: 'pipe',
+        }
+      )
+    })
+
+    it('should combine all options together', async () => {
+      const mockProcess = createMockChildProcess()
+
+      vi.mocked(spawn).mockReturnValue(mockProcess as any)
+
+      const deployPromise = executeWranglerDeploy({
+        environment: 'staging',
+        minify: true,
+        vars: { API_KEY: 'secret' },
+      })
+
+      mockProcess.emit('close', 0)
+
+      await deployPromise
+
+      expect(spawn).toHaveBeenCalledWith(
+        'wrangler',
+        ['deploy', '--env', 'staging', '--minify', '--var', 'API_KEY:secret'],
+        {
+          cwd: process.cwd(),
+          stdio: 'pipe',
+        }
+      )
     })
 
     it('should handle deployment failure', async () => {

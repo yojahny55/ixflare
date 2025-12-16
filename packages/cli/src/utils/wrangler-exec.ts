@@ -15,15 +15,31 @@ export interface DeploymentResult {
   exitCode: number
 }
 
+export interface WranglerDeployOptions {
+  environment?: string
+  minify?: boolean
+  vars?: Record<string, string>
+}
+
 /**
- * Execute wrangler deploy command with optional environment
+ * Execute wrangler deploy command with optional environment and flags
  */
-export async function executeWranglerDeploy(environment?: string): Promise<DeploymentResult> {
+export async function executeWranglerDeploy(options: WranglerDeployOptions = {}): Promise<DeploymentResult> {
   return new Promise((resolve) => {
     const args = ['deploy']
 
-    if (environment && environment !== 'production') {
-      args.push('--env', environment)
+    if (options.environment && options.environment !== 'production') {
+      args.push('--env', options.environment)
+    }
+
+    if (options.minify) {
+      args.push('--minify')
+    }
+
+    if (options.vars) {
+      for (const [key, value] of Object.entries(options.vars)) {
+        args.push('--var', `${key}:${value}`)
+      }
     }
 
     const wrangler = spawn('wrangler', args, {

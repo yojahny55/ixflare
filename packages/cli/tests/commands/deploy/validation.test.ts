@@ -105,7 +105,7 @@ describe('validation', () => {
       expect(result).toBeNull()
     })
 
-    it('should warn when bundle exceeds free tier limit', async () => {
+    it('should warn when bundle exceeds free tier limit (3MB)', async () => {
       vi.mocked(wranglerExec.executeWranglerDryRun).mockResolvedValue({
         success: true,
         stdout: 'Total Upload: 4096 KiB (gzip: 3.5 MiB)',
@@ -119,7 +119,7 @@ describe('validation', () => {
       expect(result?.type).toBe('warning')
       expect(result?.code).toBe('BUNDLE_SIZE_WARNING')
       expect(result?.message).toContain('3.50 MiB')
-      expect(result?.message).toContain('free tier limit')
+      expect(result?.message).toContain('free tier limit (3 MiB)')
     })
 
     it('should error when bundle exceeds paid tier limit', async () => {

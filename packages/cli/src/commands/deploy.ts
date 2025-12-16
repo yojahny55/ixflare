@@ -4,7 +4,7 @@
  */
 
 import { HooksRunner, HookError } from '@/hooks/index'
-import { detectAuthMethod } from '@/utils/wrangler'
+import { detectAuthMethod, parseWranglerBindings } from '@/utils/wrangler'
 import { executeWranglerDeploy } from '@/utils/wrangler-exec'
 import {
   verifyDeploymentReadiness,
@@ -53,9 +53,15 @@ export function parseDeployArgs(args: string[]): DeployOptions {
     } else if (arg === '--minify') {
       options.minify = true
     } else if (arg === '--var' && args[i + 1]) {
-      const [key, value] = args[i + 1].split(':')
-      if (key && value) {
+      // Use indexOf to handle values containing colons (e.g., DATABASE_URL:postgres://user:pass@host)
+      const colonIndex = args[i + 1].indexOf(':')
+      if (colonIndex > 0) {
+        const key = args[i + 1].substring(0, colonIndex)
+        const value = args[i + 1].substring(colonIndex + 1)
         options.vars![key] = value
+      } else {
+        // Warn about invalid --var format (missing colon)
+        console.warn(`⚠️  Invalid --var format: "${args[i + 1]}". Expected KEY:VALUE format.`)
       }
       i++
     }
@@ -73,8 +79,9 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
   const parsedOptions = { ...parseDeployArgs(cliArgs), ...options }
 
   // Detect environment from options, env vars, or default to production
-  const environment =
-    parsedOptions.environment || process.env.IXFLARE_ENV || process.env.NODE_ENV || 'production'
+  // Note: NODE_ENV is intentionally NOT used as fallback - deployment implies production intent
+  // unless explicitly specified via --env or IXFLARE_ENV
+  const environment = parsedOptions.environment || process.env.IXFLARE_ENV || 'production'
 
   // First-time deployment check (unless skipped for CI/CD)
   if (!parsedOptions.skipFirstTime) {
@@ -121,6 +128,38 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
   if (parsedOptions.dryRun) {
     console.log('\n🔍 Dry run - no changes will be made:\n')
     console.log(`Environment: ${environment}`)
+
+    // Parse wrangler.toml for bindings and show them
+    const bindings = parseWranglerBindings()
+
+    // Show variables (masked)
+    const allVars = { ...bindings.vars, ...parsedOptions.vars }
+    if (Object.keys(allVars).length > 0) {
+      console.log('\n  Variables to set:')
+      for (const key of Object.keys(allVars)) {
+        console.log(`    ${key}: ***hidden***`)
+      }
+    }
+
+    // Show resources
+    const hasResources =
+      bindings.name || bindings.d1Databases.length || bindings.kvNamespaces.length || bindings.r2Buckets.length
+    if (hasResources) {
+      console.log('\n  Resources:')
+      if (bindings.name) {
+        console.log(`    Worker: ${bindings.name}`)
+      }
+      for (const db of bindings.d1Databases) {
+        console.log(`    D1: ${db}`)
+      }
+      for (const kv of bindings.kvNamespaces) {
+        console.log(`    KV: ${kv}`)
+      }
+      for (const r2 of bindings.r2Buckets) {
+        console.log(`    R2: ${r2}`)
+      }
+    }
+
     console.log('\n✅ Deployment would proceed with these settings.\n')
     console.log('To deploy for real, run without --dry-run flag.\n')
     return { success: true, exitCode: 0 }
@@ -145,7 +184,11 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
 
     // Execute wrangler deploy
     console.log('Deploying to Cloudflare Workers...\n')
-    const result = await executeWranglerDeploy(environment)
+    const result = await executeWranglerDeploy({
+      environment,
+      minify: parsedOptions.minify,
+      vars: parsedOptions.vars,
+    })
 
     if (!result.success) {
       console.error('\n❌ Deployment failed\n')

@@ -87,13 +87,19 @@ export async function validateBundleSize(): Promise<ValidationIssue | null> {
       const unit = sizeMatch[4]
       const sizeInMb = unit === 'MiB' ? compressedSize : compressedSize / 1024
 
-      // Free tier: 3 MiB, Paid: 10 MiB
+      // Cloudflare Workers limits (compressed):
+      // - Free tier: 3 MiB
+      // - Paid tier (Workers Paid/Bundled): 10 MiB
+      // Reference: https://developers.cloudflare.com/workers/platform/limits/
       if (sizeInMb > 3) {
         return {
           type: sizeInMb > 10 ? 'error' : 'warning',
           code: 'BUNDLE_SIZE_WARNING',
-          message: `Bundle size (${sizeInMb.toFixed(2)} MiB) exceeds free tier limit (3 MiB)`,
-          remediation: 'Move configs to KV/R2, use Workers Static Assets, or upgrade to paid plan',
+          message: `Bundle size (${sizeInMb.toFixed(2)} MiB gzip) exceeds free tier limit (3 MiB)`,
+          remediation:
+            sizeInMb > 10
+              ? 'Bundle exceeds 10 MiB paid tier limit. Split code, use dynamic imports, or move assets to R2.'
+              : 'Upgrade to paid plan, or reduce bundle size by moving configs to KV/R2.',
         }
       }
       return null

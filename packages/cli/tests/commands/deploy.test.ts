@@ -10,7 +10,16 @@ import * as wranglerExec from '../../src/utils/wrangler-exec'
 import * as validation from '../../src/commands/deploy/validation'
 import * as firstTimeGuide from '../../src/commands/deploy/first-time-guide'
 
-vi.mock('../../src/utils/wrangler')
+vi.mock('../../src/utils/wrangler', () => ({
+  detectAuthMethod: vi.fn(),
+  parseWranglerBindings: vi.fn(() => ({
+    name: 'test-worker',
+    d1Databases: [],
+    kvNamespaces: [],
+    r2Buckets: [],
+    vars: {},
+  })),
+}))
 vi.mock('../../src/utils/wrangler-exec')
 vi.mock('../../src/commands/deploy/validation')
 vi.mock('../../src/commands/deploy/first-time-guide')
@@ -191,7 +200,9 @@ describe('deploy command', () => {
     it('should pass environment to wrangler deploy', async () => {
       await deploy({ environment: 'staging' })
 
-      expect(wranglerExec.executeWranglerDeploy).toHaveBeenCalledWith('staging')
+      expect(wranglerExec.executeWranglerDeploy).toHaveBeenCalledWith(
+        expect.objectContaining({ environment: 'staging' })
+      )
     })
 
     it('should use IXFLARE_ENV when environment not specified', async () => {
@@ -199,9 +210,43 @@ describe('deploy command', () => {
 
       await deploy()
 
-      expect(wranglerExec.executeWranglerDeploy).toHaveBeenCalledWith('staging')
+      expect(wranglerExec.executeWranglerDeploy).toHaveBeenCalledWith(
+        expect.objectContaining({ environment: 'staging' })
+      )
 
       delete process.env.IXFLARE_ENV
+    })
+
+    it('should pass minify flag to wrangler deploy', async () => {
+      await deploy({ minify: true })
+
+      expect(wranglerExec.executeWranglerDeploy).toHaveBeenCalledWith(
+        expect.objectContaining({ minify: true })
+      )
+    })
+
+    it('should pass vars to wrangler deploy', async () => {
+      await deploy({ vars: { API_KEY: 'secret123', DEBUG: 'true' } })
+
+      expect(wranglerExec.executeWranglerDeploy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          vars: { API_KEY: 'secret123', DEBUG: 'true' },
+        })
+      )
+    })
+
+    it('should pass all options together to wrangler deploy', async () => {
+      await deploy({
+        environment: 'staging',
+        minify: true,
+        vars: { API_KEY: 'secret' },
+      })
+
+      expect(wranglerExec.executeWranglerDeploy).toHaveBeenCalledWith({
+        environment: 'staging',
+        minify: true,
+        vars: { API_KEY: 'secret' },
+      })
     })
   })
 
@@ -286,6 +331,30 @@ describe('deploy command', () => {
       const options = parseDeployArgs(['--var', 'API_KEY:secret123', '--var', 'DEBUG:true'])
 
       expect(options.vars).toEqual({ API_KEY: 'secret123', DEBUG: 'true' })
+    })
+
+    it('should parse --var flag with values containing colons', () => {
+      const options = parseDeployArgs([
+        '--var',
+        'DATABASE_URL:postgres://user:password@host:5432/db',
+      ])
+
+      expect(options.vars).toEqual({
+        DATABASE_URL: 'postgres://user:password@host:5432/db',
+      })
+    })
+
+    it('should warn on invalid --var format (missing colon)', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      const options = parseDeployArgs(['--var', 'INVALID_VAR_NO_COLON'])
+
+      expect(options.vars).toEqual({})
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid --var format')
+      )
+
+      warnSpy.mockRestore()
     })
 
     it('should parse multiple flags together', () => {

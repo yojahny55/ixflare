@@ -28,6 +28,8 @@ interface BundleSizeInfo {
 
 // Bundle size thresholds
 const INTERNAL_TARGET_KB = 50
+// Cloudflare Workers limits (compressed): Free 3MB, Paid (Workers Paid/Bundled) 10MB
+// Reference: https://developers.cloudflare.com/workers/platform/limits/
 const WORKERS_FREE_MB = 3
 const WORKERS_PAID_MB = 10
 
