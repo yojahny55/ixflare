@@ -21,9 +21,31 @@
  * See: docs/architecture/adr-001-cloudflare-vite-plugin-integration.md
  */
 
-import { join } from 'node:path'
+import { join, relative, sep, posix } from 'node:path'
 import { writeFile, mkdir, access, readdir } from 'node:fs/promises'
 import type { Plugin, ViteDevServer, ModuleNode } from 'vite'
+
+/**
+ * Vite plugin context with environment information for SSR detection
+ * Vite 5/6 exposes environment info through the plugin context
+ */
+interface VitePluginContextWithEnvironment {
+  /** Vite environment information (Vite 5.1+) */
+  environment?: {
+    name: string
+    mode: string
+  }
+  /** Legacy SSR flag (Vite 4.x compatibility) */
+  ssr?: boolean
+}
+
+/**
+ * Helper to safely check if current build is SSR/server mode
+ * Handles both modern Vite 5+ environment API and legacy ssr flag
+ */
+function isSSRBuild(context: VitePluginContextWithEnvironment): boolean {
+  return context.environment?.name === 'ssr' || context.ssr === true
+}
 import type { IxflarePluginOptions } from './types'
 import {
   discoverRoutes,
@@ -94,6 +116,8 @@ const RESOLVED_ISLANDS_ID = '\0' + VIRTUAL_ISLANDS_ID
 /**
  * Extracts route path from a file path for HMR targeting.
  *
+ * Uses path.relative for robust cross-platform path handling.
+ *
  * Handles various route file patterns:
  * - /src/routes/index.tsx → /
  * - /src/routes/dashboard/index.tsx → /dashboard
@@ -106,61 +130,46 @@ const RESOLVED_ISLANDS_ID = '\0' + VIRTUAL_ISLANDS_ID
  * @returns Route path (e.g., '/dashboard')
  */
 function extractRoutePathFromFile(file: string, routesDir: string): string {
-  // Normalize path separators to forward slashes
+  // Use path.relative for robust cross-platform path handling
+  // First, find the routes directory in the file path
   const normalizedFile = file.replace(/\\/g, '/')
   const normalizedRoutesDir = routesDir.replace(/\\/g, '/')
 
-  // Split both paths into segments for proper matching
-  const fileSegments = normalizedFile.split('/')
-  const routesDirSegments = normalizedRoutesDir.split('/').filter(Boolean)
-
-  // Find where routesDir ends in the file path by matching segments
-  let routesDirEndIndex = -1
-
-  for (let i = 0; i <= fileSegments.length - routesDirSegments.length; i++) {
-    let match = true
-    for (let j = 0; j < routesDirSegments.length; j++) {
-      if (fileSegments[i + j] !== routesDirSegments[j]) {
-        match = false
-        break
-      }
-    }
-    if (match) {
-      routesDirEndIndex = i + routesDirSegments.length
-      break
-    }
-  }
-
-  if (routesDirEndIndex === -1) {
+  // Find the index of routesDir in the file path
+  const routesDirIndex = normalizedFile.indexOf(normalizedRoutesDir)
+  if (routesDirIndex === -1) {
     return '/'
   }
 
-  // Get segments after routes directory
-  const routeSegments = fileSegments.slice(routesDirEndIndex)
+  // Extract the full routesDir path from the file
+  const fullRoutesDir = normalizedFile.slice(0, routesDirIndex + normalizedRoutesDir.length)
 
-  if (routeSegments.length === 0) {
+  // Use path.relative to get the path relative to routesDir
+  let relativePath = relative(fullRoutesDir, file)
+
+  // Normalize separators to forward slashes (cross-platform)
+  relativePath = relativePath.split(sep).join(posix.sep)
+
+  if (!relativePath) {
     return '/'
   }
 
-  // Process the last segment (remove extension)
-  let lastSegment = routeSegments[routeSegments.length - 1]
-  const extIndex = lastSegment.lastIndexOf('.')
+  // Remove file extension
+  const extIndex = relativePath.lastIndexOf('.')
   if (extIndex > 0) {
-    lastSegment = lastSegment.slice(0, extIndex)
+    relativePath = relativePath.slice(0, extIndex)
   }
-  routeSegments[routeSegments.length - 1] = lastSegment
 
   // Handle index files - remove 'index' from the path
-  if (lastSegment === 'index') {
-    routeSegments.pop()
-  }
-
-  // Build route path
-  if (routeSegments.length === 0) {
+  if (relativePath === 'index') {
     return '/'
   }
+  if (relativePath.endsWith('/index')) {
+    relativePath = relativePath.slice(0, -6) // Remove '/index'
+  }
 
-  return '/' + routeSegments.join('/')
+  // Ensure path starts with /
+  return '/' + relativePath
 }
 
 export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
@@ -264,7 +273,7 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
 
         // Check for .server file imports in client code
         if (source.includes('.server') && importer) {
-          const ssr = (this as any).environment?.name === 'ssr' || (this as any).ssr
+          const ssr = isSSRBuild(this as VitePluginContextWithEnvironment)
 
           // Only enforce boundary during client build
           if (!ssr) {
@@ -320,7 +329,7 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
 
       // Handle server-only module (only during build)
       if (isBuildCommand && id === '\0server-only') {
-        const ssr = (this as any).environment?.name === 'ssr' || (this as any).ssr
+        const ssr = isSSRBuild(this as VitePluginContextWithEnvironment)
 
         // In server build: provide empty module (no-op)
         // In client build: throw error if somehow reached
@@ -345,8 +354,8 @@ export function ixflarePlugin(options: IxflarePluginOptions = {}): Plugin {
     transform(code, id) {
       // Only apply during build (not dev mode)
       if (isBuildCommand) {
-        // Get SSR mode from environment
-        const ssr = (this as any).environment?.name === 'ssr' || (this as any).ssr
+        // Get SSR mode from environment using typed helper
+        const ssr = isSSRBuild(this as VitePluginContextWithEnvironment)
         const result = transformServerExports(code, id, routesDir, ssr)
 
         // Track transformed routes for verbose logging

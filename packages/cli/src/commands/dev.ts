@@ -18,6 +18,23 @@ const MAX_PORT = 65535
 /** Default version fallback */
 const DEFAULT_VERSION = '0.0.0'
 
+/**
+ * Regex pattern for valid hostnames/IP addresses
+ * Allows: IPv4 addresses, IPv6 addresses, hostnames, and special values like '0.0.0.0'
+ * SECURITY: Prevents command injection by only allowing safe characters
+ */
+const VALID_HOST_PATTERN = /^(?:(?:localhost|0\.0\.0\.0|true|\d{1,3}(?:\.\d{1,3}){3})|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)|(?:\[[\da-fA-F:]+\]))$/
+
+/**
+ * Validate host argument to prevent command injection
+ * @param host - Host string from CLI argument
+ * @returns true if host is valid and safe
+ */
+export function isValidHost(host: string): boolean {
+  // Host must match safe pattern (no shell metacharacters)
+  return VALID_HOST_PATTERN.test(host)
+}
+
 export interface DevOptions {
   port?: number
   host?: string
@@ -220,7 +237,16 @@ export function parseDevArgs(args: string[]): DevOptions {
       options.port = portValue
       i++
     } else if (arg === '--host' && args[i + 1]) {
-      options.host = args[i + 1]
+      const hostValue = args[i + 1]
+
+      // SECURITY: Validate host to prevent command injection (OWASP A03)
+      if (!isValidHost(hostValue)) {
+        console.error(pc.red(`Invalid host: "${hostValue}"`))
+        console.error(pc.dim('Host must be a valid hostname, IPv4, or IPv6 address'))
+        process.exit(1)
+      }
+
+      options.host = hostValue
       i++
     } else if (arg === '--open') {
       options.open = true
@@ -271,9 +297,11 @@ export async function dev(options: DevOptions = {}): Promise<void> {
   }
 
   // Issue #3 fix: Use piped stdio to detect Vite ready signal
+  // SECURITY: shell: false prevents command injection (OWASP A03)
+  // Host argument is validated in parseDevArgs before reaching here
   const viteProcess: ChildProcess = spawn('npx', viteArgs, {
     stdio: ['inherit', 'pipe', 'pipe'],
-    shell: true,
+    shell: false,
     cwd: process.cwd(),
   })
 

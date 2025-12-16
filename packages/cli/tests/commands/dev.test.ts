@@ -323,9 +323,49 @@ describe('dev command', () => {
     })
   })
 
+  describe('Host validation (OWASP A03 - Command Injection Prevention)', () => {
+    it('should return true for valid hostnames', async () => {
+      const { isValidHost } = await import('../../src/commands/dev')
+
+      expect(isValidHost('localhost')).toBe(true)
+      expect(isValidHost('0.0.0.0')).toBe(true)
+      expect(isValidHost('192.168.1.1')).toBe(true)
+      expect(isValidHost('example.com')).toBe(true)
+      expect(isValidHost('sub.example.com')).toBe(true)
+      expect(isValidHost('my-server.local')).toBe(true)
+      expect(isValidHost('true')).toBe(true) // Vite uses 'true' for --host
+    })
+
+    it('should return false for malicious inputs (command injection attempts)', async () => {
+      const { isValidHost } = await import('../../src/commands/dev')
+
+      // Command injection attempts
+      expect(isValidHost('localhost; rm -rf /')).toBe(false)
+      expect(isValidHost('localhost && echo pwned')).toBe(false)
+      expect(isValidHost('localhost | cat /etc/passwd')).toBe(false)
+      expect(isValidHost('$(whoami)')).toBe(false)
+      expect(isValidHost('`whoami`')).toBe(false)
+      expect(isValidHost("localhost'; DROP TABLE users;--")).toBe(false)
+      expect(isValidHost('localhost\nmalicious')).toBe(false)
+    })
+
+    it('should reject invalid host in parseDevArgs and exit', async () => {
+      const { parseDevArgs } = await import('../../src/commands/dev')
+
+      // This should call process.exit(1)
+      parseDevArgs(['--host', 'localhost; rm -rf /'])
+
+      expect(mockExit).toHaveBeenCalledWith(1)
+      expect(consoleErrorSpy).toHaveBeenCalled()
+      const output = consoleErrorSpy.mock.calls.map((call) => call[0]).join('\n')
+      expect(output).toContain('Invalid host')
+    })
+  })
+
   describe('Vite subprocess management', () => {
-    it('should spawn vite with correct arguments and piped stdio', async () => {
+    it('should spawn vite with correct arguments, piped stdio, and shell: false for security', async () => {
       // Issue #3 fix: Now uses piped stdio to detect Vite ready signal
+      // SECURITY: shell: false prevents command injection (OWASP A03)
       const mockStdout = { on: vi.fn() }
       const mockStderr = { on: vi.fn() }
       const processWithPipes = {
@@ -368,7 +408,7 @@ describe('dev command', () => {
         expect.arrayContaining(['vite', '--port', '3000']),
         expect.objectContaining({
           stdio: ['inherit', 'pipe', 'pipe'],
-          shell: true,
+          shell: false, // SECURITY: Must be false to prevent command injection
         })
       )
 
