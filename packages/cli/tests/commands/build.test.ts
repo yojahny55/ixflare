@@ -193,7 +193,7 @@ describe('build command', () => {
       const { calculateGzipSize } = await import('../../src/commands/build')
 
       const testData = Buffer.from('test data repeated '.repeat(100))
-      const size = await calculateGzipSize(testData)
+      const size = calculateGzipSize(testData)
 
       expect(size).toBeGreaterThan(0)
       expect(size).toBeLessThan(testData.length)

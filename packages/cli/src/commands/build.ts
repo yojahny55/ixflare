@@ -69,7 +69,7 @@ export function parseBuildArgs(args: string[]): BuildOptions {
 /**
  * Calculate gzip size of buffer
  */
-export async function calculateGzipSize(data: Buffer): Promise<number> {
+export function calculateGzipSize(data: Buffer): number {
   const compressed = gzipSync(data)
   return compressed.length
 }
@@ -116,7 +116,7 @@ export function checkBundleSize(gzipSize: number): string[] {
 /**
  * Collect bundle sizes from dist directory
  */
-async function collectBundleSizes(distPath: string): Promise<BundleSizeInfo[]> {
+function collectBundleSizes(distPath: string): BundleSizeInfo[] {
   const bundles: BundleSizeInfo[] = []
 
   try {
@@ -134,7 +134,7 @@ async function collectBundleSizes(distPath: string): Promise<BundleSizeInfo[]> {
         if (!filePath.endsWith('.js')) continue
 
         const content = readFileSync(filePath)
-        const gzipSize = await calculateGzipSize(content)
+        const gzipSize = calculateGzipSize(content)
 
         bundles.push({
           file: file.toString(),
@@ -201,6 +201,87 @@ function displayBundleSizeWarnings(bundles: BundleSizeInfo[]): void {
 }
 
 /**
+ * Build Vite configuration object
+ */
+function buildViteConfig(options: {
+  projectRoot: string
+  env?: string
+  sourcemap: boolean
+  watch: boolean
+  analyze: boolean
+}): InlineConfig {
+  const { projectRoot, env, sourcemap, watch, analyze } = options
+
+  const config: InlineConfig = {
+    root: projectRoot,
+    configFile: join(projectRoot, 'vite.config.ts'),
+    mode: env || 'production',
+    build: {
+      outDir: 'dist',
+      minify: 'esbuild',
+      sourcemap,
+      rollupOptions: {
+        output: {
+          manualChunks: undefined,
+          entryFileNames: '_worker/index.js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash][extname]',
+        },
+      },
+    },
+  }
+
+  // Add watch mode if requested
+  if (watch) {
+    config.build = {
+      ...config.build,
+      watch: {},
+    }
+  }
+
+  // Add visualizer plugin if --analyze flag is set
+  if (analyze) {
+    config.plugins = [
+      visualizer({
+        filename: 'dist/stats.html',
+        open: true,
+        gzipSize: true,
+        brotliSize: true,
+        template: 'treemap',
+      }),
+    ]
+  }
+
+  return config
+}
+
+/**
+ * Execute Vite build and display results
+ */
+async function executeBuild(
+  viteConfig: InlineConfig,
+  projectRoot: string,
+  startTime: number
+): Promise<void> {
+  await viteBuild(viteConfig)
+
+  console.log('✓ TypeScript compilation complete')
+
+  // Collect and display bundle sizes
+  const distPath = join(projectRoot, 'dist')
+  const bundles = collectBundleSizes(distPath)
+  displayBundleSizes(bundles)
+
+  const duration = ((Date.now() - startTime) / 1000).toFixed(1)
+  console.log('')
+  console.log(`Build complete in ${pc.cyan(duration + 's')}`)
+  console.log(`Output: ${pc.dim('dist/')}`)
+
+  // Display bundle size warnings
+  displayBundleSizeWarnings(bundles)
+}
+
+/**
  * Main build command
  */
 export async function build(options: BuildOptions = {}): Promise<void> {
@@ -208,15 +289,19 @@ export async function build(options: BuildOptions = {}): Promise<void> {
   const runner = new HooksRunner()
   const startTime = Date.now()
 
+  // Parse CLI args and merge with provided options
+  const cliArgs = process.argv.slice(3)
+  const parsedOptions = { ...parseBuildArgs(cliArgs), ...options }
+
   // Default sourcemap to true if not explicitly set
-  const sourcemap = options.sourcemap !== undefined ? options.sourcemap : true
+  const sourcemap = parsedOptions.sourcemap !== undefined ? parsedOptions.sourcemap : true
 
   // Clean dist directory if --clean flag is set
-  if (options.clean) {
+  if (parsedOptions.clean) {
     const distPath = join(projectRoot, 'dist')
     try {
       rmSync(distPath, { recursive: true, force: true })
-      if (options.verbose) {
+      if (parsedOptions.verbose) {
         console.log(pc.dim('✓ Cleaned dist/ directory'))
       }
     } catch {
@@ -224,11 +309,29 @@ export async function build(options: BuildOptions = {}): Promise<void> {
     }
   }
 
-  try {
-    // Load configuration
-    await runner.loadConfig(projectRoot)
+  // Build Vite configuration
+  const viteConfig = buildViteConfig({
+    projectRoot,
+    env: parsedOptions.env,
+    sourcemap,
+    watch: parsedOptions.watch ?? false,
+    analyze: parsedOptions.analyze ?? false,
+  })
 
-    // Execute pre-build hook
+  // Try to load hooks configuration
+  let hooksLoaded = false
+  try {
+    await runner.loadConfig(projectRoot)
+    hooksLoaded = true
+  } catch (error) {
+    // No hooks config file - proceed without hooks
+    if (!(error instanceof Error && error.message.includes('Configuration file not found'))) {
+      throw error
+    }
+  }
+
+  // Execute pre-build hook if hooks are loaded
+  if (hooksLoaded) {
     try {
       await runner.runPreBuild()
     } catch (error) {
@@ -239,76 +342,20 @@ export async function build(options: BuildOptions = {}): Promise<void> {
       }
       throw error
     }
+  }
 
-    console.log('Building for production...')
-    console.log('')
+  console.log('Building for production...')
+  console.log('')
 
-    // Build Vite configuration
-    const viteConfig: InlineConfig = {
-      root: projectRoot,
-      configFile: join(projectRoot, 'vite.config.ts'),
-      mode: options.env || 'production',
-      build: {
-        outDir: 'dist',
-        minify: 'esbuild',
-        sourcemap,
-        rollupOptions: {
-          output: {
-            manualChunks: undefined,
-            entryFileNames: '_worker/index.js',
-            chunkFileNames: 'assets/[name]-[hash].js',
-            assetFileNames: 'assets/[name]-[hash][extname]',
-          },
-        },
-      },
-    }
+  // Execute Vite build
+  try {
+    await executeBuild(viteConfig, projectRoot, startTime)
 
-    // Add watch mode if requested
-    if (options.watch) {
-      viteConfig.build = {
-        ...viteConfig.build,
-        watch: {},
-      }
-    }
-
-    // Add visualizer plugin if --analyze flag is set
-    if (options.analyze) {
-      viteConfig.plugins = [
-        visualizer({
-          filename: 'dist/stats.html',
-          open: true,
-          gzipSize: true,
-          brotliSize: true,
-          template: 'treemap',
-        }),
-      ]
-    }
-
-    // Execute Vite build
-    try {
-      await viteBuild(viteConfig)
-
-      console.log('✓ TypeScript compilation complete')
-
-      // Collect and display bundle sizes
+    // Execute post-build hook if hooks are loaded
+    if (hooksLoaded) {
       const distPath = join(projectRoot, 'dist')
-      const bundles = await collectBundleSizes(distPath)
-      displayBundleSizes(bundles)
-
-      const duration = ((Date.now() - startTime) / 1000).toFixed(1)
-      console.log('')
-      console.log(`Build complete in ${pc.cyan(duration + 's')}`)
-      console.log(`Output: ${pc.dim('dist/')}`)
-
-      // Display bundle size warnings
-      displayBundleSizeWarnings(bundles)
-
-      // Determine output path for hooks
-      const outputPath = distPath
-
-      // Execute post-build hook
       try {
-        await runner.runPostBuild({ outputPath })
+        await runner.runPostBuild({ outputPath: distPath })
       } catch (error) {
         if (error instanceof HookError) {
           console.error(`\n❌ ${error.message}`)
@@ -317,88 +364,15 @@ export async function build(options: BuildOptions = {}): Promise<void> {
         }
         throw error
       }
-    } catch (error) {
-      console.error(`\n❌ Build failed:\n`)
-      if (error instanceof Error) {
-        console.error(error.message)
-      } else {
-        console.error('Unknown error occurred')
-      }
-      console.log('')
-      process.exit(1)
     }
   } catch (error) {
-    // Handle config loading errors gracefully
-    // If no config file exists, just run build without hooks
-    if (error instanceof Error && error.message.includes('Configuration file not found')) {
-      console.log('Building for production...')
-      console.log('')
-
-      // Build without hooks
-      const viteConfig: InlineConfig = {
-        root: projectRoot,
-        configFile: join(projectRoot, 'vite.config.ts'),
-        mode: options.env || 'production',
-        build: {
-          outDir: 'dist',
-          minify: 'esbuild',
-          sourcemap,
-          rollupOptions: {
-            output: {
-              manualChunks: undefined,
-              entryFileNames: '_worker/index.js',
-              chunkFileNames: 'assets/[name]-[hash].js',
-              assetFileNames: 'assets/[name]-[hash][extname]',
-            },
-          },
-        },
-      }
-
-      if (options.watch) {
-        viteConfig.build = {
-          ...viteConfig.build,
-          watch: {},
-        }
-      }
-
-      if (options.analyze) {
-        viteConfig.plugins = [
-          visualizer({
-            filename: 'dist/stats.html',
-            open: true,
-            gzipSize: true,
-            brotliSize: true,
-            template: 'treemap',
-          }),
-        ]
-      }
-
-      try {
-        await viteBuild(viteConfig)
-
-        console.log('✓ TypeScript compilation complete')
-
-        const distPath = join(projectRoot, 'dist')
-        const bundles = await collectBundleSizes(distPath)
-        displayBundleSizes(bundles)
-
-        const duration = ((Date.now() - startTime) / 1000).toFixed(1)
-        console.log('')
-        console.log(`Build complete in ${pc.cyan(duration + 's')}`)
-        console.log(`Output: ${pc.dim('dist/')}`)
-
-        displayBundleSizeWarnings(bundles)
-      } catch (buildError) {
-        console.error(`\n❌ Build failed:\n`)
-        if (buildError instanceof Error) {
-          console.error(buildError.message)
-        }
-        console.log('')
-        process.exit(1)
-      }
-
-      return
+    console.error(`\n❌ Build failed:\n`)
+    if (error instanceof Error) {
+      console.error(error.message)
+    } else {
+      console.error('Unknown error occurred')
     }
-    throw error
+    console.log('')
+    process.exit(1)
   }
 }
