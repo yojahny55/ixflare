@@ -219,6 +219,7 @@ export function spawnWranglerWithTimeout(
   timeoutMs: number = WRANGLER_TIMEOUT_MS
 ): Promise<WranglerResult> {
   // Dynamic import to avoid circular dependencies
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { spawn } = require('child_process')
 
   return new Promise((resolve) => {

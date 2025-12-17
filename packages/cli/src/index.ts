@@ -71,6 +71,20 @@ const commands: Record<string, () => Promise<void>> = {
       env: env as 'development' | 'test' | 'production' | undefined,
     })
   },
+  'db:studio': async () => {
+    const args = process.argv.slice(3)
+    const getArgValue = (flag: string): string | undefined => {
+      const index = args.indexOf(flag)
+      return index !== -1 && args[index + 1] ? args[index + 1] : undefined
+    }
+    const m = await import('./commands/db/studio')
+    await m.studio({
+      port: getArgValue('--port'),
+      remote: args.includes('--remote'),
+      open: args.includes('--open'),
+      help: args.includes('--help') || args.includes('-h'),
+    })
+  },
   generate: () => import('./commands/generate').then((m) => m.generate()),
   'generate:env': () =>
     import('./commands/generate-env-types').then((m) => m.generateEnvCommand({})),
@@ -136,6 +150,7 @@ async function main(): Promise<void> {
     migrate:rollback    Rollback the last migration
     migrate:status      Show migration status
     db:seed             Seed the database with test/development data
+    db:studio           Launch database GUI (Drizzle Studio)
     generate            Generate code (model, migration, component)
     generate:env        Generate TypeScript types from .env.example
     generate:types      Generate TypeScript types for routes and models
