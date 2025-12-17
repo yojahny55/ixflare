@@ -65,6 +65,8 @@ const commands: Record<string, () => Promise<void>> = {
   generate: () => import('./commands/generate').then((m) => m.generate()),
   'generate:env': () =>
     import('./commands/generate-env-types').then((m) => m.generateEnvCommand({})),
+  'generate:types': () =>
+    import('./commands/generate-types').then((m) => m.generateTypes()),
   'auth:rotate-keys': () => import('./commands/auth/rotate-keys').then((m) => m.rotateKeys()),
   'security:audit': async () => {
     const args = process.argv.slice(3)
@@ -127,6 +129,7 @@ async function main(): Promise<void> {
     db:seed             Seed the database with test/development data
     generate            Generate code (model, migration, component)
     generate:env        Generate TypeScript types from .env.example
+    generate:types      Generate TypeScript types for routes and models
     auth:rotate-keys    Manually rotate JWT signing keys
     security:audit      Scan dependencies for vulnerabilities
 
