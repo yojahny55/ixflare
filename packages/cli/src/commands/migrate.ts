@@ -15,6 +15,7 @@ import type { MigrateOptions } from './migrate/types'
 interface GenerateOptions {
   schema?: string
   empty?: boolean
+  help?: boolean
 }
 
 /**
@@ -65,6 +66,7 @@ export async function migrate(
     const migrateOpts = options as MigrateOptions
     await migrationStatus({
       help: migrateOpts.help,
+      env: migrateOpts.env ?? (args.includes('--remote') ? 'remote' : 'local'),
     })
     return
   }

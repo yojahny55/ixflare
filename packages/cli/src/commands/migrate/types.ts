@@ -36,9 +36,6 @@ export interface MigrateOptions {
   /** Target environment (local or remote) */
   env?: 'local' | 'remote'
 
-  /** Database name (from wrangler.toml) */
-  database?: string
-
   /** Force execution of destructive operations (DROP, TRUNCATE, etc.) */
   force?: boolean
 

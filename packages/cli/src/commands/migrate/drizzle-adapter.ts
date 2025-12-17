@@ -303,18 +303,40 @@ export default defineConfig({
 }
 
 /**
+ * Drizzle Kit version to use for consistent behavior across environments
+ * Pin to a specific version to avoid breaking changes
+ */
+const DRIZZLE_KIT_VERSION = 'drizzle-kit@0.24.0'
+
+/**
+ * Default timeout for drizzle-kit operations (30 seconds)
+ */
+const DRIZZLE_KIT_TIMEOUT_MS = 30000
+
+/**
  * Run drizzle-kit generate command
+ * Uses npx with pinned version for consistency
+ *
+ * Security: shell: false to prevent command injection
  */
 async function runDrizzleKitGenerate(cwd: string): Promise<{ success: boolean; output: string }> {
   return new Promise((resolve) => {
-    const proc = spawn('npx', ['drizzle-kit', 'generate'], {
+    // Use npx with explicit package version - shell: false for security
+    const proc = spawn('npx', ['--yes', DRIZZLE_KIT_VERSION, 'generate'], {
       cwd,
       stdio: 'pipe',
-      shell: true,
+      // Explicitly NO shell: true - prevents command injection if inputs become dynamic
     })
 
     let output = ''
     let stderr = ''
+    let timedOut = false
+
+    // Add timeout to prevent hanging indefinitely
+    const timeoutId = setTimeout(() => {
+      timedOut = true
+      proc.kill('SIGTERM')
+    }, DRIZZLE_KIT_TIMEOUT_MS)
 
     proc.stdout?.on('data', (data) => {
       output += data.toString()
@@ -324,31 +346,59 @@ async function runDrizzleKitGenerate(cwd: string): Promise<{ success: boolean; o
       stderr += data.toString()
     })
 
-    proc.on('error', () => {
-      resolve({ success: false, output: stderr })
+    proc.on('error', (err) => {
+      clearTimeout(timeoutId)
+      resolve({ success: false, output: `Process error: ${err.message}` })
     })
 
     proc.on('close', (code) => {
-      resolve({ success: code === 0, output: output || stderr })
+      clearTimeout(timeoutId)
+      if (timedOut) {
+        resolve({ success: false, output: 'Drizzle Kit timed out after 30 seconds' })
+      } else {
+        resolve({ success: code === 0, output: output || stderr })
+      }
     })
   })
 }
 
 /**
  * Generate down migration from up migration SQL
- * Parses CREATE TABLE and ALTER TABLE statements and generates reverse operations
+ * Parses CREATE TABLE, ALTER TABLE, and CREATE INDEX statements
+ * and generates reverse operations.
+ *
+ * LIMITATIONS:
+ * This auto-generation only supports a subset of SQL operations:
+ * - CREATE TABLE → DROP TABLE
+ * - ALTER TABLE ADD COLUMN → ALTER TABLE DROP COLUMN
+ * - CREATE INDEX → DROP INDEX
+ *
+ * NOT SUPPORTED (requires manual down migration):
+ * - ALTER TABLE RENAME
+ * - ALTER TABLE MODIFY COLUMN
+ * - DROP TABLE (cannot recreate without schema)
+ * - Data migrations (INSERT, UPDATE, DELETE)
+ * - Complex constraints (foreign keys, triggers)
+ *
+ * Always review generated down migrations before relying on them!
  */
 function generateDownMigration(upSql: string): string {
   const lines = upSql.split('\n')
   const downStatements: string[] = []
+  const unhandledStatements: string[] = []
 
   for (const line of lines) {
     const trimmed = line.trim()
 
+    // Skip comments and empty lines
+    if (!trimmed || trimmed.startsWith('--') || trimmed.startsWith('/*')) {
+      continue
+    }
+
     // CREATE TABLE -> DROP TABLE
     const createTableMatch = trimmed.match(/^CREATE TABLE\s+["`]?(\w+)["`]?/i)
     if (createTableMatch) {
-      downStatements.unshift(`DROP TABLE "${createTableMatch[1]}";`)
+      downStatements.unshift(`DROP TABLE IF EXISTS "${createTableMatch[1]}";`)
       continue
     }
 
@@ -366,16 +416,43 @@ function generateDownMigration(upSql: string): string {
     // CREATE INDEX -> DROP INDEX
     const createIndexMatch = trimmed.match(/^CREATE\s+(?:UNIQUE\s+)?INDEX\s+["`]?(\w+)["`]?/i)
     if (createIndexMatch) {
-      downStatements.unshift(`DROP INDEX "${createIndexMatch[1]}";`)
+      downStatements.unshift(`DROP INDEX IF EXISTS "${createIndexMatch[1]}";`)
       continue
+    }
+
+    // Track statements we couldn't reverse
+    if (trimmed.match(/^(ALTER|DROP|INSERT|UPDATE|DELETE|RENAME)/i)) {
+      unhandledStatements.push(trimmed.substring(0, 50) + (trimmed.length > 50 ? '...' : ''))
     }
   }
 
+  // Build the down migration with warnings
+  const header = `-- Auto-generated rollback migration
+-- ⚠️  IMPORTANT: Review this file before using!
+-- Auto-generation only supports: CREATE TABLE, ADD COLUMN, CREATE INDEX
+`
+
   if (downStatements.length === 0) {
-    return '-- No reversible statements detected\n-- Add manual rollback SQL here'
+    return `${header}
+-- ❌ No reversible statements detected
+-- The up migration may contain operations that cannot be auto-reversed.
+-- Add manual rollback SQL below:
+
+`
   }
 
-  return downStatements.join('\n')
+  let result = header
+
+  if (unhandledStatements.length > 0) {
+    result += `-- ⚠️  The following statements could NOT be auto-reversed:\n`
+    for (const stmt of unhandledStatements) {
+      result += `--   ${stmt}\n`
+    }
+    result += `-- Add manual rollback for these operations if needed.\n\n`
+  }
+
+  result += downStatements.join('\n')
+  return result
 }
 
 /**

@@ -11,6 +11,7 @@ import {
   getDatabaseNameFromWrangler,
   escapeSqlString,
   containsDestructiveOperations,
+  WRANGLER_TIMEOUT_MS,
 } from './utils'
 import type { MigrateOptions, MigrationRecord, MigrationFile } from './types'
 import prompts from 'prompts'
@@ -36,8 +37,8 @@ export async function applyMigrations(options: MigrateOptions = {}): Promise<voi
   const cwd = process.cwd()
   const migrationsDir = getMigrationsDir(cwd)
 
-  // Get database name from wrangler.toml or options
-  const databaseName = options.database || getDatabaseNameFromWrangler()
+  // Get database name from wrangler.toml
+  const databaseName = getDatabaseNameFromWrangler()
 
   if (!databaseName) {
     console.error('Error: No database configured')
@@ -247,6 +248,13 @@ async function executeMigration(
 
     let stdout = ''
     let stderr = ''
+    let timedOut = false
+
+    // Set timeout to prevent indefinite hanging
+    const timeoutId = setTimeout(() => {
+      timedOut = true
+      wrangler.kill('SIGTERM')
+    }, WRANGLER_TIMEOUT_MS)
 
     wrangler.stdout.on('data', (data) => {
       stdout += data.toString()
@@ -257,11 +265,15 @@ async function executeMigration(
     })
 
     wrangler.on('error', (err) => {
+      clearTimeout(timeoutId)
       reject(new Error(`Failed to execute wrangler: ${err.message}`))
     })
 
     wrangler.on('close', (exitCode) => {
-      if (exitCode === 0) {
+      clearTimeout(timeoutId)
+      if (timedOut) {
+        reject(new Error(`Wrangler timed out after ${WRANGLER_TIMEOUT_MS / 1000} seconds`))
+      } else if (exitCode === 0) {
         resolve()
       } else {
         reject(new Error(`Migration failed: ${stderr || stdout}`))
@@ -293,17 +305,28 @@ async function executeSql(
     })
 
     let stderr = ''
+    let timedOut = false
+
+    // Set timeout to prevent indefinite hanging
+    const timeoutId = setTimeout(() => {
+      timedOut = true
+      wrangler.kill('SIGTERM')
+    }, WRANGLER_TIMEOUT_MS)
 
     wrangler.stderr.on('data', (data) => {
       stderr += data.toString()
     })
 
     wrangler.on('error', (err) => {
+      clearTimeout(timeoutId)
       reject(new Error(`Failed to execute wrangler: ${err.message}`))
     })
 
     wrangler.on('close', (exitCode) => {
-      if (exitCode === 0) {
+      clearTimeout(timeoutId)
+      if (timedOut) {
+        reject(new Error(`Wrangler timed out after ${WRANGLER_TIMEOUT_MS / 1000} seconds`))
+      } else if (exitCode === 0) {
         resolve()
       } else {
         reject(new Error(`SQL execution failed: ${stderr}`))
@@ -336,6 +359,13 @@ async function executeSqlQuery(
 
     let stdout = ''
     let stderr = ''
+    let timedOut = false
+
+    // Set timeout to prevent indefinite hanging
+    const timeoutId = setTimeout(() => {
+      timedOut = true
+      wrangler.kill('SIGTERM')
+    }, WRANGLER_TIMEOUT_MS)
 
     wrangler.stdout.on('data', (data) => {
       stdout += data.toString()
@@ -346,10 +376,18 @@ async function executeSqlQuery(
     })
 
     wrangler.on('error', (err) => {
+      clearTimeout(timeoutId)
       reject(new Error(`Failed to execute wrangler: ${err.message}`))
     })
 
     wrangler.on('close', (exitCode) => {
+      clearTimeout(timeoutId)
+
+      if (timedOut) {
+        reject(new Error(`Wrangler timed out after ${WRANGLER_TIMEOUT_MS / 1000} seconds`))
+        return
+      }
+
       if (exitCode === 0) {
         try {
           // Parse JSON output from wrangler

@@ -367,10 +367,17 @@ SELECT * FROM usersWHERE active = 1;`)
       expect(result).toContain('TRUNCATE')
     })
 
-    it('should detect DELETE FROM', () => {
+    it('should detect bulk DELETE FROM (without WHERE)', () => {
+      const sql = `DELETE FROM users;`
+      const result = containsDestructiveOperations(sql)
+      expect(result.some((r) => r.includes('DELETE FROM'))).toBe(true)
+    })
+
+    it('should NOT detect DELETE FROM with WHERE clause', () => {
+      // DELETE with WHERE is a targeted delete, not a bulk delete
       const sql = `DELETE FROM users WHERE active = 0;`
       const result = containsDestructiveOperations(sql)
-      expect(result).toContain('DELETE FROM')
+      expect(result).toHaveLength(0)
     })
 
     it('should detect ALTER TABLE ... DROP COLUMN', () => {

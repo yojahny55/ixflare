@@ -39,7 +39,7 @@ const commands: Record<string, () => Promise<void>> = {
       schema: schemaPath,
       empty: args.includes('--empty'),
       help: args.includes('--help') || args.includes('-h'),
-    } as never)
+    })
   },
   'migrate:rollback': async () => {
     const args = process.argv.slice(3)
@@ -56,6 +56,7 @@ const commands: Record<string, () => Promise<void>> = {
     const m = await import('./commands/migrate')
     await m.migrate('status', undefined, {
       help: args.includes('--help') || args.includes('-h'),
+      env: args.includes('--remote') ? 'remote' : 'local',
     })
   },
   'db:seed': async () => {

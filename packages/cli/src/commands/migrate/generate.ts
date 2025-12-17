@@ -125,7 +125,7 @@ export async function generateMigration(
   if (options.help) {
     showGenerateMigrationHelp()
     process.exit(0)
-    return
+    return // For test compatibility when process.exit is mocked
   }
 
   // Validate migration name
@@ -140,7 +140,7 @@ export async function generateMigration(
     console.error('  --empty          Create empty migration (skip model detection)')
     console.error('  -h, --help       Show help message')
     process.exit(1)
-    return
+    return // For test compatibility when process.exit is mocked
   }
 
   // Convert to snake_case and validate
@@ -152,7 +152,7 @@ export async function generateMigration(
       'Migration names must contain only alphanumeric characters, hyphens, and underscores'
     )
     process.exit(1)
-    return
+    return // For test compatibility when process.exit is mocked
   }
 
   // Ensure migrations directory exists

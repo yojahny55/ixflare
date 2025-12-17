@@ -1,6 +1,17 @@
 /**
  * @module commands/migrate/model-loader
  * @description Load EdgeRecord models from user's project for migration generation
+ *
+ * LIMITATIONS:
+ * This module uses regex-based parsing for simplicity (no AST dependency).
+ * It handles common EdgeRecord patterns but may fail on:
+ * - Complex TypeScript syntax (conditional types, generics in field definitions)
+ * - Multi-line field definitions with unusual formatting
+ * - Comments embedded within model definitions
+ * - Dynamic/computed property names
+ *
+ * For complex models that fail to parse, the CLI will fall back to
+ * generating placeholder migrations that users can manually edit.
  */
 
 import { existsSync, readdirSync, readFileSync } from 'fs'
@@ -110,25 +121,60 @@ function findTypeScriptFiles(dir: string): string[] {
 }
 
 /**
+ * Result of model extraction including any warnings
+ */
+export interface ModelExtractionResult {
+  models: ExtractedModel[]
+  warnings: string[]
+}
+
+/**
  * Extract model definitions from source files using static analysis
  * This parses the TypeScript source code without executing it
  * @param files Array of file paths to analyze
  * @returns Array of extracted models
  */
 export function extractModelsFromFiles(files: string[]): ExtractedModel[] {
+  const result = extractModelsFromFilesWithWarnings(files)
+
+  // Log warnings to help users understand parsing limitations
+  for (const warning of result.warnings) {
+    console.warn(`  ⚠ ${warning}`)
+  }
+
+  return result.models
+}
+
+/**
+ * Extract models with detailed warnings for troubleshooting
+ * @param files Array of file paths to analyze
+ * @returns Models and any parsing warnings
+ */
+export function extractModelsFromFilesWithWarnings(files: string[]): ModelExtractionResult {
   const models: ExtractedModel[] = []
+  const warnings: string[] = []
 
   for (const file of files) {
     try {
       const content = readFileSync(file, 'utf-8')
+
+      // Check if file likely contains models but we couldn't parse them
+      const hasDefineModel = content.includes('defineModel')
       const fileModels = parseDefineModelCalls(content)
+
+      if (hasDefineModel && fileModels.length === 0) {
+        warnings.push(
+          `Found defineModel in ${file} but couldn't parse it. Complex syntax may require manual migration.`
+        )
+      }
+
       models.push(...fileModels)
-    } catch {
-      // Skip files that can't be read
+    } catch (error) {
+      warnings.push(`Could not read ${file}: ${error instanceof Error ? error.message : 'unknown error'}`)
     }
   }
 
-  return models
+  return { models, warnings }
 }
 
 /**

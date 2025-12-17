@@ -9,6 +9,7 @@ import {
   getAllMigrations,
   formatTimestamp,
   getDatabaseNameFromWrangler,
+  WRANGLER_TIMEOUT_MS,
 } from './utils'
 import type { MigrationRecord, MigrateOptions } from './types'
 
@@ -22,11 +23,15 @@ Usage: ix migrate:status [options]
 Display the current status of all database migrations.
 
 Options:
+  --remote            Query remote database (default: local)
   -h, --help          Show this help message
 
 Examples:
   ix migrate:status
     Show migration status for local database
+
+  ix migrate:status --remote
+    Show migration status for remote D1 database
 
 Output:
   ✓ 001_initial.sql              (2024-01-15 10:30:45)  <- Applied
@@ -53,7 +58,6 @@ export async function migrationStatus(options: MigrateOptions = {}): Promise<voi
   if (options.help) {
     showMigrationStatusHelp()
     process.exit(0)
-    return
   }
 
   const cwd = process.cwd()
@@ -82,7 +86,7 @@ export async function migrationStatus(options: MigrateOptions = {}): Promise<voi
   }
 
   // Get applied migrations from database
-  const appliedMigrations = await getAppliedMigrations(databaseName)
+  const appliedMigrations = await getAppliedMigrations(databaseName, options.env)
   const appliedMap = new Map(appliedMigrations.map((m) => [m.name, m]))
 
   // Display status
@@ -116,11 +120,14 @@ export async function migrationStatus(options: MigrateOptions = {}): Promise<voi
 /**
  * Get applied migrations from _migrations table
  */
-async function getAppliedMigrations(databaseName: string): Promise<MigrationRecord[]> {
+async function getAppliedMigrations(
+  databaseName: string,
+  env?: 'local' | 'remote'
+): Promise<MigrationRecord[]> {
   const query = 'SELECT id, name, applied_at FROM _migrations ORDER BY id ASC'
 
   try {
-    const result = await executeSqlQuery(databaseName, query)
+    const result = await executeSqlQuery(databaseName, query, env)
     return result
   } catch {
     // Table might not exist yet
@@ -130,10 +137,21 @@ async function getAppliedMigrations(databaseName: string): Promise<MigrationReco
 
 /**
  * Execute SQL query and return results
+ * Includes timeout protection to prevent indefinite hanging
  */
-async function executeSqlQuery(databaseName: string, sql: string): Promise<MigrationRecord[]> {
+async function executeSqlQuery(
+  databaseName: string,
+  sql: string,
+  env?: 'local' | 'remote'
+): Promise<MigrationRecord[]> {
   return new Promise((resolve, reject) => {
-    const args = ['d1', 'execute', databaseName, '--command', sql, '--json', '--local']
+    const args = ['d1', 'execute', databaseName, '--command', sql, '--json']
+
+    if (env === 'remote') {
+      args.push('--remote')
+    } else {
+      args.push('--local')
+    }
 
     const wrangler = spawn('wrangler', args, {
       cwd: process.cwd(),
@@ -142,6 +160,13 @@ async function executeSqlQuery(databaseName: string, sql: string): Promise<Migra
 
     let stdout = ''
     let stderr = ''
+    let timedOut = false
+
+    // Set timeout to prevent indefinite hanging
+    const timeoutId = setTimeout(() => {
+      timedOut = true
+      wrangler.kill('SIGTERM')
+    }, WRANGLER_TIMEOUT_MS)
 
     wrangler.stdout.on('data', (data) => {
       stdout += data.toString()
@@ -152,10 +177,18 @@ async function executeSqlQuery(databaseName: string, sql: string): Promise<Migra
     })
 
     wrangler.on('error', (err) => {
+      clearTimeout(timeoutId)
       reject(new Error(`Failed to execute wrangler: ${err.message}`))
     })
 
     wrangler.on('close', (exitCode) => {
+      clearTimeout(timeoutId)
+
+      if (timedOut) {
+        reject(new Error(`Wrangler timed out after ${WRANGLER_TIMEOUT_MS / 1000} seconds`))
+        return
+      }
+
       if (exitCode === 0) {
         try {
           const result = JSON.parse(stdout)
