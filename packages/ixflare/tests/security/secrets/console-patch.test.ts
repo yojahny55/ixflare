@@ -4,10 +4,7 @@ import {
   unpatchConsole,
   isConsolePatched,
 } from '../../../src/security/secrets/console-patch'
-import {
-  getSecretTracker,
-  resetGlobalTracker,
-} from '../../../src/security/secrets/tracker'
+import { getSecretTracker, resetGlobalTracker } from '../../../src/security/secrets/tracker'
 
 describe('patchConsole', () => {
   let originalLog: typeof console.log
@@ -142,9 +139,7 @@ describe('patchConsole', () => {
 
       console.error('Connection failed: postgres://user:pass@host/db')
 
-      expect(mockError).toHaveBeenCalledWith(
-        'Connection failed: [REDACTED:DB_URL]'
-      )
+      expect(mockError).toHaveBeenCalledWith('Connection failed: [REDACTED:DB_URL]')
     })
 
     it('should redact tracked secrets in console.debug', () => {
@@ -224,9 +219,7 @@ describe('patchConsole', () => {
       tracker.track('CUSTOM_SECRET', 'my_custom_value')
 
       // Message with both a tracked secret and a pattern-matched secret
-      console.log(
-        'Custom: my_custom_value, Stripe: sk_live_51HvI9aB2C3D4E5F6G7H8I9J'
-      )
+      console.log('Custom: my_custom_value, Stripe: sk_live_51HvI9aB2C3D4E5F6G7H8I9J')
 
       const call = mockLog.mock.calls[0][0]
       expect(call).toContain('[REDACTED:CUSTOM_SECRET]')

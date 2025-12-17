@@ -61,7 +61,7 @@ describe('preview command', () => {
       parsePreviewArgs(['--port', 'invalid'])
 
       expect(mockConsoleError).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid port: "invalid"'),
+        expect.stringContaining('Invalid port: "invalid"')
       )
       expect(mockExit).toHaveBeenCalledWith(1)
     })
@@ -77,7 +77,7 @@ describe('preview command', () => {
       parsePreviewArgs(['--port', '65536'])
 
       expect(mockConsoleError).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid port: "65536"'),
+        expect.stringContaining('Invalid port: "65536"')
       )
       expect(mockExit).toHaveBeenCalledWith(1)
     })

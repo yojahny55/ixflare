@@ -6,12 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import {
-  createSignedToken,
-  setCSRFCookie,
-  csrf,
-  getCsrfToken,
-} from '../../../src/auth/csrf'
+import { createSignedToken, setCSRFCookie, csrf, getCsrfToken } from '../../../src/auth/csrf'
 import type { EdgeContext } from '../../../src/types/context'
 
 const TEST_SECRET = 'integration-test-secret-32-chars'
@@ -19,10 +14,7 @@ const TEST_SECRET = 'integration-test-secret-32-chars'
 /**
  * Create a mock EdgeContext for testing
  */
-function createMockContext(
-  request: Request,
-  session?: { id: string }
-): EdgeContext {
+function createMockContext(request: Request, session?: { id: string }): EdgeContext {
   const url = new URL(request.url)
 
   return {

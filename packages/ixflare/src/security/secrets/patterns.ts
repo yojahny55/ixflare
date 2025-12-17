@@ -120,9 +120,7 @@ export function shouldRedactField(
   }
 
   // Check custom fields
-  return customFields.some((field) =>
-    lowerFieldName.includes(field.toLowerCase())
-  )
+  return customFields.some((field) => lowerFieldName.includes(field.toLowerCase()))
 }
 
 /**
@@ -130,8 +128,6 @@ export function shouldRedactField(
  * @param customPatterns - Additional custom patterns
  * @returns Combined array of all patterns
  */
-export function getRedactionPatterns(
-  customPatterns: RegExp[] = []
-): RegExp[] {
+export function getRedactionPatterns(customPatterns: RegExp[] = []): RegExp[] {
   return [...DEFAULT_REDACT_PATTERNS, ...customPatterns]
 }

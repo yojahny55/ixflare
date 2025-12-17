@@ -143,7 +143,10 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
 
     // Show resources
     const hasResources =
-      bindings.name || bindings.d1Databases.length || bindings.kvNamespaces.length || bindings.r2Buckets.length
+      bindings.name ||
+      bindings.d1Databases.length ||
+      bindings.kvNamespaces.length ||
+      bindings.r2Buckets.length
     if (hasResources) {
       console.log('\n  Resources:')
       if (bindings.name) {

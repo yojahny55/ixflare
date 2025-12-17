@@ -4,12 +4,7 @@
  * @module security/secrets
  */
 
-export type {
-  RedactionConfig,
-  SecretConfig,
-  SecretInfo,
-  RedactionResult,
-} from './types'
+export type { RedactionConfig, SecretConfig, SecretInfo, RedactionResult } from './types'
 
 export {
   DEFAULT_REDACT_FIELDS,
@@ -24,11 +19,7 @@ export { SecretTracker, getSecretTracker, autoTrackSecrets } from './tracker'
 
 export { patchConsole, unpatchConsole, isConsolePatched } from './console-patch'
 
-export {
-  sanitizeError,
-  sanitizeFetchError,
-  createSafeError,
-} from './error-sanitizer'
+export { sanitizeError, sanitizeFetchError, createSafeError } from './error-sanitizer'
 
 export type { LoggerConfig } from './logger'
 export { Logger, createLogger, getLogger, logger } from './logger'

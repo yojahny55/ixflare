@@ -380,9 +380,7 @@ describe('Cookie Name Validation', () => {
     const validNames = ['session', 'my-cookie', 'my_cookie', '__Host-session', '__Secure-token']
 
     for (const name of validNames) {
-      expect(() =>
-        setCookie(response, name, 'value', { secure: true, path: '/' })
-      ).not.toThrow()
+      expect(() => setCookie(response, name, 'value', { secure: true, path: '/' })).not.toThrow()
     }
   })
 })

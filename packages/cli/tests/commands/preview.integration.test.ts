@@ -124,7 +124,7 @@ describe('preview command integration', () => {
       }
 
       expect(mockConsoleError).toHaveBeenCalledWith(
-        expect.stringContaining('dist/ directory not found'),
+        expect.stringContaining('dist/ directory not found')
       )
       expect(mockExit).toHaveBeenCalledWith(1)
     })
@@ -142,7 +142,7 @@ describe('preview command integration', () => {
       }
 
       expect(mockConsoleError).toHaveBeenCalledWith(
-        expect.stringContaining('Production build not found'),
+        expect.stringContaining('Production build not found')
       )
       expect(mockExit).toHaveBeenCalledWith(1)
     })
@@ -162,9 +162,8 @@ describe('preview command integration', () => {
 
   describe('port availability', () => {
     it('should use suggested port when requested port is unavailable', async () => {
-      const { isPortAvailable, findAvailablePort, displayPortConflictMessage } = await import(
-        '../../src/commands/dev.js'
-      )
+      const { isPortAvailable, findAvailablePort, displayPortConflictMessage } =
+        await import('../../src/commands/dev.js')
       vi.mocked(isPortAvailable).mockResolvedValueOnce(false)
       vi.mocked(findAvailablePort).mockResolvedValueOnce(3002)
 
@@ -194,9 +193,7 @@ describe('preview command integration', () => {
         // Expected - process.exit throws in test
       }
 
-      expect(mockConsoleError).toHaveBeenCalledWith(
-        expect.stringContaining('Port 3001 is in use'),
-      )
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('Port 3001 is in use'))
       expect(mockExit).toHaveBeenCalledWith(1)
     })
   })
@@ -454,7 +451,7 @@ describe('preview command integration', () => {
       }
 
       expect(mockConsoleError).toHaveBeenCalledWith(
-        expect.stringContaining('Cannot prompt for confirmation in non-interactive mode'),
+        expect.stringContaining('Cannot prompt for confirmation in non-interactive mode')
       )
       expect(mockExit).toHaveBeenCalledWith(0)
     })

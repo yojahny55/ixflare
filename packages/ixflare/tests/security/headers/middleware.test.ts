@@ -4,7 +4,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { createSecurityHeadersMiddleware, DEFAULT_SECURITY_HEADERS_CONFIG } from '@/security/headers/middleware'
+import {
+  createSecurityHeadersMiddleware,
+  DEFAULT_SECURITY_HEADERS_CONFIG,
+} from '@/security/headers/middleware'
 import { clearRequestNonce } from '@/security/headers/csp'
 import { setEnvironment, clearEnvironment } from '@/auth/cookie/security'
 
@@ -371,7 +374,9 @@ describe('createSecurityHeadersMiddleware', () => {
 
       const response = await middleware(mockContext, mockNext)
 
-      expect(response.headers.get('Location')).toBe('https://example.com/users/123?sort=asc&filter=active')
+      expect(response.headers.get('Location')).toBe(
+        'https://example.com/users/123?sort=asc&filter=active'
+      )
     })
 
     it('should skip redirect when route disables headers', async () => {

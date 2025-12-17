@@ -120,9 +120,7 @@ function getSafeErrorMessage(error: unknown): string {
     // Filter out potentially sensitive information from error messages
     const message = error.message
     // Remove file paths that might expose system structure
-    const sanitized = message
-      .replace(/\/[^\s]+/g, '[path]')
-      .replace(/\\[^\s]+/g, '[path]')
+    const sanitized = message.replace(/\/[^\s]+/g, '[path]').replace(/\\[^\s]+/g, '[path]')
     // Limit message length
     return sanitized.length > 200 ? sanitized.slice(0, 200) + '...' : sanitized
   }
@@ -278,7 +276,9 @@ function parseAuditOutput(output: string, ignoredCves: string[]): AuditResult {
     }
   } catch {
     // Don't expose raw parsing errors which may contain sensitive data
-    throw new Error('Failed to parse audit output. Ensure pnpm is installed and the project has a valid package.json.')
+    throw new Error(
+      'Failed to parse audit output. Ensure pnpm is installed and the project has a valid package.json.'
+    )
   }
 }
 
@@ -394,7 +394,9 @@ function displayAuditResults(result: AuditResult, _options: AuditOptions): void 
   }
 
   console.log(
-    pc.yellow(`Found ${result.summary.total} ${result.summary.total === 1 ? 'vulnerability' : 'vulnerabilities'}:\n`)
+    pc.yellow(
+      `Found ${result.summary.total} ${result.summary.total === 1 ? 'vulnerability' : 'vulnerabilities'}:\n`
+    )
   )
 
   // Group by severity for cleaner output
@@ -509,7 +511,11 @@ async function runAuditFix(
       console.log(pc.yellow(`  - ${vuln.id}: ${vuln.package}@${vuln.version}`))
     }
     console.log(pc.yellow('\npnpm audit --fix may still attempt to update these packages.'))
-    console.log(pc.yellow('If this causes issues, you can revert with: git checkout package.json pnpm-lock.yaml\n'))
+    console.log(
+      pc.yellow(
+        'If this causes issues, you can revert with: git checkout package.json pnpm-lock.yaml\n'
+      )
+    )
   }
 
   // Build args for fix command
@@ -607,16 +613,12 @@ function displayFixResults(result: FixResult, json?: boolean): void {
 
   if (result.fixes.length > 0) {
     for (const fix of result.fixes) {
-      console.log(
-        pc.green(`✓ Updated ${fix.package}: ${fix.fromVersion} → ${fix.toVersion}`)
-      )
+      console.log(pc.green(`✓ Updated ${fix.package}: ${fix.fromVersion} → ${fix.toVersion}`))
     }
   }
 
   if (result.remaining > 0) {
-    console.log(
-      pc.yellow(`\n✗ ${result.remaining} vulnerabilities require manual action\n`)
-    )
+    console.log(pc.yellow(`\n✗ ${result.remaining} vulnerabilities require manual action\n`))
   } else {
     console.log(pc.green('\n✓ All vulnerabilities fixed\n'))
   }

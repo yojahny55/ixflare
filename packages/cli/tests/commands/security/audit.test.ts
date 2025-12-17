@@ -116,9 +116,7 @@ describe('security:audit severity filtering logic', () => {
     ]
 
     // Filter by high threshold - should include high and critical
-    const highAndAbove = vulnerabilities.filter((v) =>
-      ['high', 'critical'].includes(v.severity)
-    )
+    const highAndAbove = vulnerabilities.filter((v) => ['high', 'critical'].includes(v.severity))
     expect(highAndAbove).toHaveLength(2)
 
     // Filter by critical threshold - should include only critical
@@ -156,9 +154,30 @@ CVE-2024-0001 # Fixed in next release
 
   it('should filter vulnerabilities by ignored CVEs', () => {
     const vulnerabilities: Vulnerability[] = [
-      { id: 'CVE-2023-1234', severity: 'high', package: 'pkg1', version: '1.0.0', path: [], description: '' },
-      { id: 'CVE-2023-5678', severity: 'high', package: 'pkg2', version: '1.0.0', path: [], description: '' },
-      { id: 'CVE-2024-0001', severity: 'low', package: 'pkg3', version: '1.0.0', path: [], description: '' },
+      {
+        id: 'CVE-2023-1234',
+        severity: 'high',
+        package: 'pkg1',
+        version: '1.0.0',
+        path: [],
+        description: '',
+      },
+      {
+        id: 'CVE-2023-5678',
+        severity: 'high',
+        package: 'pkg2',
+        version: '1.0.0',
+        path: [],
+        description: '',
+      },
+      {
+        id: 'CVE-2024-0001',
+        severity: 'low',
+        package: 'pkg3',
+        version: '1.0.0',
+        path: [],
+        description: '',
+      },
     ]
 
     const ignoredCves = ['CVE-2023-1234', 'CVE-2024-0001']
@@ -268,7 +287,14 @@ describe('security:audit input validation', () => {
   it('should handle empty ignore list', () => {
     const ignoredCves: string[] = []
     const vulnerabilities: Vulnerability[] = [
-      { id: 'CVE-2023-1234', severity: 'high', package: 'pkg', version: '1.0.0', path: [], description: '' },
+      {
+        id: 'CVE-2023-1234',
+        severity: 'high',
+        package: 'pkg',
+        version: '1.0.0',
+        path: [],
+        description: '',
+      },
     ]
 
     const filtered = vulnerabilities.filter((v) => !ignoredCves.includes(v.id))
@@ -279,13 +305,7 @@ describe('security:audit input validation', () => {
 
 describe('security:audit error message safety', () => {
   it('should not expose sensitive data patterns in error messages', () => {
-    const sensitivePatterns = [
-      /token/i,
-      /secret/i,
-      /password/i,
-      /api[_-]?key/i,
-      /bearer/i,
-    ]
+    const sensitivePatterns = [/token/i, /secret/i, /password/i, /api[_-]?key/i, /bearer/i]
 
     const safeErrorMessage = 'Error running audit: pnpm audit failed with code 2'
 
@@ -301,7 +321,14 @@ describe('security:audit vulnerability grouping', () => {
       { id: '1', severity: 'low', package: 'pkg1', version: '1.0.0', path: [], description: '' },
       { id: '2', severity: 'high', package: 'pkg2', version: '1.0.0', path: [], description: '' },
       { id: '3', severity: 'high', package: 'pkg3', version: '1.0.0', path: [], description: '' },
-      { id: '4', severity: 'critical', package: 'pkg4', version: '1.0.0', path: [], description: '' },
+      {
+        id: '4',
+        severity: 'critical',
+        package: 'pkg4',
+        version: '1.0.0',
+        path: [],
+        description: '',
+      },
     ]
 
     const grouped: Record<VulnerabilitySeverity, Vulnerability[]> = {
@@ -473,10 +500,7 @@ CVE-2023-1111
 
 describe('security:audit pnpm output parsing', () => {
   // Simulates parseAuditOutput logic
-  function parseAuditOutput(
-    data: PnpmAuditOutput,
-    ignoredCves: string[]
-  ): AuditResult {
+  function parseAuditOutput(data: PnpmAuditOutput, ignoredCves: string[]): AuditResult {
     const vulnerabilities: Vulnerability[] = []
 
     for (const [advisoryId, advisory] of Object.entries(data.advisories || {})) {
@@ -532,9 +556,7 @@ describe('security:audit pnpm output parsing', () => {
           severity: 'high',
           overview: 'Prototype pollution in lodash',
           url: 'https://github.com/advisories/GHSA-abcd-efgh-ijkl',
-          findings: [
-            { version: '4.17.19', paths: ['my-app > dep > lodash'] }
-          ]
+          findings: [{ version: '4.17.19', paths: ['my-app > dep > lodash'] }],
         },
         '5678': {
           id: 5678,
@@ -547,10 +569,8 @@ describe('security:audit pnpm output parsing', () => {
           severity: 'moderate',
           overview: 'Regular expression denial of service',
           url: 'https://nvd.nist.gov/vuln/detail/CVE-2024-12345',
-          findings: [
-            { version: '1.5.0', paths: ['my-app > axios'] }
-          ]
-        }
+          findings: [{ version: '1.5.0', paths: ['my-app > axios'] }],
+        },
       },
       metadata: {
         vulnerabilities: {
@@ -559,9 +579,9 @@ describe('security:audit pnpm output parsing', () => {
           moderate: 1,
           high: 1,
           critical: 0,
-          total: 2
-        }
-      }
+          total: 2,
+        },
+      },
     }
 
     const result = parseAuditOutput(mockOutput, [])
@@ -572,12 +592,12 @@ describe('security:audit pnpm output parsing', () => {
     expect(result.summary.moderate).toBe(1)
 
     // Check first vulnerability (GHSA)
-    const lodashVuln = result.vulnerabilities.find(v => v.package === 'lodash')
+    const lodashVuln = result.vulnerabilities.find((v) => v.package === 'lodash')
     expect(lodashVuln?.id).toBe('GHSA-abcd-efgh-ijkl')
     expect(lodashVuln?.version).toBe('4.17.19')
 
     // Check second vulnerability (CVE)
-    const axiosVuln = result.vulnerabilities.find(v => v.package === 'axios')
+    const axiosVuln = result.vulnerabilities.find((v) => v.package === 'axios')
     expect(axiosVuln?.id).toBe('CVE-2024-12345')
   })
 
@@ -595,7 +615,7 @@ describe('security:audit pnpm output parsing', () => {
           severity: 'high',
           overview: 'Test CVE-2023-1234',
           url: 'https://example.com',
-          findings: [{ version: '0.9.0', paths: ['app > pkg1'] }]
+          findings: [{ version: '0.9.0', paths: ['app > pkg1'] }],
         },
         '5678': {
           id: 5678,
@@ -608,12 +628,12 @@ describe('security:audit pnpm output parsing', () => {
           severity: 'critical',
           overview: 'Critical issue',
           url: 'https://example.com',
-          findings: [{ version: '1.9.0', paths: ['app > pkg2'] }]
-        }
+          findings: [{ version: '1.9.0', paths: ['app > pkg2'] }],
+        },
       },
       metadata: {
-        vulnerabilities: { info: 0, low: 0, moderate: 0, high: 1, critical: 1, total: 2 }
-      }
+        vulnerabilities: { info: 0, low: 0, moderate: 0, high: 1, critical: 1, total: 2 },
+      },
     }
 
     // Ignore advisory 1234 by its numeric ID
@@ -627,8 +647,8 @@ describe('security:audit pnpm output parsing', () => {
     const mockOutput: PnpmAuditOutput = {
       advisories: {},
       metadata: {
-        vulnerabilities: { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 }
-      }
+        vulnerabilities: { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 },
+      },
     }
 
     const result = parseAuditOutput(mockOutput, [])
@@ -651,14 +671,12 @@ describe('security:audit pnpm output parsing', () => {
           severity: 'high',
           overview: 'Issue',
           url: 'https://github.com/advisories/GHSA-xxxx-yyyy-zzzz',
-          findings: [
-            { version: '4.17.19', paths: ['app > dep1 > lodash', 'app > dep2 > lodash'] }
-          ]
-        }
+          findings: [{ version: '4.17.19', paths: ['app > dep1 > lodash', 'app > dep2 > lodash'] }],
+        },
       },
       metadata: {
-        vulnerabilities: { info: 0, low: 0, moderate: 0, high: 2, critical: 0, total: 2 }
-      }
+        vulnerabilities: { info: 0, low: 0, moderate: 0, high: 2, critical: 0, total: 2 },
+      },
     }
 
     const result = parseAuditOutput(mockOutput, [])
@@ -688,13 +706,7 @@ describe('security:audit CLI argument validation', () => {
     const validLevels = ['low', 'moderate', 'high', 'critical'] as const
 
     // Injection attempts should fail validation
-    const injectionAttempts = [
-      '; rm -rf /',
-      '$(whoami)',
-      '`id`',
-      '--help',
-      '-e "malicious"',
-    ]
+    const injectionAttempts = ['; rm -rf /', '$(whoami)', '`id`', '--help', '-e "malicious"']
 
     for (const attempt of injectionAttempts) {
       expect(validLevels.includes(attempt as never)).toBe(false)
@@ -751,7 +763,7 @@ describe('security:audit options validation', () => {
 
   function validateAuditOptions(options: AuditOptions): { valid: boolean; error?: string } {
     if (options.auditLevel !== undefined) {
-      if (!VALID_AUDIT_LEVELS.includes(options.auditLevel as typeof VALID_AUDIT_LEVELS[number])) {
+      if (!VALID_AUDIT_LEVELS.includes(options.auditLevel as (typeof VALID_AUDIT_LEVELS)[number])) {
         return { valid: false, error: `Invalid audit level: "${options.auditLevel}"` }
       }
     }
@@ -774,7 +786,9 @@ describe('security:audit options validation', () => {
   })
 
   it('should reject invalid audit levels', () => {
-    expect(validateAuditOptions({ auditLevel: 'invalid' as VulnerabilitySeverity }).valid).toBe(false)
+    expect(validateAuditOptions({ auditLevel: 'invalid' as VulnerabilitySeverity }).valid).toBe(
+      false
+    )
     expect(validateAuditOptions({ auditLevel: 'HIGH' as VulnerabilitySeverity }).valid).toBe(false)
     expect(validateAuditOptions({ auditLevel: '' as VulnerabilitySeverity }).valid).toBe(false)
   })
@@ -786,16 +800,12 @@ describe('security:audit options validation', () => {
   })
 
   it('should reject injection attempts in audit level', () => {
-    const injectionAttempts = [
-      '; rm -rf /',
-      '$(whoami)',
-      '`id`',
-      '--help',
-      '-e "malicious"',
-    ]
+    const injectionAttempts = ['; rm -rf /', '$(whoami)', '`id`', '--help', '-e "malicious"']
 
     for (const attempt of injectionAttempts) {
-      expect(validateAuditOptions({ auditLevel: attempt as VulnerabilitySeverity }).valid).toBe(false)
+      expect(validateAuditOptions({ auditLevel: attempt as VulnerabilitySeverity }).valid).toBe(
+        false
+      )
     }
   })
 })
@@ -803,9 +813,30 @@ describe('security:audit options validation', () => {
 describe('security:audit --fix ignore configuration handling', () => {
   it('should identify ignored vulnerabilities that might be affected by fix', () => {
     const vulnerabilities: Vulnerability[] = [
-      { id: 'CVE-2023-1234', severity: 'high', package: 'pkg1', version: '1.0.0', path: [], description: '' },
-      { id: 'GHSA-abcd-efgh-ijkl', severity: 'high', package: 'pkg2', version: '1.0.0', path: [], description: '' },
-      { id: 'CVE-2024-5678', severity: 'low', package: 'pkg3', version: '1.0.0', path: [], description: '' },
+      {
+        id: 'CVE-2023-1234',
+        severity: 'high',
+        package: 'pkg1',
+        version: '1.0.0',
+        path: [],
+        description: '',
+      },
+      {
+        id: 'GHSA-abcd-efgh-ijkl',
+        severity: 'high',
+        package: 'pkg2',
+        version: '1.0.0',
+        path: [],
+        description: '',
+      },
+      {
+        id: 'CVE-2024-5678',
+        severity: 'low',
+        package: 'pkg3',
+        version: '1.0.0',
+        path: [],
+        description: '',
+      },
     ]
 
     const ignoredCves = ['CVE-2023-1234', 'GHSA-abcd-efgh-ijkl']
@@ -815,15 +846,36 @@ describe('security:audit --fix ignore configuration handling', () => {
     )
 
     expect(ignoredVulns).toHaveLength(2)
-    expect(ignoredVulns.map(v => v.id)).toContain('CVE-2023-1234')
-    expect(ignoredVulns.map(v => v.id)).toContain('GHSA-abcd-efgh-ijkl')
+    expect(ignoredVulns.map((v) => v.id)).toContain('CVE-2023-1234')
+    expect(ignoredVulns.map((v) => v.id)).toContain('GHSA-abcd-efgh-ijkl')
   })
 
   it('should exclude ignored vulnerabilities from remaining count', () => {
     const vulnerabilities: Vulnerability[] = [
-      { id: 'CVE-2023-1234', severity: 'high', package: 'pkg1', version: '1.0.0', path: [], description: '' },
-      { id: 'CVE-2024-5678', severity: 'high', package: 'pkg2', version: '1.0.0', path: [], description: '' },
-      { id: 'CVE-2024-9999', severity: 'low', package: 'pkg3', version: '1.0.0', path: [], description: '' },
+      {
+        id: 'CVE-2023-1234',
+        severity: 'high',
+        package: 'pkg1',
+        version: '1.0.0',
+        path: [],
+        description: '',
+      },
+      {
+        id: 'CVE-2024-5678',
+        severity: 'high',
+        package: 'pkg2',
+        version: '1.0.0',
+        path: [],
+        description: '',
+      },
+      {
+        id: 'CVE-2024-9999',
+        severity: 'low',
+        package: 'pkg3',
+        version: '1.0.0',
+        path: [],
+        description: '',
+      },
     ]
 
     const ignoredCves = ['CVE-2023-1234']
@@ -837,7 +889,6 @@ describe('security:audit --fix ignore configuration handling', () => {
 })
 
 describe('security:audit security tests', () => {
-
   it('should sanitize vulnerability descriptions for display', () => {
     // Ensure HTML/script in descriptions doesn't cause issues
     const vuln: Vulnerability = {

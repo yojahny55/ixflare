@@ -77,7 +77,10 @@ export function redactString(
   // Apply each pattern
   for (const pattern of patterns) {
     // Create a new RegExp to ensure global flag and reset lastIndex
-    const regex = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g')
+    const regex = new RegExp(
+      pattern.source,
+      pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g'
+    )
     result = result.replace(regex, placeholder)
   }
 
@@ -113,7 +116,7 @@ export function redactObject<T extends Record<string, unknown>>(
     // Check if this field should be redacted
     if (shouldRedactField(key, customFields, whitelist)) {
       // For sensitive fields, preserve null/undefined but redact everything else
-      result[key] = (value === null || value === undefined) ? value : placeholder
+      result[key] = value === null || value === undefined ? value : placeholder
       continue
     }
 
@@ -150,9 +153,6 @@ export function redactObject<T extends Record<string, unknown>>(
  * @returns Redacted arguments
  * @internal
  */
-export function redactConsoleArgs(
-  args: unknown[],
-  config: RedactionConfig = {}
-): unknown[] {
+export function redactConsoleArgs(args: unknown[], config: RedactionConfig = {}): unknown[] {
   return args.map((arg) => redactValue(arg, config))
 }

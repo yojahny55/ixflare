@@ -275,7 +275,8 @@ describe('integration: error sanitization with various secret types', () => {
   })
 
   it('should sanitize JWT tokens in errors', () => {
-    const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U'
+    const jwt =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U'
     const error = new Error(`Invalid token: ${jwt}`)
 
     const result = sanitizeError(error) as { message: string }

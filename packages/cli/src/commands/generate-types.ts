@@ -96,9 +96,9 @@ export function validateOutputPath(projectRoot: string, outputDir: string): stri
   if (rel.startsWith('..') || isAbsolute(rel)) {
     throw new Error(
       `Output path must be within project root.\n` +
-      `  Provided: ${outputDir}\n` +
-      `  Resolved: ${resolved}\n` +
-      `  Project root: ${projectRoot}`
+        `  Provided: ${outputDir}\n` +
+        `  Resolved: ${resolved}\n` +
+        `  Project root: ${projectRoot}`
     )
   }
 
@@ -171,7 +171,8 @@ async function findRouteFiles(dir: string, baseDir: string = dir): Promise<strin
     } else if (entry.isFile()) {
       // Include .ts and .tsx files, exclude test files and private files
       const ext = extname(entry.name)
-      const isRouteFile = (ext === '.ts' || ext === '.tsx') &&
+      const isRouteFile =
+        (ext === '.ts' || ext === '.tsx') &&
         !entry.name.includes('.test.') &&
         !entry.name.startsWith('_')
 
@@ -189,10 +190,7 @@ async function findRouteFiles(dir: string, baseDir: string = dir): Promise<strin
 /**
  * Generate route type declarations for all routes
  */
-export async function generateRouteTypes(
-  projectRoot: string,
-  outputDir?: string
-): Promise<string> {
+export async function generateRouteTypes(projectRoot: string, outputDir?: string): Promise<string> {
   const routesDir = join(projectRoot, 'src', 'routes')
 
   // Validate and resolve output path (prevent path traversal)
@@ -208,8 +206,8 @@ export async function generateRouteTypes(
   if (!existsSync(routesDir)) {
     throw new Error(
       `Routes directory not found: ${routesDir}\n\n` +
-      `To fix this, create the routes directory:\n` +
-      `  mkdir -p src/routes`
+        `To fix this, create the routes directory:\n` +
+        `  mkdir -p src/routes`
     )
   }
 
@@ -218,8 +216,7 @@ export async function generateRouteTypes(
 
   if (routeFiles.length === 0) {
     throw new Error(
-      `No route files found in: ${routesDir}\n\n` +
-      `Add .ts or .tsx route files to generate types.`
+      `No route files found in: ${routesDir}\n\n` + `Add .ts or .tsx route files to generate types.`
     )
   }
 
@@ -271,10 +268,7 @@ export async function generateRouteTypes(
 /**
  * Generate model type declarations (placeholder for AC3)
  */
-export async function generateModelTypes(
-  projectRoot: string,
-  outputDir?: string
-): Promise<string> {
+export async function generateModelTypes(projectRoot: string, outputDir?: string): Promise<string> {
   // Validate and resolve output path (prevent path traversal)
   let outputPath: string
   if (outputDir) {
@@ -311,10 +305,7 @@ export async function generateModelTypes(
 /**
  * Run type generation (used by both one-time and watch mode)
  */
-async function runTypeGeneration(
-  projectRoot: string,
-  outputDir?: string
-): Promise<void> {
+async function runTypeGeneration(projectRoot: string, outputDir?: string): Promise<void> {
   // Generate route types
   const routeTypesPath = await generateRouteTypes(projectRoot, outputDir)
   console.log('✅ Route types generated')

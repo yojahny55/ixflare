@@ -92,7 +92,10 @@ describe('CookieSignatureError', () => {
 
 describe('Error Information Leakage Prevention', () => {
   it('should not leak implementation details in error messages', () => {
-    const validationError = new CookieValidationError('PREFIX_INVALID', 'Prefix requirements not met')
+    const validationError = new CookieValidationError(
+      'PREFIX_INVALID',
+      'Prefix requirements not met'
+    )
     const securityError = new CookieSecurityError()
     const signatureError = new CookieSignatureError()
 

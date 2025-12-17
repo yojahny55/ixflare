@@ -97,10 +97,7 @@ export async function verifyCSRFSignature(
  * @param secret - HMAC secret key
  * @returns Signed token and metadata
  */
-export async function createSignedToken(
-  sessionId: string,
-  secret: string
-): Promise<CSRFToken> {
+export async function createSignedToken(sessionId: string, secret: string): Promise<CSRFToken> {
   const value = generateCSRFToken()
   const signature = await signCSRFToken(value, sessionId, secret)
   const signedToken = `${value}.${signature}`

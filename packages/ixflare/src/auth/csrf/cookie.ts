@@ -53,10 +53,7 @@ export function setCSRFCookie(
  * @param config - CSRF configuration (optional)
  * @returns Signed CSRF token or null if not found
  */
-export function getCSRFCookie(
-  request: Request,
-  config?: Partial<CSRFConfig>
-): string | null {
+export function getCSRFCookie(request: Request, config?: Partial<CSRFConfig>): string | null {
   const cookieName = config?.cookie ?? '__csrf'
   return getBaseCookie(request, cookieName)
 }

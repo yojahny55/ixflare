@@ -7,20 +7,13 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import {
-  createSignedToken,
-  verifyCSRFSignature,
-  csrf,
-} from '../../../src/auth/csrf'
+import { createSignedToken, verifyCSRFSignature, csrf } from '../../../src/auth/csrf'
 import { CSRFInvalidError } from '../../../src/auth/csrf/errors'
 import type { EdgeContext } from '../../../src/types/context'
 
 const TEST_SECRET = 'security-test-secret-32-chars!'
 
-function createMockContext(
-  request: Request,
-  session?: { id: string }
-): EdgeContext {
+function createMockContext(request: Request, session?: { id: string }): EdgeContext {
   const url = new URL(request.url)
   return {
     request,
@@ -198,14 +191,12 @@ describe('CSRF Security Tests (Epic 5 Requirements)', () => {
       const token = await createSignedToken(sessionId, TEST_SECRET)
 
       // Verify with correct session
-      expect(await verifyCSRFSignature(token.signedToken, sessionId, TEST_SECRET)).toBe(
-        true
-      )
+      expect(await verifyCSRFSignature(token.signedToken, sessionId, TEST_SECRET)).toBe(true)
 
       // Verify with wrong session
-      expect(
-        await verifyCSRFSignature(token.signedToken, 'different-session', TEST_SECRET)
-      ).toBe(false)
+      expect(await verifyCSRFSignature(token.signedToken, 'different-session', TEST_SECRET)).toBe(
+        false
+      )
     })
   })
 
@@ -380,9 +371,7 @@ describe('CSRF Security Tests (Epic 5 Requirements)', () => {
       const response = await middleware(ctx, next)
 
       expect(nextCalled).toBe(true)
-      expect(response.headers.get('Access-Control-Allow-Origin')).toBe(
-        'https://app.example.com'
-      )
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://app.example.com')
     })
   })
 

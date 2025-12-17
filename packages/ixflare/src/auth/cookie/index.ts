@@ -11,20 +11,10 @@
  */
 
 // Core cookie operations
-export {
-  setCookie,
-  getCookie,
-  parseCookies,
-  deleteCookie,
-} from './core'
+export { setCookie, getCookie, parseCookies, deleteCookie } from './core'
 
 // Signed cookie operations
-export {
-  signCookieValue,
-  verifyCookieSignature,
-  setSignedCookie,
-  getSignedCookie,
-} from './signed'
+export { signCookieValue, verifyCookieSignature, setSignedCookie, getSignedCookie } from './signed'
 
 // Security enforcement
 export {
@@ -36,16 +26,10 @@ export {
 } from './security'
 
 // Prefix validation
-export {
-  validateCookiePrefix,
-} from './prefix-validator'
+export { validateCookiePrefix } from './prefix-validator'
 
 // Types
-export type {
-  CookieOptions,
-  SignedCookieOptions,
-  Environment,
-} from './types'
+export type { CookieOptions, SignedCookieOptions, Environment } from './types'
 
 // Errors
 export {

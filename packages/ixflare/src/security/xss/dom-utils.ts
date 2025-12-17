@@ -59,11 +59,7 @@ export function setTextContent(element: HTMLElement, content: string): void {
  * @param value - Attribute value
  * @throws {InvalidAttributeError} If attribute name is an event handler (on*)
  */
-export function setAttribute(
-  element: HTMLElement,
-  name: string,
-  value: string
-): void {
+export function setAttribute(element: HTMLElement, name: string, value: string): void {
   // Block event handler attributes
   if (EVENT_HANDLER_PATTERN.test(name)) {
     throw new InvalidAttributeError(name)

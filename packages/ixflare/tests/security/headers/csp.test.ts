@@ -42,7 +42,9 @@ describe('generateNonce', () => {
 
   it('should generate nonces of minimum 128 bits', async () => {
     const nonce = await generateNonce()
-    const buffer = Uint8Array.from(atob(nonce.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))
+    const buffer = Uint8Array.from(atob(nonce.replace(/-/g, '+').replace(/_/g, '/')), (c) =>
+      c.charCodeAt(0)
+    )
 
     // 128 bits = 16 bytes
     expect(buffer.length).toBeGreaterThanOrEqual(16)

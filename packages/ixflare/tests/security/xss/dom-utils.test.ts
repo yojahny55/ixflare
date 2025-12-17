@@ -64,13 +64,7 @@ describe('DOM-Safe Utilities', () => {
     })
 
     it('should block all on* attributes', () => {
-      const eventHandlers = [
-        'onclick',
-        'onerror',
-        'onload',
-        'onmouseover',
-        'onfocus',
-      ]
+      const eventHandlers = ['onclick', 'onerror', 'onload', 'onmouseover', 'onfocus']
 
       eventHandlers.forEach((handler) => {
         expect(() => {

@@ -105,10 +105,7 @@ const ATTR_PATTERN = /([a-z][a-z0-9-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]*))/
  * @param options - Sanitization options
  * @returns Sanitized HTML string
  */
-export function sanitizeHtml(
-  input: string,
-  options: SanitizeOptions = {}
-): string {
+export function sanitizeHtml(input: string, options: SanitizeOptions = {}): string {
   if (!input) return input
 
   // Merge with defaults
@@ -149,11 +146,7 @@ export function sanitizeHtml(
 
     // Process attributes for opening tags
     const allowedAttrs = opts.allowedAttributes[lowerTag] || []
-    const sanitizedAttrs = sanitizeAttributes(
-      attributes,
-      allowedAttrs,
-      opts.allowedSchemes
-    )
+    const sanitizedAttrs = sanitizeAttributes(attributes, allowedAttrs, opts.allowedSchemes)
 
     // Self-closing tag
     if (match.endsWith('/>')) {

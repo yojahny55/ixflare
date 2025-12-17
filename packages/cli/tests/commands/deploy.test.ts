@@ -350,9 +350,7 @@ describe('deploy command', () => {
       const options = parseDeployArgs(['--var', 'INVALID_VAR_NO_COLON'])
 
       expect(options.vars).toEqual({})
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid --var format')
-      )
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid --var format'))
 
       warnSpy.mockRestore()
     })

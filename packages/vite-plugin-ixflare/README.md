@@ -498,7 +498,7 @@ The plugin automatically watches for route file changes:
 Three types of HMR updates:
 
 1. **Frontend Islands (.client.tsx)** - React Fast Refresh handles component updates with state preservation
-2. **Server Components (routes/*.tsx)** - Custom `ixflare:server-update` event swaps HTML while preserving island state
+2. **Server Components (routes/\*.tsx)** - Custom `ixflare:server-update` event swaps HTML while preserving island state
 3. **Route Manifest** - Virtual module invalidation for new/deleted routes
 
 **HMR Performance Monitoring:**

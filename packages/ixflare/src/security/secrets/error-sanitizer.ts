@@ -28,10 +28,7 @@ import type { RedactionConfig } from './types'
  * }
  * ```
  */
-export function sanitizeError(
-  error: unknown,
-  config: RedactionConfig = {}
-): unknown {
+export function sanitizeError(error: unknown, config: RedactionConfig = {}): unknown {
   // Handle non-Error types
   if (!(error instanceof Error)) {
     // If it's a plain object, redact it
@@ -113,10 +110,7 @@ function sanitizeString(str: string, config: RedactionConfig = {}): string {
  * }
  * ```
  */
-export function sanitizeFetchError(
-  error: unknown,
-  config: RedactionConfig = {}
-): unknown {
+export function sanitizeFetchError(error: unknown, config: RedactionConfig = {}): unknown {
   // Start with basic sanitization
   const sanitized = sanitizeError(error, config)
 
@@ -131,31 +125,16 @@ export function sanitizeFetchError(
 
     // Sanitize headers if present
     if (typeof errorObj.headers === 'object' && errorObj.headers !== null) {
-      errorObj.headers = redactObject(
-        errorObj.headers as Record<string, unknown>,
-        config
-      )
+      errorObj.headers = redactObject(errorObj.headers as Record<string, unknown>, config)
     }
 
     // Sanitize request/response details if present
-    if (
-      typeof errorObj.request === 'object' &&
-      errorObj.request !== null
-    ) {
-      errorObj.request = redactObject(
-        errorObj.request as Record<string, unknown>,
-        config
-      )
+    if (typeof errorObj.request === 'object' && errorObj.request !== null) {
+      errorObj.request = redactObject(errorObj.request as Record<string, unknown>, config)
     }
 
-    if (
-      typeof errorObj.response === 'object' &&
-      errorObj.response !== null
-    ) {
-      errorObj.response = redactObject(
-        errorObj.response as Record<string, unknown>,
-        config
-      )
+    if (typeof errorObj.response === 'object' && errorObj.response !== null) {
+      errorObj.response = redactObject(errorObj.response as Record<string, unknown>, config)
     }
   }
 

@@ -134,7 +134,7 @@ export class Logger {
 
     // Then apply tracker-based redaction for each arg
     const tracker = getSecretTracker()
-    redacted = redacted.map(arg => {
+    redacted = redacted.map((arg) => {
       if (typeof arg === 'string') {
         return tracker.redact(arg)
       }

@@ -170,7 +170,9 @@ export function extractModelsFromFilesWithWarnings(files: string[]): ModelExtrac
 
       models.push(...fileModels)
     } catch (error) {
-      warnings.push(`Could not read ${file}: ${error instanceof Error ? error.message : 'unknown error'}`)
+      warnings.push(
+        `Could not read ${file}: ${error instanceof Error ? error.message : 'unknown error'}`
+      )
     }
   }
 

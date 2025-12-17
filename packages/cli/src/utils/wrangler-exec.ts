@@ -24,7 +24,9 @@ export interface WranglerDeployOptions {
 /**
  * Execute wrangler deploy command with optional environment and flags
  */
-export async function executeWranglerDeploy(options: WranglerDeployOptions = {}): Promise<DeploymentResult> {
+export async function executeWranglerDeploy(
+  options: WranglerDeployOptions = {}
+): Promise<DeploymentResult> {
   return new Promise((resolve) => {
     const args = ['deploy']
 

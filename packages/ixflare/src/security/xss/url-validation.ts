@@ -116,10 +116,7 @@ const NAMED_ENTITIES: Record<string, string> = {
  * @param options - Validation options
  * @returns true if URL is safe, false otherwise
  */
-export function isUrlSafe(
-  url: string,
-  options: UrlValidationOptions = {}
-): boolean {
+export function isUrlSafe(url: string, options: UrlValidationOptions = {}): boolean {
   if (!url) return false
 
   // Merge with defaults

@@ -23,7 +23,8 @@ const DEFAULT_VERSION = '0.0.0'
  * Allows: IPv4 addresses, IPv6 addresses, hostnames, and special values like '0.0.0.0'
  * SECURITY: Prevents command injection by only allowing safe characters
  */
-const VALID_HOST_PATTERN = /^(?:(?:localhost|0\.0\.0\.0|true|\d{1,3}(?:\.\d{1,3}){3})|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)|(?:\[[\da-fA-F:]+\]))$/
+const VALID_HOST_PATTERN =
+  /^(?:(?:localhost|0\.0\.0\.0|true|\d{1,3}(?:\.\d{1,3}){3})|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)|(?:\[[\da-fA-F:]+\]))$/
 
 /**
  * Validate host argument to prevent command injection
@@ -115,7 +116,9 @@ export async function findAvailablePort(startPort: number): Promise<number> {
     port++
   }
 
-  throw new Error(`Could not find available port after ${maxAttempts} attempts starting from ${startPort}`)
+  throw new Error(
+    `Could not find available port after ${maxAttempts} attempts starting from ${startPort}`
+  )
 }
 
 /**
@@ -169,18 +172,28 @@ export function displayBanner(options: BannerOptions): void {
   console.log('')
   console.log('  ╭─────────────────────────────────────────╮')
   console.log('  │                                         │')
-  console.log('  │   ' + pc.cyan(pc.bold('Ixflare')) + ` v${version}` + ' '.repeat(Math.max(0, 28 - version.length)) + '│')
+  console.log(
+    '  │   ' +
+      pc.cyan(pc.bold('Ixflare')) +
+      ` v${version}` +
+      ' '.repeat(Math.max(0, 28 - version.length)) +
+      '│'
+  )
   console.log('  │                                         │')
 
   // Local URL line - "➜  " prefix is 3 chars, content area is 37
   const localPadded = padLine(localText)
-  console.log('  │   ' + pc.green('➜') + '  ' + localPadded.replace(localUrl, pc.cyan(localUrl)) + '│')
+  console.log(
+    '  │   ' + pc.green('➜') + '  ' + localPadded.replace(localUrl, pc.cyan(localUrl)) + '│'
+  )
 
   if (networkAddress) {
     const networkUrl = `http://${networkAddress}:${port}`
     const networkText = `Network: ${networkUrl}`
     const networkPadded = padLine(networkText)
-    console.log('  │   ' + pc.green('➜') + '  ' + networkPadded.replace(networkUrl, pc.cyan(networkUrl)) + '│')
+    console.log(
+      '  │   ' + pc.green('➜') + '  ' + networkPadded.replace(networkUrl, pc.cyan(networkUrl)) + '│'
+    )
   }
 
   console.log('  │                                         │')
@@ -198,8 +211,15 @@ export function displayBanner(options: BannerOptions): void {
 export function displayPortConflictMessage(occupiedPort: number, suggestedPort: number): void {
   console.error('')
   console.error(pc.red('Port ' + occupiedPort + ' is in use.') + ' Suggestions:')
-  console.error(pc.dim('  • Use ') + pc.cyan(`--port ${suggestedPort}`) + pc.dim(' (next available)'))
-  console.error(pc.dim('  • Kill process on ') + occupiedPort + pc.dim(': ') + pc.yellow(`lsof -ti:${occupiedPort} | xargs kill -9`))
+  console.error(
+    pc.dim('  • Use ') + pc.cyan(`--port ${suggestedPort}`) + pc.dim(' (next available)')
+  )
+  console.error(
+    pc.dim('  • Kill process on ') +
+      occupiedPort +
+      pc.dim(': ') +
+      pc.yellow(`lsof -ti:${occupiedPort} | xargs kill -9`)
+  )
   console.error('')
 }
 
@@ -376,7 +396,10 @@ export async function dev(options: DevOptions = {}): Promise<void> {
           await generateRouteTypes(process.cwd())
           console.log(pc.dim('[types] ') + pc.green('Route types regenerated'))
         } catch (error) {
-          console.error(pc.dim('[types] ') + pc.red('Type generation failed:'), error instanceof Error ? error.message : String(error))
+          console.error(
+            pc.dim('[types] ') + pc.red('Type generation failed:'),
+            error instanceof Error ? error.message : String(error)
+          )
         } finally {
           regenerating = false
         }

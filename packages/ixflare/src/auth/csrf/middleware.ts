@@ -41,10 +41,7 @@ const DEFAULT_CSRF_CONFIG: CSRFConfig = {
  * @param config - CSRF configuration
  * @returns Token value or null if not found
  */
-async function extractToken(
-  request: Request,
-  config: CSRFConfig
-): Promise<string | null> {
+async function extractToken(request: Request, config: CSRFConfig): Promise<string | null> {
   // Try header first (API/fetch requests)
   const headerToken = request.headers.get(config.header)
   if (headerToken) {
@@ -129,9 +126,7 @@ function getSessionId(ctx: any): string | null {
  * export const middleware = [csrf({ secret: env.CSRF_SECRET })]
  * ```
  */
-export function csrf<Env = unknown>(
-  config?: Partial<CSRFConfig>
-): Middleware<Env> {
+export function csrf<Env = unknown>(config?: Partial<CSRFConfig>): Middleware<Env> {
   const opts = { ...DEFAULT_CSRF_CONFIG, ...config }
 
   // Validate secret is provided

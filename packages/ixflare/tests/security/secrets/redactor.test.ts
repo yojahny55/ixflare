@@ -23,7 +23,8 @@ describe('redactString', () => {
   })
 
   it('should redact multiple secrets in one string', () => {
-    const input = 'API Key: sk_live_51HvI9aB2C3D4E5F6G7H8I9J and JWT: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.signature'
+    const input =
+      'API Key: sk_live_51HvI9aB2C3D4E5F6G7H8I9J and JWT: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.signature'
     const result = redactString(input, DEFAULT_REDACT_PATTERNS)
     expect(result).toContain('[REDACTED]')
     expect(result).not.toContain('sk_live_')
@@ -242,15 +243,9 @@ describe('redactValue', () => {
   })
 
   it('should handle arrays', () => {
-    const input = [
-      { password: 'secret1' },
-      { password: 'secret2' },
-    ]
+    const input = [{ password: 'secret1' }, { password: 'secret2' }]
     const result = redactValue(input)
-    expect(result).toEqual([
-      { password: '[REDACTED]' },
-      { password: '[REDACTED]' },
-    ])
+    expect(result).toEqual([{ password: '[REDACTED]' }, { password: '[REDACTED]' }])
   })
 
   it('should handle null', () => {
@@ -337,7 +332,7 @@ describe('redaction accuracy (security critical)', () => {
       'ghp_1234567890abcdefghijklmnopqrstuvwxyz',
     ]
 
-    secretFormats.forEach(secret => {
+    secretFormats.forEach((secret) => {
       const result = redactString(secret, DEFAULT_REDACT_PATTERNS)
       expect(result).toContain('[REDACTED]')
       expect(result).not.toBe(secret)

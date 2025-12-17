@@ -142,7 +142,9 @@ export const securityHeadersConfigSchema = z.object({
   xXssProtection: z.boolean().optional(),
   permissionsPolicy: permissionsPolicyConfigSchema.optional(),
   crossOriginEmbedderPolicy: z.enum(['unsafe-none', 'require-corp', 'credentialless']).optional(),
-  crossOriginOpenerPolicy: z.enum(['unsafe-none', 'same-origin-allow-popups', 'same-origin']).optional(),
+  crossOriginOpenerPolicy: z
+    .enum(['unsafe-none', 'same-origin-allow-popups', 'same-origin'])
+    .optional(),
   crossOriginResourcePolicy: z.enum(['same-site', 'same-origin', 'cross-origin']).optional(),
   httpsRedirect: z.boolean().optional(),
 })

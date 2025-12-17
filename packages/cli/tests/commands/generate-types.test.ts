@@ -157,10 +157,7 @@ describe('generate:types command', () => {
     })
 
     it('should handle complex paths', () => {
-      const options = parseGenerateTypesArgs([
-        '--output',
-        '../../some/nested/path/types',
-      ])
+      const options = parseGenerateTypesArgs(['--output', '../../some/nested/path/types'])
 
       expect(options.output).toBe('../../some/nested/path/types')
     })
@@ -188,12 +185,7 @@ describe('generate:types command', () => {
     })
 
     it('should handle duplicate flags by using last value for output', () => {
-      const options = parseGenerateTypesArgs([
-        '--output',
-        'first',
-        '--output',
-        'second',
-      ])
+      const options = parseGenerateTypesArgs(['--output', 'first', '--output', 'second'])
 
       expect(options.output).toBe('second')
     })
@@ -215,9 +207,7 @@ describe('generate:types command', () => {
     it('should extract single dynamic parameter', () => {
       const params = extractRouteParams('users/[userId].tsx')
 
-      expect(params).toEqual([
-        { name: 'userId', optional: false, catchAll: false },
-      ])
+      expect(params).toEqual([{ name: 'userId', optional: false, catchAll: false }])
     })
 
     it('should extract multiple dynamic parameters', () => {
@@ -232,25 +222,19 @@ describe('generate:types command', () => {
     it('should extract optional parameter', () => {
       const params = extractRouteParams('users/[[optional]].tsx')
 
-      expect(params).toEqual([
-        { name: 'optional', optional: true, catchAll: false },
-      ])
+      expect(params).toEqual([{ name: 'optional', optional: true, catchAll: false }])
     })
 
     it('should extract catch-all parameter', () => {
       const params = extractRouteParams('docs/[...slug].tsx')
 
-      expect(params).toEqual([
-        { name: 'slug', optional: false, catchAll: true },
-      ])
+      expect(params).toEqual([{ name: 'slug', optional: false, catchAll: true }])
     })
 
     it('should extract optional catch-all parameter', () => {
       const params = extractRouteParams('docs/[[...slug]].tsx')
 
-      expect(params).toEqual([
-        { name: 'slug', optional: true, catchAll: true },
-      ])
+      expect(params).toEqual([{ name: 'slug', optional: true, catchAll: true }])
     })
 
     it('should handle nested paths with parameters', () => {
@@ -280,33 +264,25 @@ describe('generate:types command', () => {
     })
 
     it('should generate type for single required parameter', () => {
-      const type = generateRouteParamsType([
-        { name: 'userId', optional: false, catchAll: false },
-      ])
+      const type = generateRouteParamsType([{ name: 'userId', optional: false, catchAll: false }])
 
       expect(type).toBe('export interface Params {\n  userId: string\n}')
     })
 
     it('should generate type for optional parameter', () => {
-      const type = generateRouteParamsType([
-        { name: 'optional', optional: true, catchAll: false },
-      ])
+      const type = generateRouteParamsType([{ name: 'optional', optional: true, catchAll: false }])
 
       expect(type).toBe('export interface Params {\n  optional?: string\n}')
     })
 
     it('should generate type for catch-all parameter', () => {
-      const type = generateRouteParamsType([
-        { name: 'slug', optional: false, catchAll: true },
-      ])
+      const type = generateRouteParamsType([{ name: 'slug', optional: false, catchAll: true }])
 
       expect(type).toBe('export interface Params {\n  slug: string[]\n}')
     })
 
     it('should generate type for optional catch-all parameter', () => {
-      const type = generateRouteParamsType([
-        { name: 'slug', optional: true, catchAll: true },
-      ])
+      const type = generateRouteParamsType([{ name: 'slug', optional: true, catchAll: true }])
 
       expect(type).toBe('export interface Params {\n  slug?: string[]\n}')
     })
@@ -317,9 +293,7 @@ describe('generate:types command', () => {
         { name: 'postId', optional: false, catchAll: false },
       ])
 
-      expect(type).toBe(
-        'export interface Params {\n  userId: string\n  postId: string\n}'
-      )
+      expect(type).toBe('export interface Params {\n  userId: string\n  postId: string\n}')
     })
 
     it('should generate type for mix of optional and required', () => {
@@ -328,9 +302,7 @@ describe('generate:types command', () => {
         { name: 'postId', optional: true, catchAll: false },
       ])
 
-      expect(type).toBe(
-        'export interface Params {\n  userId: string\n  postId?: string\n}'
-      )
+      expect(type).toBe('export interface Params {\n  userId: string\n  postId?: string\n}')
     })
   })
 

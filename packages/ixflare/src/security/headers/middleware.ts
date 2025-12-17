@@ -7,7 +7,13 @@
 
 import type { Middleware } from '@/core/middleware'
 import type { SecurityHeadersConfig } from './types'
-import { buildCSPHeader, getCSPHeaderName, generateNonce, setRequestNonce, clearRequestNonce } from './csp'
+import {
+  buildCSPHeader,
+  getCSPHeaderName,
+  generateNonce,
+  setRequestNonce,
+  clearRequestNonce,
+} from './csp'
 import { buildHSTSHeader } from './hsts'
 import { buildPermissionsPolicyHeader } from './permissions'
 import {
@@ -107,8 +113,9 @@ export function createSecurityHeadersMiddleware(
   return async (ctx, next) => {
     // Determine effective config early for HTTPS redirect check
     // Route config type assertion - routeConfig is dynamically added by router
-    const routeConfig = (ctx as { routeConfig?: { security?: { headers?: SecurityHeadersConfig | false } } })
-      .routeConfig?.security?.headers
+    const routeConfig = (
+      ctx as { routeConfig?: { security?: { headers?: SecurityHeadersConfig | false } } }
+    ).routeConfig?.security?.headers
 
     // If route disabled headers entirely, skip all processing including HTTPS redirect
     if (routeConfig === false) {
@@ -160,7 +167,10 @@ export function createSecurityHeadersMiddleware(
       const headers = new Headers(response.headers)
 
       // Content-Security-Policy
-      if (effectiveConfig.contentSecurityPolicy !== false && effectiveConfig.contentSecurityPolicy !== undefined) {
+      if (
+        effectiveConfig.contentSecurityPolicy !== false &&
+        effectiveConfig.contentSecurityPolicy !== undefined
+      ) {
         const cspConfig = effectiveConfig.contentSecurityPolicy
         const csp = buildCSPHeader(cspConfig, nonce)
         const headerName = getCSPHeaderName(cspConfig.reportOnly)
@@ -174,10 +184,14 @@ export function createSecurityHeadersMiddleware(
       }
 
       // Strict-Transport-Security
-      if (effectiveConfig.strictTransportSecurity !== undefined && effectiveConfig.strictTransportSecurity !== false) {
-        const hstsConfig = effectiveConfig.strictTransportSecurity === true
-          ? DEFAULT_SECURITY_HEADERS_CONFIG.strictTransportSecurity
-          : effectiveConfig.strictTransportSecurity
+      if (
+        effectiveConfig.strictTransportSecurity !== undefined &&
+        effectiveConfig.strictTransportSecurity !== false
+      ) {
+        const hstsConfig =
+          effectiveConfig.strictTransportSecurity === true
+            ? DEFAULT_SECURITY_HEADERS_CONFIG.strictTransportSecurity
+            : effectiveConfig.strictTransportSecurity
         const hsts = buildHSTSHeader(hstsConfig)
         headers.set('Strict-Transport-Security', hsts)
       }
@@ -195,7 +209,10 @@ export function createSecurityHeadersMiddleware(
       }
 
       // Referrer-Policy
-      if (effectiveConfig.referrerPolicy !== false && effectiveConfig.referrerPolicy !== undefined) {
+      if (
+        effectiveConfig.referrerPolicy !== false &&
+        effectiveConfig.referrerPolicy !== undefined
+      ) {
         const value = buildReferrerPolicyHeader(effectiveConfig.referrerPolicy)
         headers.set('Referrer-Policy', value)
       }
@@ -216,7 +233,9 @@ export function createSecurityHeadersMiddleware(
 
       // Cross-Origin-Embedder-Policy
       if (effectiveConfig.crossOriginEmbedderPolicy) {
-        const value = buildCrossOriginEmbedderPolicyHeader(effectiveConfig.crossOriginEmbedderPolicy)
+        const value = buildCrossOriginEmbedderPolicyHeader(
+          effectiveConfig.crossOriginEmbedderPolicy
+        )
         headers.set('Cross-Origin-Embedder-Policy', value)
       }
 
@@ -228,7 +247,9 @@ export function createSecurityHeadersMiddleware(
 
       // Cross-Origin-Resource-Policy
       if (effectiveConfig.crossOriginResourcePolicy) {
-        const value = buildCrossOriginResourcePolicyHeader(effectiveConfig.crossOriginResourcePolicy)
+        const value = buildCrossOriginResourcePolicyHeader(
+          effectiveConfig.crossOriginResourcePolicy
+        )
         headers.set('Cross-Origin-Resource-Policy', value)
       }
 

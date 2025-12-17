@@ -80,6 +80,7 @@ const commands: Record<string, () => Promise<void>> = {
     const m = await import('./commands/db/studio')
     await m.studio({
       port: getArgValue('--port'),
+      binding: getArgValue('--binding'),
       remote: args.includes('--remote'),
       open: args.includes('--open'),
       help: args.includes('--help') || args.includes('-h'),
@@ -88,8 +89,7 @@ const commands: Record<string, () => Promise<void>> = {
   generate: () => import('./commands/generate').then((m) => m.generate()),
   'generate:env': () =>
     import('./commands/generate-env-types').then((m) => m.generateEnvCommand({})),
-  'generate:types': () =>
-    import('./commands/generate-types').then((m) => m.generateTypes()),
+  'generate:types': () => import('./commands/generate-types').then((m) => m.generateTypes()),
   'auth:rotate-keys': () => import('./commands/auth/rotate-keys').then((m) => m.rotateKeys()),
   'security:audit': async () => {
     const args = process.argv.slice(3)
@@ -104,7 +104,10 @@ const commands: Record<string, () => Promise<void>> = {
     // Validate --audit-level input
     const validAuditLevels = ['low', 'moderate', 'high', 'critical'] as const
     const auditLevelArg = getArgValue('--audit-level')
-    if (auditLevelArg && !validAuditLevels.includes(auditLevelArg as typeof validAuditLevels[number])) {
+    if (
+      auditLevelArg &&
+      !validAuditLevels.includes(auditLevelArg as (typeof validAuditLevels)[number])
+    ) {
       console.error(`Error: Invalid audit level "${auditLevelArg}"`)
       console.error(`Valid levels: ${validAuditLevels.join(', ')}`)
       process.exit(1)

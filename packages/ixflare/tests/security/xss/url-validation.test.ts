@@ -10,9 +10,7 @@ describe('isUrlSafe', () => {
     })
 
     it('should block data: protocol', () => {
-      expect(isUrlSafe('data:text/html,<script>alert(1)</script>')).toBe(
-        false
-      )
+      expect(isUrlSafe('data:text/html,<script>alert(1)</script>')).toBe(false)
       expect(isUrlSafe('DATA:text/html,test')).toBe(false)
     })
 
@@ -70,34 +68,24 @@ describe('isUrlSafe', () => {
 
   describe('Custom Configuration', () => {
     it('should respect custom allowed schemes', () => {
-      expect(
-        isUrlSafe('ftp://example.com', { allowedSchemes: ['ftp'] })
-      ).toBe(true)
-      expect(
-        isUrlSafe('ftp://example.com', { allowedSchemes: ['http', 'https'] })
-      ).toBe(false)
+      expect(isUrlSafe('ftp://example.com', { allowedSchemes: ['ftp'] })).toBe(true)
+      expect(isUrlSafe('ftp://example.com', { allowedSchemes: ['http', 'https'] })).toBe(false)
     })
 
     it('should block schemes not in allowed list', () => {
-      expect(
-        isUrlSafe('http://example.com', { allowedSchemes: ['https'] })
-      ).toBe(false)
+      expect(isUrlSafe('http://example.com', { allowedSchemes: ['https'] })).toBe(false)
     })
 
     it('should allow disabling relative URLs', () => {
       expect(isUrlSafe('/path', { allowRelative: false })).toBe(false)
-      expect(
-        isUrlSafe('https://example.com', { allowRelative: false })
-      ).toBe(true)
+      expect(isUrlSafe('https://example.com', { allowRelative: false })).toBe(true)
     })
   })
 
   describe('Encoding Bypass Prevention', () => {
     it('should decode URL-encoded schemes', () => {
       // %6a%61%76%61%73%63%72%69%70%74 = javascript
-      expect(isUrlSafe('%6a%61%76%61%73%63%72%69%70%74:alert(1)')).toBe(
-        false
-      )
+      expect(isUrlSafe('%6a%61%76%61%73%63%72%69%70%74:alert(1)')).toBe(false)
     })
 
     it('should handle mixed encoding', () => {
@@ -112,7 +100,9 @@ describe('isUrlSafe', () => {
     it('should handle triple encoding', () => {
       // Triple-encoded 'javascript'
       // j = %6a -> %256a -> %25256a
-      expect(isUrlSafe('%25256a%252561%252576%252561%252573%252563%252572%252569%252570%252574:alert(1)')).toBe(false)
+      expect(
+        isUrlSafe('%25256a%252561%252576%252561%252573%252563%252572%252569%252570%252574:alert(1)')
+      ).toBe(false)
     })
 
     it('should prevent infinite decoding loops', () => {

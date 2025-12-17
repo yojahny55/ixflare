@@ -117,7 +117,8 @@ describe('sanitizeHtml', () => {
 
   describe('URL Scheme Validation', () => {
     it('should allow safe URL schemes', () => {
-      const html = '<a href="https://example.com">HTTPS</a><a href="mailto:test@example.com">Email</a>'
+      const html =
+        '<a href="https://example.com">HTTPS</a><a href="mailto:test@example.com">Email</a>'
       const sanitized = sanitizeHtml(html, {
         allowedTags: ['a'],
         allowedAttributes: { a: ['href'] },
@@ -235,7 +236,8 @@ describe('sanitizeHtml', () => {
     })
 
     it('should handle encoding bypass attempts', () => {
-      const html = '<a href="&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;&#58;">Link</a>'
+      const html =
+        '<a href="&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;&#58;">Link</a>'
       const sanitized = sanitizeHtml(html, {
         allowedTags: ['a'],
         allowedAttributes: { a: ['href'] },
@@ -266,7 +268,8 @@ describe('sanitizeHtml', () => {
     })
 
     it('should allow safe srcset attribute', () => {
-      const html = '<img srcset="https://example.com/small.jpg 1x, https://example.com/large.jpg 2x">'
+      const html =
+        '<img srcset="https://example.com/small.jpg 1x, https://example.com/large.jpg 2x">'
       const sanitized = sanitizeHtml(html, {
         allowedTags: ['img'],
         allowedAttributes: { img: ['srcset'] },
@@ -327,7 +330,8 @@ describe('sanitizeHtml', () => {
 
     it('should decode numeric character references', () => {
       // &#106; = j, &#97; = a, etc. to spell "javascript"
-      const html = '<a href="&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;:alert(1)">Link</a>'
+      const html =
+        '<a href="&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;:alert(1)">Link</a>'
       const sanitized = sanitizeHtml(html, {
         allowedTags: ['a'],
         allowedAttributes: { a: ['href'] },
@@ -356,7 +360,8 @@ describe('sanitizeHtml', () => {
     })
 
     it('should handle math/mtext mXSS vector', () => {
-      const html = '<math><mtext><table><mglyph><style><img src=x onerror=alert(1)></style></table></mtext></math>'
+      const html =
+        '<math><mtext><table><mglyph><style><img src=x onerror=alert(1)></style></table></mtext></math>'
       const sanitized = sanitizeHtml(html, {
         allowedTags: ['p', 'table'],
       })
@@ -365,7 +370,8 @@ describe('sanitizeHtml', () => {
     })
 
     it('should handle textarea-based mXSS', () => {
-      const html = '<form><math><mtext></form><form><mglyph><svg><mtext><textarea><path id="</textarea><img onerror=alert(1) src>">'
+      const html =
+        '<form><math><mtext></form><form><mglyph><svg><mtext><textarea><path id="</textarea><img onerror=alert(1) src>">'
       const sanitized = sanitizeHtml(html, {
         allowedTags: ['form'],
         allowedAttributes: {},

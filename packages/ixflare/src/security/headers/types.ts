@@ -8,7 +8,13 @@
 /**
  * Content-Security-Policy directive source values
  */
-export type CSPSource = "'self'" | "'none'" | "'unsafe-inline'" | "'unsafe-eval'" | "'strict-dynamic'" | string
+export type CSPSource =
+  | "'self'"
+  | "'none'"
+  | "'unsafe-inline'"
+  | "'unsafe-eval'"
+  | "'strict-dynamic'"
+  | string
 
 /**
  * Content-Security-Policy configuration

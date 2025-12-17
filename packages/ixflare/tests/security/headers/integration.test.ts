@@ -242,9 +242,10 @@ describe('Security Headers Integration', () => {
 
     const mockRequest = new Request('https://example.com/test')
     const mockContext = { request: mockRequest } as any
-    const mockNext = async () => new Response('OK', {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    const mockNext = async () =>
+      new Response('OK', {
+        headers: { 'Content-Type': 'application/json' },
+      })
 
     const response = await middleware(mockContext, mockNext)
 

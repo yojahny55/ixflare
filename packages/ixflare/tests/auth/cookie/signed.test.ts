@@ -72,9 +72,7 @@ describe('signCookieValue', () => {
   })
 
   it('should throw CookieSignatureError for empty secret', async () => {
-    await expect(signCookieValue('session', 'user123', '')).rejects.toThrow(
-      CookieSignatureError
-    )
+    await expect(signCookieValue('session', 'user123', '')).rejects.toThrow(CookieSignatureError)
   })
 
   it('should warn for short secret but still sign', async () => {
@@ -83,12 +81,8 @@ describe('signCookieValue', () => {
     const shortSecret = 'short-secret' // Less than 32 chars
     const signed = await signCookieValue('session', 'user123', shortSecret)
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[COOKIE SECURITY]')
-    )
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('recommended minimum')
-    )
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('[COOKIE SECURITY]'))
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('recommended minimum'))
 
     // Should still produce a valid signature
     const verified = await verifyCookieSignature('session', signed, shortSecret)
@@ -387,12 +381,7 @@ describe('Integration: Signed Cookie Round-trip', () => {
 
   it('should handle values containing dots correctly', async () => {
     // Values with dots should work (common in JWTs, UUIDs, etc.)
-    const testCases = [
-      'user.role.admin',
-      'a.b.c.d.e',
-      '1.2.3',
-      'config.setting.value.nested',
-    ]
+    const testCases = ['user.role.admin', 'a.b.c.d.e', '1.2.3', 'config.setting.value.nested']
 
     for (const value of testCases) {
       const signed = await signCookieValue('test', value, TEST_SECRET)

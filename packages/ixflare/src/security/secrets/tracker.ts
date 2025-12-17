@@ -85,9 +85,7 @@ export class SecretTracker {
   setDebugMode(enabled: boolean): void {
     // Only allow enabling debug mode in non-production
     if (enabled && this.isProduction()) {
-      console.warn(
-        'IX_DEBUG_SECRETS cannot be enabled in production - request ignored'
-      )
+      console.warn('IX_DEBUG_SECRETS cannot be enabled in production - request ignored')
       return
     }
 
@@ -234,10 +232,7 @@ export function autoTrackSecrets(
   const tracked: string[] = []
   const skipped: string[] = []
 
-  const allPatterns = [
-    ...SECRET_NAME_PATTERNS,
-    ...(options.additionalPatterns || []),
-  ]
+  const allPatterns = [...SECRET_NAME_PATTERNS, ...(options.additionalPatterns || [])]
   const excludeSet = new Set(options.exclude || [])
   const includeSet = new Set(options.include || [])
 
@@ -261,8 +256,7 @@ export function autoTrackSecrets(
     }
 
     // Check if key should be tracked
-    const shouldTrack =
-      includeSet.has(key) || allPatterns.some((pattern) => pattern.test(key))
+    const shouldTrack = includeSet.has(key) || allPatterns.some((pattern) => pattern.test(key))
 
     if (shouldTrack) {
       tracker.track(key, value)

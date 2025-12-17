@@ -4,7 +4,10 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { buildPermissionsPolicyHeader, DEFAULT_PERMISSIONS_POLICY_CONFIG } from '@/security/headers/permissions'
+import {
+  buildPermissionsPolicyHeader,
+  DEFAULT_PERMISSIONS_POLICY_CONFIG,
+} from '@/security/headers/permissions'
 
 describe('buildPermissionsPolicyHeader', () => {
   it('should build policy with disabled features', () => {

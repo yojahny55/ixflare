@@ -99,17 +99,23 @@ export function checkBundleSize(gzipSize: number): string[] {
 
   // Internal target check (info level)
   if (sizeKB > INTERNAL_TARGET_KB) {
-    warnings.push(`Bundle exceeds internal target of ${INTERNAL_TARGET_KB}KB (actual: ${formatSize(gzipSize)})`)
+    warnings.push(
+      `Bundle exceeds internal target of ${INTERNAL_TARGET_KB}KB (actual: ${formatSize(gzipSize)})`
+    )
   }
 
   // Workers free tier limit
   if (sizeMB > WORKERS_FREE_MB) {
-    warnings.push(`Bundle exceeds Workers free tier limit of ${WORKERS_FREE_MB}MB (actual: ${formatSize(gzipSize)})`)
+    warnings.push(
+      `Bundle exceeds Workers free tier limit of ${WORKERS_FREE_MB}MB (actual: ${formatSize(gzipSize)})`
+    )
   }
 
   // Workers paid tier limit
   if (sizeMB > WORKERS_PAID_MB) {
-    warnings.push(`Bundle exceeds Workers paid tier limit of ${WORKERS_PAID_MB}MB (actual: ${formatSize(gzipSize)})`)
+    warnings.push(
+      `Bundle exceeds Workers paid tier limit of ${WORKERS_PAID_MB}MB (actual: ${formatSize(gzipSize)})`
+    )
   }
 
   return warnings
@@ -163,7 +169,9 @@ function displayBundleSizes(bundles: BundleSizeInfo[]): void {
 
   // Find server bundle
   const serverBundle = bundles.find((b) => b.file.includes('_worker'))
-  const clientBundles = bundles.filter((b) => !b.file.includes('_worker') && b.file.includes('assets'))
+  const clientBundles = bundles.filter(
+    (b) => !b.file.includes('_worker') && b.file.includes('assets')
+  )
 
   if (serverBundle) {
     console.log(`✓ Server bundle: ${pc.cyan(formatSize(serverBundle.gzipSize))} (gzip)`)

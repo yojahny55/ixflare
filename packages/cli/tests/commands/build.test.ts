@@ -135,7 +135,9 @@ describe('build command', () => {
       await build({})
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Build failed'))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('TypeScript compilation failed'))
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('TypeScript compilation failed')
+      )
       expect(mockExit).toHaveBeenCalledWith(1)
     })
 
@@ -224,7 +226,7 @@ describe('build command', () => {
       const warnings = checkBundleSize(4 * 1024 * 1024) // 4MB
 
       expect(warnings.length).toBeGreaterThan(0)
-      expect(warnings.some(w => w.includes('3MB'))).toBe(true)
+      expect(warnings.some((w) => w.includes('3MB'))).toBe(true)
     })
 
     it('should warn when bundle exceeds Workers paid tier limit (10MB)', async () => {
@@ -233,7 +235,7 @@ describe('build command', () => {
       const warnings = checkBundleSize(11 * 1024 * 1024) // 11MB
 
       expect(warnings.length).toBeGreaterThan(0)
-      expect(warnings.some(w => w.includes('10MB'))).toBe(true)
+      expect(warnings.some((w) => w.includes('10MB'))).toBe(true)
     })
   })
 
@@ -283,7 +285,9 @@ describe('build command', () => {
     })
 
     it('should handle TypeScript errors from Vite', async () => {
-      const tsError = new Error('src/index.ts:10:3 - error TS2322: Type "string" is not assignable to type "number"')
+      const tsError = new Error(
+        'src/index.ts:10:3 - error TS2322: Type "string" is not assignable to type "number"'
+      )
       buildMock.mockRejectedValue(tsError)
 
       const { build } = await import('../../src/commands/build')

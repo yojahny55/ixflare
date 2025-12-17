@@ -22,9 +22,7 @@ describe('escapeHtml', () => {
   })
 
   it('should escape quotes', () => {
-    expect(escapeHtml(`"double" and 'single'`)).toBe(
-      '&quot;double&quot; and &#x27;single&#x27;'
-    )
+    expect(escapeHtml(`"double" and 'single'`)).toBe('&quot;double&quot; and &#x27;single&#x27;')
   })
 
   it('should handle empty strings', () => {

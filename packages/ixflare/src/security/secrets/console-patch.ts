@@ -45,10 +45,7 @@ function wrapArgs(args: unknown[]): unknown[] {
  * @param tracker - Secret tracker instance
  * @returns Value with tracked secrets redacted
  */
-function redactTrackedValue(
-  value: unknown,
-  tracker: ReturnType<typeof getSecretTracker>
-): unknown {
+function redactTrackedValue(value: unknown, tracker: ReturnType<typeof getSecretTracker>): unknown {
   if (value === null || value === undefined) {
     return value
   }

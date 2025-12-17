@@ -15,10 +15,7 @@ const TEST_SECRET = 'test-secret-key-for-csrf-32-chars'
 /**
  * Create a mock EdgeContext for testing
  */
-function createMockContext(
-  request: Request,
-  session?: { id: string }
-): EdgeContext {
+function createMockContext(request: Request, session?: { id: string }): EdgeContext {
   const url = new URL(request.url)
 
   return {

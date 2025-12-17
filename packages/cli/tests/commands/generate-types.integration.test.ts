@@ -58,7 +58,11 @@ describe('generate:types integration', () => {
       await mkdir(routesDir, { recursive: true })
 
       await mkdir(join(routesDir, 'docs'), { recursive: true })
-      await writeFile(join(routesDir, 'docs', '[[optional]].tsx'), 'export function GET() {}', 'utf-8')
+      await writeFile(
+        join(routesDir, 'docs', '[[optional]].tsx'),
+        'export function GET() {}',
+        'utf-8'
+      )
 
       const outputPath = await generateRouteTypes(testDir)
       const content = await readFile(outputPath, 'utf-8')
@@ -86,7 +90,11 @@ describe('generate:types integration', () => {
       await mkdir(routesDir, { recursive: true })
 
       await mkdir(join(routesDir, 'docs'), { recursive: true })
-      await writeFile(join(routesDir, 'docs', '[[...slug]].tsx'), 'export function GET() {}', 'utf-8')
+      await writeFile(
+        join(routesDir, 'docs', '[[...slug]].tsx'),
+        'export function GET() {}',
+        'utf-8'
+      )
 
       const outputPath = await generateRouteTypes(testDir)
       const content = await readFile(outputPath, 'utf-8')
@@ -142,18 +150,14 @@ describe('generate:types integration', () => {
     })
 
     it('should throw error if routes directory does not exist', async () => {
-      await expect(generateRouteTypes(testDir)).rejects.toThrow(
-        'Routes directory not found'
-      )
+      await expect(generateRouteTypes(testDir)).rejects.toThrow('Routes directory not found')
     })
 
     it('should throw error if no route files found', async () => {
       const routesDir = join(testDir, 'src', 'routes')
       await mkdir(routesDir, { recursive: true })
 
-      await expect(generateRouteTypes(testDir)).rejects.toThrow(
-        'No route files found'
-      )
+      await expect(generateRouteTypes(testDir)).rejects.toThrow('No route files found')
     })
   })
 

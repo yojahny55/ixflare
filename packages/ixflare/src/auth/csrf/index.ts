@@ -8,12 +8,7 @@
 
 export type { CSRFConfig, CSRFToken } from './types'
 export { CSRFError, CSRFInvalidError } from './errors'
-export {
-  generateCSRFToken,
-  signCSRFToken,
-  verifyCSRFSignature,
-  createSignedToken,
-} from './token'
+export { generateCSRFToken, signCSRFToken, verifyCSRFSignature, createSignedToken } from './token'
 export { setCSRFCookie, getCSRFCookie } from './cookie'
 export { csrf } from './middleware'
 export type { CSRFInputProps } from './client'

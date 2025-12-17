@@ -17,9 +17,7 @@ describe('CSRF Token Generation', () => {
       const token = generateCSRFToken()
 
       // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-      expect(token).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      )
+      expect(token).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
     })
 
     it('should generate unique tokens', () => {
@@ -207,9 +205,7 @@ describe('CSRF Token Generation', () => {
       expect(await verifyCSRFSignature(token.signedToken, sessionId, secret)).toBe(true)
 
       // Should fail with different session
-      expect(await verifyCSRFSignature(token.signedToken, 'different-session', secret)).toBe(
-        false
-      )
+      expect(await verifyCSRFSignature(token.signedToken, 'different-session', secret)).toBe(false)
     })
   })
 

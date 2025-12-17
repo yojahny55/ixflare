@@ -23,12 +23,7 @@
  */
 
 // Context-specific encoding
-export {
-  escapeHtml,
-  escapeHtmlAttribute,
-  escapeJavaScript,
-  escapeUrl,
-} from './escape'
+export { escapeHtml, escapeHtmlAttribute, escapeJavaScript, escapeUrl } from './escape'
 
 // HTML sanitization
 export { sanitizeHtml } from './sanitizer'
@@ -46,4 +41,9 @@ export { setTextContent, setAttribute, setInnerHTML } from './dom-utils'
 export { XSSError, UnsafeUrlError, InvalidAttributeError } from './errors'
 
 // Types
-export type { SanitizeOptions, UrlValidationOptions, UrlValidationResult, EncodingContext } from './types'
+export type {
+  SanitizeOptions,
+  UrlValidationOptions,
+  UrlValidationResult,
+  EncodingContext,
+} from './types'

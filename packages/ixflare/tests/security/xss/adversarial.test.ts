@@ -95,7 +95,9 @@ describe('Adversarial XSS Tests', () => {
     })
 
     it('should detect triple URL-encoded javascript', () => {
-      expect(isUrlSafe('%25256a%252561%252576%252561%252573%252563%252572%252569%252570%252574:alert(1)')).toBe(false)
+      expect(
+        isUrlSafe('%25256a%252561%252576%252561%252573%252563%252572%252569%252570%252574:alert(1)')
+      ).toBe(false)
     })
 
     it('should detect mixed HTML entity + URL encoding', () => {
@@ -105,12 +107,16 @@ describe('Adversarial XSS Tests', () => {
 
     it('should detect decimal entity encoded javascript', () => {
       // &#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116; = javascript
-      expect(isUrlSafe('&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;:alert(1)')).toBe(false)
+      expect(isUrlSafe('&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;:alert(1)')).toBe(
+        false
+      )
     })
 
     it('should detect hex entity encoded javascript', () => {
       // &#x6a;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74; = javascript
-      expect(isUrlSafe('&#x6a;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;:alert(1)')).toBe(false)
+      expect(
+        isUrlSafe('&#x6a;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;:alert(1)')
+      ).toBe(false)
     })
   })
 
@@ -159,10 +165,25 @@ describe('Adversarial XSS Tests', () => {
   describe('Event Handler Bypass Attempts', () => {
     it('should strip all on* event handlers', () => {
       const eventHandlers = [
-        'onclick', 'onerror', 'onload', 'onmouseover', 'onfocus',
-        'onblur', 'onchange', 'onsubmit', 'onkeydown', 'onkeyup',
-        'onmousedown', 'onmouseup', 'ondblclick', 'oncontextmenu',
-        'onscroll', 'onresize', 'oninput', 'onpaste', 'oncopy',
+        'onclick',
+        'onerror',
+        'onload',
+        'onmouseover',
+        'onfocus',
+        'onblur',
+        'onchange',
+        'onsubmit',
+        'onkeydown',
+        'onkeyup',
+        'onmousedown',
+        'onmouseup',
+        'ondblclick',
+        'oncontextmenu',
+        'onscroll',
+        'onresize',
+        'oninput',
+        'onpaste',
+        'oncopy',
       ]
 
       eventHandlers.forEach((handler) => {

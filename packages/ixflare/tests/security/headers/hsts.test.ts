@@ -239,7 +239,9 @@ describe('createHttpsRedirectMiddleware', () => {
 
     const response = await middleware(mockContext, mockNext)
 
-    expect(response.headers.get('Location')).toBe('https://example.com/users/123?sort=asc&filter=active')
+    expect(response.headers.get('Location')).toBe(
+      'https://example.com/users/123?sort=asc&filter=active'
+    )
   })
 
   it('should not redirect if already HTTPS', async () => {

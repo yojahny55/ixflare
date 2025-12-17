@@ -37,7 +37,8 @@ describe('DEFAULT_REDACT_FIELDS', () => {
 
 describe('DEFAULT_REDACT_PATTERNS', () => {
   it('should redact JWT tokens completely', () => {
-    const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U'
+    const jwt =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U'
     const result = redactString(jwt, DEFAULT_REDACT_PATTERNS)
     expect(result).toBe('[REDACTED]')
     expect(result).not.toContain('eyJ')
@@ -94,19 +95,19 @@ describe('DEFAULT_REDACT_PATTERNS', () => {
 
   it('should NOT match regular text', () => {
     const text = 'This is just regular text without secrets'
-    const hasMatch = DEFAULT_REDACT_PATTERNS.some(p => p.test(text))
+    const hasMatch = DEFAULT_REDACT_PATTERNS.some((p) => p.test(text))
     expect(hasMatch).toBe(false)
   })
 
   it('should NOT match short strings', () => {
     const shortString = 'abc123'
-    const hasMatch = DEFAULT_REDACT_PATTERNS.some(p => p.test(shortString))
+    const hasMatch = DEFAULT_REDACT_PATTERNS.some((p) => p.test(shortString))
     expect(hasMatch).toBe(false)
   })
 
   it('should NOT match UUIDs', () => {
     const uuid = '550e8400-e29b-41d4-a716-446655440000'
-    const hasMatch = DEFAULT_REDACT_PATTERNS.some(p => p.test(uuid))
+    const hasMatch = DEFAULT_REDACT_PATTERNS.some((p) => p.test(uuid))
     expect(hasMatch).toBe(false)
   })
 })
@@ -186,7 +187,7 @@ describe('getRedactionPatterns', () => {
   it('should preserve default patterns when adding custom', () => {
     const customPattern = /custom-pattern/g
     const patterns = getRedactionPatterns([customPattern])
-    DEFAULT_REDACT_PATTERNS.forEach(defaultPattern => {
+    DEFAULT_REDACT_PATTERNS.forEach((defaultPattern) => {
       expect(patterns).toContain(defaultPattern)
     })
   })

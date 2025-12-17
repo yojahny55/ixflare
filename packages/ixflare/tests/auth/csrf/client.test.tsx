@@ -6,7 +6,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { getCsrfToken, csrfToken, getCSRFInputProps, CSRFInput } from '../../../src/auth/csrf/client'
+import {
+  getCsrfToken,
+  csrfToken,
+  getCSRFInputProps,
+  CSRFInput,
+} from '../../../src/auth/csrf/client'
 
 describe('CSRF Client Helpers', () => {
   describe('getCsrfToken', () => {

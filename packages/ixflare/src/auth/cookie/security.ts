@@ -166,9 +166,7 @@ export function validateSecurityRequirements(
     }
 
     if (isAuthCookie(name) && options.httpOnly === false) {
-      throw new CookieSecurityError(
-        `Auth cookie "${name}" must have httpOnly=true in production`
-      )
+      throw new CookieSecurityError(`Auth cookie "${name}" must have httpOnly=true in production`)
     }
   }
 }

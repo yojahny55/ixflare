@@ -37,7 +37,12 @@ const DEFAULT_PORT = 3001 // Different from dev (3000)
  */
 export function isProductionEnv(env: string): boolean {
   const normalized = env.toLowerCase()
-  return normalized === 'production' || normalized === 'prod' || normalized.startsWith('prod-') || normalized.startsWith('production-')
+  return (
+    normalized === 'production' ||
+    normalized === 'prod' ||
+    normalized.startsWith('prod-') ||
+    normalized.startsWith('production-')
+  )
 }
 
 /**
@@ -96,14 +101,28 @@ function displayPreviewBanner(options: { port: number; env?: string }): void {
   if (env) {
     // Truncate long env names to fit banner, use Math.max to prevent negative padding
     const displayEnv = env.length > 14 ? env.slice(0, 11) + '...' : env
-    console.log('  │   ' + pc.green('✓') + ' Remote environment: ' + pc.cyan(displayEnv) + ''.padEnd(Math.max(0, 16 - displayEnv.length)) + '│')
+    console.log(
+      '  │   ' +
+        pc.green('✓') +
+        ' Remote environment: ' +
+        pc.cyan(displayEnv) +
+        ''.padEnd(Math.max(0, 16 - displayEnv.length)) +
+        '│'
+    )
   } else {
     console.log('  │   ' + pc.green('✓') + ' Miniflare simulating Workers env    │')
     console.log('  │   ' + pc.green('✓') + ' D1 using local SQLite database      │')
   }
 
   console.log('  │                                         │')
-  console.log('  │   ' + pc.green('➜') + '  Preview: ' + pc.cyan(localUrl) + ''.padEnd(27 - localUrl.length) + '│')
+  console.log(
+    '  │   ' +
+      pc.green('➜') +
+      '  Preview: ' +
+      pc.cyan(localUrl) +
+      ''.padEnd(27 - localUrl.length) +
+      '│'
+  )
   console.log('  │                                         │')
   console.log('  │   ' + pc.dim('Note: This simulates production') + '       │')
   console.log('  │   ' + pc.dim('behavior locally.') + '                    │')
@@ -121,7 +140,7 @@ function displayHelp(): void {
   console.log('')
   console.log(pc.bold('Description:'))
   console.log('  Preview production build locally using Miniflare/Wrangler.')
-  console.log('  Unlike \'ix dev\', this runs the built output without HMR.')
+  console.log("  Unlike 'ix dev', this runs the built output without HMR.")
   console.log('')
   console.log(pc.bold('Options:'))
   console.log('  --port <number>   Port to serve preview on (default: 3001)')
@@ -169,7 +188,9 @@ async function confirmProductionAccess(env: string, skipPrompt: boolean): Promis
   if (isNonInteractive()) {
     console.error('')
     console.error(pc.red('  ✗ Cannot prompt for confirmation in non-interactive mode'))
-    console.error(pc.dim('  Use ') + pc.cyan('--yes') + pc.dim(' flag to skip confirmation in CI/automation'))
+    console.error(
+      pc.dim('  Use ') + pc.cyan('--yes') + pc.dim(' flag to skip confirmation in CI/automation')
+    )
     console.error('')
     return false
   }
@@ -212,7 +233,9 @@ export async function preview(options: PreviewOptions = {}): Promise<void> {
   if (!existsSync(distPath)) {
     console.error('')
     console.error(pc.red('  ✗ dist/ directory not found'))
-    console.error(pc.dim('  Run ') + pc.cyan('ix build') + pc.dim(' first to create production build'))
+    console.error(
+      pc.dim('  Run ') + pc.cyan('ix build') + pc.dim(' first to create production build')
+    )
     console.error('')
     process.exit(1)
   }
@@ -223,7 +246,9 @@ export async function preview(options: PreviewOptions = {}): Promise<void> {
     console.error('')
     console.error(pc.red('  ✗ Production build not found'))
     console.error(pc.dim('  Expected: ') + pc.cyan('dist/_worker/index.js'))
-    console.error(pc.dim('  Run ') + pc.cyan('ix build') + pc.dim(' first to create production build'))
+    console.error(
+      pc.dim('  Run ') + pc.cyan('ix build') + pc.dim(' first to create production build')
+    )
     console.error('')
     process.exit(1)
   }

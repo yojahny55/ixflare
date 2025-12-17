@@ -335,9 +335,7 @@ describe('autoTrackSecrets', () => {
 
       // Verify redaction works
       const tracker = getSecretTracker()
-      const redacted = tracker.redact(
-        'Connecting to postgres://user:pass@host/db'
-      )
+      const redacted = tracker.redact('Connecting to postgres://user:pass@host/db')
       expect(redacted).toContain('[REDACTED:DATABASE_URL]')
     })
   })

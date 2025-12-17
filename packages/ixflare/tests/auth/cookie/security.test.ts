@@ -115,9 +115,7 @@ describe('enforceSecureDefaults - Production', () => {
     const options: CookieOptions = { secure: false }
     enforceSecureDefaults('session', options, 'production')
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[COOKIE SECURITY]')
-    )
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('[COOKIE SECURITY]'))
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining('Overriding secure=false to secure=true')
     )
@@ -134,12 +132,8 @@ describe('enforceSecureDefaults - Production', () => {
     }
     enforceSecureDefaults('session', options, 'production')
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[COOKIE SECURITY]')
-    )
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('httpOnly=false')
-    )
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('[COOKIE SECURITY]'))
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('httpOnly=false'))
 
     consoleSpy.mockRestore()
   })
@@ -181,9 +175,7 @@ describe('enforceSecureDefaults - Development', () => {
     const options: CookieOptions = { secure: false }
     enforceSecureDefaults('session', options, 'development')
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[COOKIE SECURITY]')
-    )
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('[COOKIE SECURITY]'))
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining('would be rejected in production')
     )
@@ -264,9 +256,7 @@ describe('enforceSecureDefaults - Auth Cookie Detection', () => {
     enforceSecureDefaults('language', { secure: true, httpOnly: false }, 'production')
 
     // Should not warn about httpOnly for non-auth cookies
-    const calls = consoleSpy.mock.calls.filter(call =>
-      call[0].includes('httpOnly')
-    )
+    const calls = consoleSpy.mock.calls.filter((call) => call[0].includes('httpOnly'))
     expect(calls.length).toBe(0)
 
     consoleSpy.mockRestore()
@@ -364,9 +354,7 @@ describe('Security: Production Enforcement', () => {
     enforceSecureDefaults('session', options, 'production')
 
     // Warning is logged to alert developer
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('httpOnly=false')
-    )
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('httpOnly=false'))
 
     consoleSpy.mockRestore()
   })

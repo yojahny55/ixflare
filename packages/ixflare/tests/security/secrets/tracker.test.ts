@@ -58,9 +58,7 @@ describe('SecretTracker', () => {
     it('should redact multiple instances of same secret', () => {
       tracker.track('PASSWORD', 'secret123')
       const result = tracker.redact('password: secret123, again: secret123')
-      expect(result).toBe(
-        'password: [REDACTED:PASSWORD], again: [REDACTED:PASSWORD]'
-      )
+      expect(result).toBe('password: [REDACTED:PASSWORD], again: [REDACTED:PASSWORD]')
     })
 
     it('should redact multiple different secrets', () => {
