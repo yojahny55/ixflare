@@ -416,4 +416,24 @@ describe('rollbackMigration', () => {
     )
     expect(console.log).toHaveBeenCalledWith('✓ Migration rolled back successfully!')
   })
+
+  it('should display help text when --help flag is passed', async () => {
+    await rollbackMigration({ help: true })
+
+    expect(console.log).toHaveBeenCalled()
+    const logCalls = (console.log as unknown as ReturnType<typeof vi.fn>).mock.calls
+    const helpText = logCalls.map((call: string[]) => call.join(' ')).join('\n')
+
+    expect(helpText).toContain('Usage: ix migrate:rollback')
+    expect(helpText).toContain('--yes')
+    expect(helpText).toContain('--force')
+    expect(helpText).toContain('--remote')
+    expect(helpText).toContain('Examples:')
+  })
+
+  it('should exit after displaying help', async () => {
+    await rollbackMigration({ help: true })
+
+    expect(process.exit).toHaveBeenCalledWith(0)
+  })
 })

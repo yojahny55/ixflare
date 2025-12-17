@@ -162,4 +162,30 @@ describe('generateMigration', () => {
     // Should contain placeholder, not auto-generated SQL
     expect(content).toContain('Add your SQL statements below')
   })
+
+  it('should display help text when --help flag is passed', async () => {
+    await generateMigration('', { cwd: testDir, help: true })
+
+    expect(console.log).toHaveBeenCalled()
+    const logCalls = (console.log as unknown as ReturnType<typeof vi.fn>).mock.calls
+    const helpText = logCalls.map((call: string[]) => call.join(' ')).join('\n')
+
+    expect(helpText).toContain('Usage: ix migrate:generate')
+    expect(helpText).toContain('--schema')
+    expect(helpText).toContain('--empty')
+    expect(helpText).toContain('Examples:')
+  })
+
+  it('should exit after displaying help without creating files', async () => {
+    await generateMigration('test_help', { cwd: testDir, help: true })
+
+    const migrationsDir = join(testDir, 'migrations')
+
+    // Should not create migration files when showing help
+    if (existsSync(migrationsDir)) {
+      expect(existsSync(join(migrationsDir, '001_test_help.sql'))).toBe(false)
+    }
+
+    expect(process.exit).toHaveBeenCalledWith(0)
+  })
 })

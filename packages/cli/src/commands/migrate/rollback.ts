@@ -16,6 +16,52 @@ import type { MigrateOptions, MigrationRecord } from './types'
 import prompts from 'prompts'
 
 /**
+ * Display help information for migrate:rollback command
+ */
+export function showRollbackMigrationHelp(): void {
+  console.log(`
+Usage: ix migrate:rollback [options]
+
+Rollback the last applied database migration.
+
+Options:
+  --yes               Skip confirmation prompts
+  --force             Allow destructive operations (DROP TABLE, TRUNCATE, etc.)
+  --remote            Target remote database (default: local)
+  -h, --help          Show this help message
+
+Examples:
+  ix migrate:rollback
+    Rollback the last migration with confirmation prompt
+
+  ix migrate:rollback --yes
+    Rollback without confirmation (useful for automation)
+
+  ix migrate:rollback --force --yes
+    Rollback destructive migration without prompts
+
+  ix migrate:rollback --remote
+    Rollback on remote D1 database
+
+Safety:
+  - Only the LAST applied migration can be rolled back
+  - A down migration file (*.down.sql) must exist
+  - Destructive operations require --force flag for safety
+  - Confirmation prompt defaults to "No" for safety
+
+Destructive Operations:
+  - DROP TABLE
+  - DROP COLUMN
+  - TRUNCATE
+  - DELETE FROM (without WHERE clause)
+
+See also:
+  ix migrate:status   View migration history
+  ix migrate          Apply pending migrations
+`)
+}
+
+/**
  * Check down migration file for destructive operations
  */
 function checkDownMigrationForDestructiveOps(downPath: string): string[] {
@@ -33,6 +79,13 @@ function checkDownMigrationForDestructiveOps(downPath: string): string[] {
  * @param options Migration options
  */
 export async function rollbackMigration(options: MigrateOptions = {}): Promise<void> {
+  // Show help if requested
+  if (options.help) {
+    showRollbackMigrationHelp()
+    process.exit(0)
+    return
+  }
+
   const cwd = process.cwd()
   const migrationsDir = getMigrationsDir(cwd)
 

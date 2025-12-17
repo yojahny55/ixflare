@@ -62,6 +62,47 @@ interface GenerateOptions {
   schema?: string
   /** Don't auto-detect models, just create placeholder */
   empty?: boolean
+  /** Show help message */
+  help?: boolean
+}
+
+/**
+ * Display help information for migrate:generate command
+ */
+export function showGenerateMigrationHelp(): void {
+  console.log(`
+Usage: ix migrate:generate <name> [options]
+
+Generate a new database migration file with automatic schema change detection.
+
+Arguments:
+  <name>              Migration name (e.g., add_bio_to_users)
+
+Options:
+  --schema <path>     Path to schema definition file (legacy, use model detection instead)
+  --empty             Create empty migration without schema detection
+  -h, --help          Show this help message
+
+Examples:
+  ix migrate:generate add_users_table
+    Generate migration with automatic schema change detection from EdgeRecord models
+
+  ix migrate:generate add_bio_column --empty
+    Create empty migration file for manual SQL
+
+  ix migrate:generate update_users --schema schema.json
+    Generate from legacy JSON schema file (not recommended)
+
+Generated Files:
+  migrations/001_<name>.sql         Up migration (apply changes)
+  migrations/001_<name>.down.sql    Down migration (rollback changes)
+
+Migration Workflow:
+  1. Generate migration: ix migrate:generate <name>
+  2. Review and edit SQL: migrations/001_<name>.sql
+  3. Apply migration: ix migrate
+  4. Rollback if needed: ix migrate:rollback
+`)
 }
 
 /**
@@ -80,6 +121,13 @@ export async function generateMigration(
 ): Promise<void> {
   const cwd = options.cwd || process.cwd()
 
+  // Show help if requested
+  if (options.help) {
+    showGenerateMigrationHelp()
+    process.exit(0)
+    return
+  }
+
   // Validate migration name
   if (!name || name.trim() === '') {
     console.error('Error: Migration name is required')
@@ -90,6 +138,7 @@ export async function generateMigration(
     console.error('Options:')
     console.error('  --schema <path>  Path to schema definition JSON file (legacy)')
     console.error('  --empty          Create empty migration (skip model detection)')
+    console.error('  -h, --help       Show help message')
     process.exit(1)
     return
   }

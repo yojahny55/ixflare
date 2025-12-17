@@ -62,7 +62,10 @@ export async function migrate(
   }
 
   if (subcommand === 'status' || args[0] === 'status') {
-    await migrationStatus()
+    const migrateOpts = options as MigrateOptions
+    await migrationStatus({
+      help: migrateOpts.help,
+    })
     return
   }
 

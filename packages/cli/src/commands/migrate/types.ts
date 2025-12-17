@@ -41,6 +41,9 @@ export interface MigrateOptions {
 
   /** Force execution of destructive operations (DROP, TRUNCATE, etc.) */
   force?: boolean
+
+  /** Show help message */
+  help?: boolean
 }
 
 /**

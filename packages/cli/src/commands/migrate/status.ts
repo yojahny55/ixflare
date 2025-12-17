@@ -10,12 +10,52 @@ import {
   formatTimestamp,
   getDatabaseNameFromWrangler,
 } from './utils'
-import type { MigrationRecord } from './types'
+import type { MigrationRecord, MigrateOptions } from './types'
+
+/**
+ * Display help information for migrate:status command
+ */
+export function showMigrationStatusHelp(): void {
+  console.log(`
+Usage: ix migrate:status [options]
+
+Display the current status of all database migrations.
+
+Options:
+  -h, --help          Show this help message
+
+Examples:
+  ix migrate:status
+    Show migration status for local database
+
+Output:
+  ✓ 001_initial.sql              (2024-01-15 10:30:45)  <- Applied
+  ✓ 002_add_users.sql            (2024-01-15 11:22:10)  <- Applied
+  ○ 003_add_posts.sql            (pending)              <- Not yet applied
+
+Summary:
+  Database: <name>
+  Applied:  2 / 3
+  Pending:  1
+
+See also:
+  ix migrate              Apply pending migrations
+  ix migrate:rollback     Rollback last migration
+  ix migrate:generate     Create new migration
+`)
+}
 
 /**
  * Display migration status
  */
-export async function migrationStatus(): Promise<void> {
+export async function migrationStatus(options: MigrateOptions = {}): Promise<void> {
+  // Show help if requested
+  if (options.help) {
+    showMigrationStatusHelp()
+    process.exit(0)
+    return
+  }
+
   const cwd = process.cwd()
   const migrationsDir = getMigrationsDir(cwd)
 
