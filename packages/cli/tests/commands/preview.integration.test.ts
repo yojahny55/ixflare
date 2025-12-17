@@ -20,36 +20,95 @@ vi.mock('prompts', () => ({
   default: vi.fn(() => Promise.resolve({ confirmed: true })),
 }))
 
+// Mock dev.ts port utilities
+vi.mock('../../src/commands/dev.js', () => ({
+  isValidPort: vi.fn((port: number) => !isNaN(port) && port >= 1 && port <= 65535),
+  MIN_PORT: 1,
+  MAX_PORT: 65535,
+  isPortAvailable: vi.fn(() => Promise.resolve(true)),
+  findAvailablePort: vi.fn((startPort: number) => Promise.resolve(startPort)),
+  displayPortConflictMessage: vi.fn(),
+}))
+
 describe('preview command integration', () => {
   let mockProcess: any
   let mockExit: ReturnType<typeof vi.spyOn>
   let mockConsoleError: ReturnType<typeof vi.spyOn>
   let mockConsoleLog: ReturnType<typeof vi.spyOn>
+  let mockStdoutIsTTY: boolean | undefined
+
+  // Increase max listeners to prevent warning during tests
+  const originalMaxListeners = process.getMaxListeners()
+  const originalIsTTY = process.stdout.isTTY
 
   beforeEach(() => {
+    // Increase max listeners to prevent memory leak warning during tests
+    process.setMaxListeners(50)
+
+    // Default to TTY mode for tests
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true,
+      writable: true,
+      configurable: true,
+    })
+
     // Mock child process
     mockProcess = new EventEmitter()
     mockProcess.killed = false
     mockProcess.kill = vi.fn()
     vi.mocked(spawn).mockReturnValue(mockProcess as any)
 
-    // Mock file system
+    // Mock file system - default to true
     vi.mocked(existsSync).mockReturnValue(true)
 
     // Mock console and process
-    mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never)
+    mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {
+      // Throw to stop execution flow in tests
+      throw new Error('process.exit called')
+    }) as never)
     mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     // Mock process.argv to simulate CLI args
     process.argv = ['node', 'ix', 'preview']
+
+    // Clear CI environment
+    delete process.env.CI
   })
 
   afterEach(() => {
+    // Remove all SIGINT/SIGTERM listeners added during tests
+    process.removeAllListeners('SIGINT')
+    process.removeAllListeners('SIGTERM')
+    // Restore original max listeners
+    process.setMaxListeners(originalMaxListeners)
+    // Restore original isTTY
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: originalIsTTY,
+      writable: true,
+      configurable: true,
+    })
+
     vi.clearAllMocks()
     mockExit.mockRestore()
     mockConsoleError.mockRestore()
     mockConsoleLog.mockRestore()
+  })
+
+  describe('help flag', () => {
+    it('should display help and return early when --help is provided', async () => {
+      await preview({ help: true })
+
+      const logCalls = mockConsoleLog.mock.calls.map((call) => call[0]).join('\n')
+      expect(logCalls).toContain('Usage:')
+      expect(logCalls).toContain('ix preview')
+      expect(logCalls).toContain('--port')
+      expect(logCalls).toContain('--env')
+      expect(logCalls).toContain('--open')
+      expect(logCalls).toContain('--yes')
+      expect(logCalls).toContain('--help')
+      expect(spawn).not.toHaveBeenCalled()
+    })
   })
 
   describe('dist directory validation', () => {
@@ -58,7 +117,11 @@ describe('preview command integration', () => {
         return !(path as string).includes('dist')
       })
 
-      await preview({ port: 3001 })
+      try {
+        await preview({ port: 3001 })
+      } catch {
+        // Expected - process.exit throws in test
+      }
 
       expect(mockConsoleError).toHaveBeenCalledWith(
         expect.stringContaining('dist/ directory not found'),
@@ -72,7 +135,11 @@ describe('preview command integration', () => {
         return true
       })
 
-      await preview({ port: 3001 })
+      try {
+        await preview({ port: 3001 })
+      } catch {
+        // Expected - process.exit throws in test
+      }
 
       expect(mockConsoleError).toHaveBeenCalledWith(
         expect.stringContaining('Production build not found'),
@@ -83,9 +150,54 @@ describe('preview command integration', () => {
     it('should suggest running ix build when dist is missing', async () => {
       vi.mocked(existsSync).mockReturnValue(false)
 
-      await preview({ port: 3001 })
+      try {
+        await preview({ port: 3001 })
+      } catch {
+        // Expected - process.exit throws in test
+      }
 
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('ix build'))
+    })
+  })
+
+  describe('port availability', () => {
+    it('should use suggested port when requested port is unavailable', async () => {
+      const { isPortAvailable, findAvailablePort, displayPortConflictMessage } = await import(
+        '../../src/commands/dev.js'
+      )
+      vi.mocked(isPortAvailable).mockResolvedValueOnce(false)
+      vi.mocked(findAvailablePort).mockResolvedValueOnce(3002)
+
+      const previewPromise = preview({ port: 3001 })
+
+      await vi.waitFor(() => {
+        expect(spawn).toHaveBeenCalled()
+      })
+
+      expect(displayPortConflictMessage).toHaveBeenCalledWith(3001, 3002)
+
+      const spawnCall = vi.mocked(spawn).mock.calls[0]
+      expect(spawnCall[1]).toContain('3002')
+
+      // Cleanup
+      mockProcess.emit('exit', 0)
+    })
+
+    it('should exit when no available port is found', async () => {
+      const { isPortAvailable, findAvailablePort } = await import('../../src/commands/dev.js')
+      vi.mocked(isPortAvailable).mockResolvedValueOnce(false)
+      vi.mocked(findAvailablePort).mockRejectedValueOnce(new Error('No ports available'))
+
+      try {
+        await preview({ port: 3001 })
+      } catch {
+        // Expected - process.exit throws in test
+      }
+
+      expect(mockConsoleError).toHaveBeenCalledWith(
+        expect.stringContaining('Port 3001 is in use'),
+      )
+      expect(mockExit).toHaveBeenCalledWith(1)
     })
   })
 
@@ -218,7 +330,11 @@ describe('preview command integration', () => {
       })
 
       // Simulate SIGINT
-      process.emit('SIGINT')
+      try {
+        process.emit('SIGINT')
+      } catch {
+        // Expected - process.exit throws in test
+      }
 
       expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM')
       expect(mockExit).toHaveBeenCalledWith(0)
@@ -232,7 +348,11 @@ describe('preview command integration', () => {
       })
 
       // Simulate SIGTERM
-      process.emit('SIGTERM')
+      try {
+        process.emit('SIGTERM')
+      } catch {
+        // Expected - process.exit throws in test
+      }
 
       expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM')
       expect(mockExit).toHaveBeenCalledWith(0)
@@ -249,14 +369,116 @@ describe('preview command integration', () => {
       mockProcess.killed = true
 
       // Simulate SIGINT
-      process.emit('SIGINT')
+      try {
+        process.emit('SIGINT')
+      } catch {
+        // Expected - process.exit throws in test
+      }
 
       expect(mockProcess.kill).not.toHaveBeenCalled()
     })
   })
 
+  describe('production environment handling', () => {
+    it('should skip confirmation prompt when --yes flag is provided', async () => {
+      const prompts = await import('prompts')
+
+      const previewPromise = preview({ port: 3001, env: 'production', yes: true })
+
+      await vi.waitFor(() => {
+        expect(spawn).toHaveBeenCalled()
+      })
+
+      // prompts should NOT have been called because --yes was provided
+      expect(prompts.default).not.toHaveBeenCalled()
+
+      // Cleanup
+      mockProcess.emit('exit', 0)
+    })
+
+    it('should show confirmation prompt for production without --yes flag in TTY mode', async () => {
+      const prompts = await import('prompts')
+
+      const previewPromise = preview({ port: 3001, env: 'production' })
+
+      await vi.waitFor(() => {
+        expect(prompts.default).toHaveBeenCalled()
+      })
+
+      // Cleanup
+      mockProcess.emit('exit', 0)
+    })
+
+    it('should detect "prod" as production environment', async () => {
+      const prompts = await import('prompts')
+
+      const previewPromise = preview({ port: 3001, env: 'prod' })
+
+      await vi.waitFor(() => {
+        expect(prompts.default).toHaveBeenCalled()
+      })
+
+      // Cleanup
+      mockProcess.emit('exit', 0)
+    })
+
+    it('should not show confirmation for non-production environments', async () => {
+      const prompts = await import('prompts')
+      vi.mocked(prompts.default).mockClear()
+
+      const previewPromise = preview({ port: 3001, env: 'staging' })
+
+      await vi.waitFor(() => {
+        expect(spawn).toHaveBeenCalled()
+      })
+
+      // prompts should NOT have been called for staging
+      expect(prompts.default).not.toHaveBeenCalled()
+
+      // Cleanup
+      mockProcess.emit('exit', 0)
+    })
+
+    it('should fail in non-TTY mode without --yes flag for production', async () => {
+      // Set non-TTY mode
+      Object.defineProperty(process.stdout, 'isTTY', {
+        value: false,
+        writable: true,
+        configurable: true,
+      })
+
+      try {
+        await preview({ port: 3001, env: 'production' })
+      } catch {
+        // Expected - process.exit throws in test
+      }
+
+      expect(mockConsoleError).toHaveBeenCalledWith(
+        expect.stringContaining('Cannot prompt for confirmation in non-interactive mode'),
+      )
+      expect(mockExit).toHaveBeenCalledWith(0)
+    })
+
+    it('should work in CI mode with --yes flag for production', async () => {
+      process.env.CI = 'true'
+
+      const previewPromise = preview({ port: 3001, env: 'production', yes: true })
+
+      await vi.waitFor(() => {
+        expect(spawn).toHaveBeenCalled()
+      })
+
+      // Should show warning but proceed
+      const logCalls = mockConsoleLog.mock.calls.map((call) => call[0]).join('\n')
+      expect(logCalls).toContain('Confirmation skipped via --yes flag')
+
+      // Cleanup
+      mockProcess.emit('exit', 0)
+    })
+  })
+
   describe('error handling', () => {
-    it('should exit with error code when wrangler exits with non-zero code', async () => {
+    it('should reject promise when wrangler exits with non-zero code', async () => {
       const previewPromise = preview({ port: 3001 })
 
       await vi.waitFor(() => {
@@ -266,12 +488,10 @@ describe('preview command integration', () => {
       // Simulate wrangler error exit
       mockProcess.emit('exit', 1)
 
-      await vi.waitFor(() => {
-        expect(mockExit).toHaveBeenCalledWith(1)
-      })
+      await expect(previewPromise).rejects.toThrow('Preview server exited with code 1')
     })
 
-    it('should handle successful exit (code 0)', async () => {
+    it('should resolve promise on successful exit (code 0)', async () => {
       const previewPromise = preview({ port: 3001 })
 
       await vi.waitFor(() => {
@@ -281,13 +501,10 @@ describe('preview command integration', () => {
       // Simulate successful exit
       mockProcess.emit('exit', 0)
 
-      await vi.waitFor(() => {
-        // Should not call exit for success
-        expect(mockExit).not.toHaveBeenCalled()
-      })
+      await expect(previewPromise).resolves.toBeUndefined()
     })
 
-    it('should handle null exit code', async () => {
+    it('should resolve promise on null exit code', async () => {
       const previewPromise = preview({ port: 3001 })
 
       await vi.waitFor(() => {
@@ -297,10 +514,20 @@ describe('preview command integration', () => {
       // Simulate exit with null code (normal termination)
       mockProcess.emit('exit', null)
 
+      await expect(previewPromise).resolves.toBeUndefined()
+    })
+
+    it('should reject promise on spawn error', async () => {
+      const previewPromise = preview({ port: 3001 })
+
       await vi.waitFor(() => {
-        // Should not call exit for null code
-        expect(mockExit).not.toHaveBeenCalled()
+        expect(spawn).toHaveBeenCalled()
       })
+
+      // Simulate spawn error
+      mockProcess.emit('error', new Error('spawn failed'))
+
+      await expect(previewPromise).rejects.toThrow('spawn failed')
     })
   })
 })

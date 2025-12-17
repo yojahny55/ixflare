@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { parsePreviewArgs } from '../../src/commands/preview'
+import { parsePreviewArgs, isProductionEnv } from '../../src/commands/preview'
 
 describe('preview command', () => {
   describe('parsePreviewArgs', () => {
@@ -22,6 +22,8 @@ describe('preview command', () => {
       expect(options).toEqual({
         port: 3001,
         open: false,
+        yes: false,
+        help: false,
       })
     })
 
@@ -50,6 +52,8 @@ describe('preview command', () => {
         port: 4000,
         env: 'staging',
         open: true,
+        yes: false,
+        help: false,
       })
     })
 
@@ -157,6 +161,108 @@ describe('preview command', () => {
       const options = parsePreviewArgs(['--env', 'Production'])
 
       expect(options.env).toBe('Production')
+    })
+
+    it('should parse --yes flag', () => {
+      const options = parsePreviewArgs(['--yes'])
+
+      expect(options.yes).toBe(true)
+    })
+
+    it('should parse -y shorthand flag', () => {
+      const options = parsePreviewArgs(['-y'])
+
+      expect(options.yes).toBe(true)
+    })
+
+    it('should default yes to false', () => {
+      const options = parsePreviewArgs([])
+
+      expect(options.yes).toBe(false)
+    })
+
+    it('should parse --yes with other flags', () => {
+      const options = parsePreviewArgs(['--env', 'production', '--yes', '--port', '4000'])
+
+      expect(options.yes).toBe(true)
+      expect(options.env).toBe('production')
+      expect(options.port).toBe(4000)
+    })
+
+    it('should parse --help flag', () => {
+      const options = parsePreviewArgs(['--help'])
+
+      expect(options.help).toBe(true)
+    })
+
+    it('should parse -h shorthand flag', () => {
+      const options = parsePreviewArgs(['-h'])
+
+      expect(options.help).toBe(true)
+    })
+
+    it('should default help to false', () => {
+      const options = parsePreviewArgs([])
+
+      expect(options.help).toBe(false)
+    })
+
+    it('should stop processing other flags when --help is present', () => {
+      const options = parsePreviewArgs(['--help', '--port', '4000'])
+
+      expect(options.help).toBe(true)
+      // Other flags are still parsed (help just causes early exit in preview())
+      expect(options.port).toBe(4000)
+    })
+  })
+
+  describe('isProductionEnv', () => {
+    it('should return true for "production"', () => {
+      expect(isProductionEnv('production')).toBe(true)
+    })
+
+    it('should return true for "prod"', () => {
+      expect(isProductionEnv('prod')).toBe(true)
+    })
+
+    it('should return true for "Production" (case insensitive)', () => {
+      expect(isProductionEnv('Production')).toBe(true)
+    })
+
+    it('should return true for "PRODUCTION" (case insensitive)', () => {
+      expect(isProductionEnv('PRODUCTION')).toBe(true)
+    })
+
+    it('should return true for "PROD" (case insensitive)', () => {
+      expect(isProductionEnv('PROD')).toBe(true)
+    })
+
+    it('should return true for "prod-us-east-1"', () => {
+      expect(isProductionEnv('prod-us-east-1')).toBe(true)
+    })
+
+    it('should return true for "production-us-west"', () => {
+      expect(isProductionEnv('production-us-west')).toBe(true)
+    })
+
+    it('should return false for "staging"', () => {
+      expect(isProductionEnv('staging')).toBe(false)
+    })
+
+    it('should return false for "development"', () => {
+      expect(isProductionEnv('development')).toBe(false)
+    })
+
+    it('should return false for "preview"', () => {
+      expect(isProductionEnv('preview')).toBe(false)
+    })
+
+    it('should return false for "test"', () => {
+      expect(isProductionEnv('test')).toBe(false)
+    })
+
+    it('should return false for "reproduce" (contains "prod" but not at start)', () => {
+      expect(isProductionEnv('reproduce')).toBe(false)
     })
   })
 })
