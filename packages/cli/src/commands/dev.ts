@@ -5,10 +5,10 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, watch, type FSWatcher } from 'node:fs'
 import { createServer } from 'node:net'
 import { networkInterfaces } from 'node:os'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import pc from 'picocolors'
 
 /** Valid port range constants */
@@ -331,8 +331,83 @@ export async function dev(options: DevOptions = {}): Promise<void> {
     process.stderr.write(data)
   })
 
+  // AC4: Start type generation in watch mode (parallel to Vite)
+  // This automatically regenerates types when route files change
+  let typeWatcher: FSWatcher | null = null
+  let typeGenTimeout: NodeJS.Timeout | null = null
+  const routesDir = join(process.cwd(), 'src', 'routes')
+
+  const startTypeWatcher = async (): Promise<void> => {
+    if (!existsSync(routesDir)) {
+      // No routes directory yet - skip type watching
+      return
+    }
+
+    try {
+      // Import the type generation function
+      const { generateRouteTypes, generateModelTypes } = await import('./generate-types')
+
+      // Initial type generation (silent - don't interrupt banner)
+      try {
+        await generateRouteTypes(process.cwd())
+        await generateModelTypes(process.cwd())
+      } catch {
+        // Initial generation may fail if no route files exist yet - that's OK
+      }
+
+      // Throttled regeneration function (2s cooldown per Story 6-4 pattern)
+      let regenerating = false
+
+      const triggerRegeneration = async (): Promise<void> => {
+        if (regenerating) {
+          // Reschedule if already regenerating
+          if (typeGenTimeout) clearTimeout(typeGenTimeout)
+          typeGenTimeout = setTimeout(() => void triggerRegeneration(), 2000)
+          return
+        }
+
+        regenerating = true
+        if (typeGenTimeout) {
+          clearTimeout(typeGenTimeout)
+          typeGenTimeout = null
+        }
+
+        try {
+          await generateRouteTypes(process.cwd())
+          console.log(pc.dim('[types] ') + pc.green('Route types regenerated'))
+        } catch (error) {
+          console.error(pc.dim('[types] ') + pc.red('Type generation failed:'), error instanceof Error ? error.message : String(error))
+        } finally {
+          regenerating = false
+        }
+      }
+
+      // Watch routes directory for changes
+      typeWatcher = watch(routesDir, { recursive: true }, (eventType, filename) => {
+        if (filename && (filename.endsWith('.ts') || filename.endsWith('.tsx'))) {
+          void triggerRegeneration()
+        }
+      })
+    } catch {
+      // generate-types module may not exist in all setups - fail silently
+    }
+  }
+
+  // Start type watcher (don't await - run in parallel)
+  void startTypeWatcher()
+
   // Handle process cleanup
   const cleanup = (): void => {
+    // Cleanup type watcher
+    if (typeWatcher) {
+      typeWatcher.close()
+      typeWatcher = null
+    }
+    if (typeGenTimeout) {
+      clearTimeout(typeGenTimeout)
+      typeGenTimeout = null
+    }
+
     if (viteProcess && !viteProcess.killed) {
       viteProcess.kill('SIGTERM')
     }
@@ -343,6 +418,12 @@ export async function dev(options: DevOptions = {}): Promise<void> {
   process.on('SIGTERM', cleanup)
 
   viteProcess.on('exit', (code) => {
+    // Cleanup type watcher on exit
+    if (typeWatcher) {
+      typeWatcher.close()
+      typeWatcher = null
+    }
+
     // If banner wasn't displayed (Vite failed to start), show it now with CLI time
     if (!bannerDisplayed) {
       const duration = Date.now() - startTime

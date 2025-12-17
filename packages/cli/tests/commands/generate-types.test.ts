@@ -3,6 +3,8 @@ import {
   parseGenerateTypesArgs,
   extractRouteParams,
   generateRouteParamsType,
+  validateOutputPath,
+  showGenerateTypesHelp,
 } from '../../src/commands/generate-types'
 
 describe('generate:types command', () => {
@@ -14,7 +16,20 @@ describe('generate:types command', () => {
         watch: false,
         output: undefined,
         yes: false,
+        help: false,
       })
+    })
+
+    it('should parse --help flag', () => {
+      const options = parseGenerateTypesArgs(['--help'])
+
+      expect(options.help).toBe(true)
+    })
+
+    it('should parse -h flag (help shorthand)', () => {
+      const options = parseGenerateTypesArgs(['-h'])
+
+      expect(options.help).toBe(true)
     })
 
     it('should parse --watch flag', () => {
@@ -60,6 +75,7 @@ describe('generate:types command', () => {
         watch: true,
         output: 'types/',
         yes: true,
+        help: false,
       })
     })
 
@@ -70,6 +86,7 @@ describe('generate:types command', () => {
         watch: true,
         output: 'src/gen',
         yes: true,
+        help: false,
       })
     })
 
@@ -80,6 +97,7 @@ describe('generate:types command', () => {
         watch: true,
         output: 'types',
         yes: true,
+        help: false,
       })
     })
 
@@ -90,6 +108,7 @@ describe('generate:types command', () => {
         watch: true,
         output: undefined,
         yes: true,
+        help: false,
       })
     })
 
@@ -112,15 +131,17 @@ describe('generate:types command', () => {
         watch: true,
         output: undefined,
         yes: false,
+        help: false,
       })
     })
 
-    it('should consume next arg for --output even if it looks like a flag', () => {
+    it('should NOT consume flag as output value (prevents user errors)', () => {
       const options = parseGenerateTypesArgs(['--output', '--watch'])
 
-      // --watch becomes the output value since it follows --output
-      expect(options.output).toBe('--watch')
-      expect(options.watch).toBe(false)
+      // --watch should NOT become output value - this prevents accidental misuse
+      // where users forget to provide an output path
+      expect(options.output).toBeUndefined()
+      expect(options.watch).toBe(true)
     })
 
     it('should handle empty strings as valid output paths', () => {
@@ -151,6 +172,7 @@ describe('generate:types command', () => {
         watch: true,
         output: 'types',
         yes: true,
+        help: false,
       })
     })
 
@@ -161,6 +183,7 @@ describe('generate:types command', () => {
         watch: false,
         output: undefined,
         yes: false,
+        help: false,
       })
     })
 
@@ -308,6 +331,56 @@ describe('generate:types command', () => {
       expect(type).toBe(
         'export interface Params {\n  userId: string\n  postId?: string\n}'
       )
+    })
+  })
+
+  describe('validateOutputPath', () => {
+    it('should accept valid relative path within project', () => {
+      const result = validateOutputPath('/project', 'src/types')
+
+      expect(result).toBe('/project/src/types')
+    })
+
+    it('should accept nested path within project', () => {
+      const result = validateOutputPath('/project', 'deep/nested/types/dir')
+
+      expect(result).toBe('/project/deep/nested/types/dir')
+    })
+
+    it('should throw error for path traversal attempt with ../', () => {
+      expect(() => validateOutputPath('/project', '../outside')).toThrow(
+        'Output path must be within project root'
+      )
+    })
+
+    it('should throw error for deep path traversal', () => {
+      expect(() => validateOutputPath('/project', '../../etc/passwd')).toThrow(
+        'Output path must be within project root'
+      )
+    })
+
+    it('should throw error for path traversal in middle of path', () => {
+      expect(() => validateOutputPath('/project', 'src/../../../outside')).toThrow(
+        'Output path must be within project root'
+      )
+    })
+
+    it('should accept path with .. that resolves within project', () => {
+      // src/../types resolves to /project/types which is within project
+      const result = validateOutputPath('/project', 'src/../types')
+
+      expect(result).toBe('/project/types')
+    })
+  })
+
+  describe('showGenerateTypesHelp', () => {
+    it('should be a function', () => {
+      expect(typeof showGenerateTypesHelp).toBe('function')
+    })
+
+    it('should not throw when called', () => {
+      // Just verify it doesn't throw - output goes to console
+      expect(() => showGenerateTypesHelp()).not.toThrow()
     })
   })
 })

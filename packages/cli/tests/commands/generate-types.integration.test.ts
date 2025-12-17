@@ -1,8 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mkdtemp, rm, mkdir, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { generateRouteTypes, generateModelTypes } from '../../src/commands/generate-types'
+import {
+  generateRouteTypes,
+  generateModelTypes,
+  parseGenerateTypesArgs,
+  validateOutputPath,
+} from '../../src/commands/generate-types'
 
 describe('generate:types integration', () => {
   let testDir: string
@@ -170,6 +175,98 @@ describe('generate:types integration', () => {
 
       const content = await readFile(outputPath, 'utf-8')
       expect(content).toContain('Model type definitions')
+    })
+  })
+
+  describe('CLI argument wiring (Story 6-2 blocker fix)', () => {
+    it('should parse --output flag and apply to generation', async () => {
+      // Setup routes
+      const routesDir = join(testDir, 'src', 'routes')
+      await mkdir(routesDir, { recursive: true })
+      await writeFile(join(routesDir, '[userId].tsx'), 'export function GET() {}', 'utf-8')
+
+      // Parse CLI args
+      const options = parseGenerateTypesArgs(['--output', 'custom-types'])
+
+      // Verify parsing worked
+      expect(options.output).toBe('custom-types')
+
+      // Apply to generation
+      const outputPath = await generateRouteTypes(testDir, options.output)
+
+      // Verify output went to custom directory
+      expect(outputPath).toBe(join(testDir, 'custom-types', 'routes.d.ts'))
+    })
+
+    it('should parse --help flag correctly', () => {
+      const options = parseGenerateTypesArgs(['--help'])
+
+      expect(options.help).toBe(true)
+    })
+
+    it('should parse --yes flag correctly', () => {
+      const options = parseGenerateTypesArgs(['--yes'])
+
+      expect(options.yes).toBe(true)
+    })
+
+    it('should parse combined flags correctly', () => {
+      const options = parseGenerateTypesArgs(['-w', '-o', 'out', '-y'])
+
+      expect(options.watch).toBe(true)
+      expect(options.output).toBe('out')
+      expect(options.yes).toBe(true)
+    })
+  })
+
+  describe('path traversal prevention', () => {
+    it('should reject path traversal in route types generation', async () => {
+      // Setup routes
+      const routesDir = join(testDir, 'src', 'routes')
+      await mkdir(routesDir, { recursive: true })
+      await writeFile(join(routesDir, '[userId].tsx'), 'export function GET() {}', 'utf-8')
+
+      // Attempt path traversal
+      await expect(generateRouteTypes(testDir, '../../../etc')).rejects.toThrow(
+        'Output path must be within project root'
+      )
+    })
+
+    it('should reject path traversal in model types generation', async () => {
+      // Attempt path traversal
+      await expect(generateModelTypes(testDir, '../../../etc')).rejects.toThrow(
+        'Output path must be within project root'
+      )
+    })
+
+    it('should allow valid relative paths', async () => {
+      // Setup routes
+      const routesDir = join(testDir, 'src', 'routes')
+      await mkdir(routesDir, { recursive: true })
+      await writeFile(join(routesDir, '[userId].tsx'), 'export function GET() {}', 'utf-8')
+
+      // Valid relative path should work
+      const outputPath = await generateRouteTypes(testDir, 'generated/types')
+
+      expect(outputPath).toBe(join(testDir, 'generated', 'types', 'routes.d.ts'))
+    })
+  })
+
+  describe('module augmentation output format', () => {
+    it('should generate properly indented module augmentation', async () => {
+      const routesDir = join(testDir, 'src', 'routes')
+      await mkdir(routesDir, { recursive: true })
+      await writeFile(join(routesDir, '[userId].tsx'), 'export function GET() {}', 'utf-8')
+
+      const outputPath = await generateRouteTypes(testDir)
+      const content = await readFile(outputPath, 'utf-8')
+
+      // Verify proper indentation: module declaration with properly indented interface
+      expect(content).toContain("declare module '@/routes/[userId]' {")
+      expect(content).toContain('  export interface Params {')
+      expect(content).toContain('    userId: string')
+      expect(content).toContain('  }')
+      expect(content).toContain('}')
     })
   })
 })
