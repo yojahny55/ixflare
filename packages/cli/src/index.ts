@@ -122,6 +122,35 @@ const commands: Record<string, () => Promise<void>> = {
       dev: args.includes('--dev'),
     })
   },
+  rescue: async () => {
+    const args = process.argv.slice(3)
+    const m = await import('./commands/rescue')
+    await m.create(args)
+  },
+  'rescue:create': async () => {
+    const args = process.argv.slice(3)
+    const m = await import('./commands/rescue')
+    await m.create(args)
+  },
+  'rescue:restore': async () => {
+    const args = process.argv.slice(3)
+    const checkpointId = args[0]
+    const restArgs = args.slice(1)
+    const m = await import('./commands/rescue')
+    await m.restore(checkpointId, restArgs)
+  },
+  'rescue:list': async () => {
+    const args = process.argv.slice(3)
+    const m = await import('./commands/rescue')
+    await m.list(args)
+  },
+  'rescue:delete': async () => {
+    const args = process.argv.slice(3)
+    const checkpointId = args[0]
+    const restArgs = args.slice(1)
+    const m = await import('./commands/rescue')
+    await m.deleteCheckpoint(checkpointId, restArgs)
+  },
 }
 
 async function main(): Promise<void> {
@@ -154,6 +183,11 @@ async function main(): Promise<void> {
     migrate:status      Show migration status
     db:seed             Seed the database with test/development data
     db:studio           Launch database GUI (Drizzle Studio)
+    rescue              Create a rescue checkpoint (default action)
+    rescue:create       Create a rescue checkpoint
+    rescue:restore      Restore from a checkpoint
+    rescue:list         List available checkpoints
+    rescue:delete       Delete a checkpoint
     generate            Generate code (model, migration, component)
     generate:env        Generate TypeScript types from .env.example
     generate:types      Generate TypeScript types for routes and models
