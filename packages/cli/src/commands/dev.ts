@@ -12,8 +12,8 @@ import { resolve } from 'node:path'
 import pc from 'picocolors'
 
 /** Valid port range constants */
-const MIN_PORT = 1
-const MAX_PORT = 65535
+export const MIN_PORT = 1
+export const MAX_PORT = 65535
 
 /** Default version fallback */
 const DEFAULT_VERSION = '0.0.0'

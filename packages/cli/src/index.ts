@@ -13,6 +13,7 @@ const command = args[0]
 const commands: Record<string, () => Promise<void>> = {
   dev: () => import('./commands/dev').then((m) => m.dev()),
   build: () => import('./commands/build').then((m) => m.build()),
+  preview: () => import('./commands/preview').then((m) => m.preview()),
   deploy: async () => {
     const m = await import('./commands/deploy')
     const result = await m.deploy()
@@ -117,6 +118,7 @@ async function main(): Promise<void> {
   Commands:
     dev                 Start development server
     build               Build for production
+    preview             Preview production build locally
     deploy              Deploy to Cloudflare Workers
     migrate             Apply pending database migrations
     migrate:generate    Generate a new migration file
