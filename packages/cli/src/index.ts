@@ -11,6 +11,7 @@ const args = process.argv.slice(2)
 const command = args[0]
 
 const commands: Record<string, () => Promise<void>> = {
+  init: () => import('./commands/init').then((m) => m.init()),
   dev: () => import('./commands/dev').then((m) => m.dev()),
   build: () => import('./commands/build').then((m) => m.build()),
   preview: () => import('./commands/preview').then((m) => m.preview()),
