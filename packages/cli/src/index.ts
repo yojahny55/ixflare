@@ -174,6 +174,10 @@ const commands: Record<string, () => Promise<void>> = {
     const m = await import('./commands/config')
     await m.config()
   },
+  typecheck: async () => {
+    const m = await import('./commands/typecheck')
+    await m.typecheck()
+  },
 }
 
 async function main(): Promise<void> {
@@ -239,6 +243,7 @@ async function main(): Promise<void> {
     security:audit      Scan dependencies for vulnerabilities
     errors              Error code reference and troubleshooting
     config              Manage CLI configuration preferences
+    typecheck           Run TypeScript type checking
 
   Migration Options:
     --yes               Skip confirmation prompts
