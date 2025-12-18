@@ -12,6 +12,7 @@ import {
   listCheckpoints,
   isOlderThan,
   formatCheckpointAge,
+  isValidCheckpointId,
 } from './utils'
 
 /**
@@ -170,6 +171,16 @@ export async function deleteCheckpoint(
     console.log('')
     console.log('Available checkpoints:')
     console.log(pc.cyan('  ix rescue:list'))
+    console.log('')
+    process.exit(1)
+    return
+  }
+
+  // Security: Validate checkpoint ID to prevent path traversal attacks
+  if (!isValidCheckpointId(checkpointId)) {
+    console.log('')
+    console.log(pc.red('Error: Invalid checkpoint ID format'))
+    console.log(pc.dim('Checkpoint IDs must be alphanumeric with hyphens/underscores only'))
     console.log('')
     process.exit(1)
     return

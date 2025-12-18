@@ -4,7 +4,7 @@
  * @node-only
  */
 
-import { copyFileSync, existsSync, readdirSync, writeFileSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
@@ -105,7 +105,6 @@ function backupD1Database(
   const backupPath = join(checkpointDir, backupFilename)
 
   // Ensure checkpoint directory exists
-  const { mkdirSync } = require('fs')
   mkdirSync(checkpointDir, { recursive: true })
 
   // Copy SQLite file

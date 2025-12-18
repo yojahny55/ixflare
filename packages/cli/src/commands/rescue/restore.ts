@@ -4,13 +4,18 @@
  * @node-only
  */
 
-import { copyFileSync, existsSync } from 'fs'
+import { copyFileSync, existsSync, readdirSync, type Dirent } from 'fs'
 import { join } from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import pc from 'picocolors'
 import prompts from 'prompts'
-import { loadCheckpointMetadata, getCheckpointDir, formatTimestamp } from './utils'
+import {
+  loadCheckpointMetadata,
+  getCheckpointDir,
+  formatTimestamp,
+  isValidCheckpointId,
+} from './utils'
 
 const execAsync = promisify(exec)
 
@@ -27,12 +32,9 @@ function findLocalD1DatabasePath(cwd: string): string | null {
     return null
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const fs = require('fs')
-  const bindings = fs
-    .readdirSync(wranglerStateDir, { withFileTypes: true })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .filter((entry: any) => entry.isDirectory())
+  const bindings = readdirSync(wranglerStateDir, { withFileTypes: true }).filter(
+    (entry: Dirent) => entry.isDirectory()
+  )
 
   // Use first D1 database found
   for (const binding of bindings) {
@@ -190,6 +192,16 @@ export async function restore(checkpointId: string | undefined, args: string[] =
       console.log('')
       process.exit(1)
     }
+    return
+  }
+
+  // Security: Validate checkpoint ID to prevent path traversal attacks
+  if (!isValidCheckpointId(checkpointId)) {
+    console.log('')
+    console.log(pc.red('Error: Invalid checkpoint ID format'))
+    console.log(pc.dim('Checkpoint IDs must be alphanumeric with hyphens/underscores only'))
+    console.log('')
+    process.exit(1)
     return
   }
 
