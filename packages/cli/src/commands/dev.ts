@@ -10,6 +10,7 @@ import { createServer } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import { join, resolve } from 'node:path'
 import pc from 'picocolors'
+import { ConfigError, detectDisplayOptions } from '@/errors'
 
 /** Valid port range constants */
 export const MIN_PORT = 1
@@ -209,18 +210,21 @@ export function displayBanner(options: BannerOptions): void {
  * Issue #6 fix: No longer calls process.exit - caller handles exit
  */
 export function displayPortConflictMessage(occupiedPort: number, suggestedPort: number): void {
-  console.error('')
-  console.error(pc.red('Port ' + occupiedPort + ' is in use.') + ' Suggestions:')
-  console.error(
-    pc.dim('  • Use ') + pc.cyan(`--port ${suggestedPort}`) + pc.dim(' (next available)')
-  )
-  console.error(
-    pc.dim('  • Kill process on ') +
-      occupiedPort +
-      pc.dim(': ') +
-      pc.yellow(`lsof -ti:${occupiedPort} | xargs kill -9`)
-  )
-  console.error('')
+  const error = new ConfigError({
+    code: 'IX_E103',
+    message: `Port ${occupiedPort} is already in use`,
+    causes: [
+      `Another process is using port ${occupiedPort}`,
+      'Previous dev server may not have shut down properly',
+    ],
+    fixes: [
+      `Use next available port: \`ix dev --port ${suggestedPort}\``,
+      `Kill process on ${occupiedPort}: \`lsof -ti:${occupiedPort} | xargs kill -9\``,
+      'Restart your terminal if issue persists',
+    ],
+  })
+  const displayOptions = detectDisplayOptions()
+  console.error(error.format(displayOptions))
 }
 
 /**
@@ -248,8 +252,20 @@ export function parseDevArgs(args: string[]): DevOptions {
       const portValue = parseInt(args[i + 1], 10)
 
       if (!isValidPort(portValue)) {
-        console.error(pc.red(`Invalid port: "${args[i + 1]}"`))
-        console.error(pc.dim(`Port must be an integer between ${MIN_PORT} and ${MAX_PORT}`))
+        const error = new ConfigError({
+          code: 'IX_E103',
+          message: `Invalid port: "${args[i + 1]}"`,
+          causes: [
+            `Port must be an integer between ${MIN_PORT} and ${MAX_PORT}`,
+            'Port value provided is not a valid number',
+          ],
+          fixes: [
+            'Use a valid port number: `ix dev --port 3000`',
+            'Common ports: 3000, 8080, 8000',
+          ],
+        })
+        const displayOptions = detectDisplayOptions()
+        console.error(error.format(displayOptions))
         process.exit(1)
       }
 
@@ -260,8 +276,21 @@ export function parseDevArgs(args: string[]): DevOptions {
 
       // SECURITY: Validate host to prevent command injection (OWASP A03)
       if (!isValidHost(hostValue)) {
-        console.error(pc.red(`Invalid host: "${hostValue}"`))
-        console.error(pc.dim('Host must be a valid hostname, IPv4, or IPv6 address'))
+        const error = new ConfigError({
+          code: 'IX_E103',
+          message: `Invalid host: "${hostValue}"`,
+          causes: [
+            'Host must be a valid hostname, IPv4, or IPv6 address',
+            'Invalid characters detected in host value',
+          ],
+          fixes: [
+            'Use localhost: `ix dev --host localhost`',
+            'Use IP address: `ix dev --host 0.0.0.0`',
+            'Use hostname: `ix dev --host myapp.local`',
+          ],
+        })
+        const displayOptions = detectDisplayOptions()
+        console.error(error.format(displayOptions))
         process.exit(1)
       }
 

@@ -21,6 +21,7 @@ import {
 } from './utils'
 import { findModelFiles, extractModelsFromFiles, type ExtractedModel } from './model-loader'
 import { generateMigrationWithDrizzle } from './drizzle-adapter'
+import { DatabaseError, detectDisplayOptions } from '@/errors'
 
 /**
  * Represents a column in the database schema
@@ -130,15 +131,18 @@ export async function generateMigration(
 
   // Validate migration name
   if (!name || name.trim() === '') {
-    console.error('Error: Migration name is required')
-    console.error('')
-    console.error('Usage: ix migrate:generate <name>')
-    console.error('Example: ix migrate:generate add_bio_to_users')
-    console.error('')
-    console.error('Options:')
-    console.error('  --schema <path>  Path to schema definition JSON file (legacy)')
-    console.error('  --empty          Create empty migration (skip model detection)')
-    console.error('  -h, --help       Show help message')
+    const error = new DatabaseError({
+      code: 'IX_E401',
+      message: 'Migration name is required',
+      causes: ['No migration name was provided to the command'],
+      fixes: [
+        'Provide a migration name: `ix migrate:generate <name>`',
+        'Example: `ix migrate:generate add_bio_to_users`',
+        'Run `ix migrate:generate --help` for more options',
+      ],
+    })
+    const displayOptions = detectDisplayOptions()
+    console.error(error.format(displayOptions))
     process.exit(1)
     return // For test compatibility when process.exit is mocked
   }
@@ -147,10 +151,21 @@ export async function generateMigration(
   const migrationName = toSnakeCase(name)
 
   if (!isValidMigrationName(migrationName)) {
-    console.error(`Error: Invalid migration name: ${migrationName}`)
-    console.error(
-      'Migration names must contain only alphanumeric characters, hyphens, and underscores'
-    )
+    const error = new DatabaseError({
+      code: 'IX_E401',
+      message: `Invalid migration name: ${migrationName}`,
+      causes: [
+        'Migration name contains invalid characters',
+        'Only alphanumeric characters, hyphens, and underscores are allowed',
+      ],
+      fixes: [
+        'Use only letters, numbers, hyphens, and underscores',
+        'Example: `ix migrate:generate add_user_bio`',
+        'Example: `ix migrate:generate create-posts-table`',
+      ],
+    })
+    const displayOptions = detectDisplayOptions()
+    console.error(error.format(displayOptions))
     process.exit(1)
     return // For test compatibility when process.exit is mocked
   }

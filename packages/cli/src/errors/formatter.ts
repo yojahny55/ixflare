@@ -139,8 +139,74 @@ function getErrorIcon(severity: string): string {
 /**
  * Highlight command text (between backticks) in cyan
  */
-function highlightCommands(text: string): string {
+export function highlightCommands(text: string): string {
   return text.replace(/`([^`]+)`/g, (_, command) => pc.cyan(command))
+}
+
+/**
+ * Format error code metadata for display (used by `ix errors <code>`)
+ * Reuses the same formatting logic as formatError for consistency
+ */
+export function formatErrorCodeInfo(
+  code: string,
+  title: string,
+  category: string,
+  causes: string[],
+  fixes: string[],
+  docsUrl: string | undefined,
+  options: FormatOptions
+): string {
+  const lines: string[] = []
+
+  // Header
+  const styledCode = options.color ? pc.bold(code) : code
+  lines.push(`${styledCode}: ${title}`)
+  lines.push('')
+
+  // Category
+  const categoryLabel = options.color ? pc.dim('Category:') : 'Category:'
+  lines.push(`${categoryLabel} ${category}`)
+
+  // Common causes (numbered list) - same format as formatError
+  if (causes.length > 0) {
+    lines.push('')
+    const header = options.color ? pc.dim('This usually means:') : 'This usually means:'
+    lines.push(header)
+    causes.forEach((cause, i) => {
+      lines.push(`  ${i + 1}. ${cause}`)
+    })
+  }
+
+  // Quick fixes (bullet list) - same format as formatError
+  if (fixes.length > 0) {
+    lines.push('')
+    const header = options.color ? pc.dim('Quick fixes:') : 'Quick fixes:'
+    lines.push(header)
+    fixes.forEach((fix) => {
+      const styledFix = options.color ? highlightCommands(fix) : fix
+      lines.push(`  • ${styledFix}`)
+    })
+  }
+
+  // Documentation link
+  lines.push('')
+  const docsLabel = options.color ? pc.dim('📖 More info:') : 'More info:'
+  const url = docsUrl ? (options.color ? pc.cyan(docsUrl) : docsUrl) : 'N/A'
+  const comingSoon = options.color ? pc.dim('(coming soon)') : '(coming soon)'
+  lines.push(`${docsLabel} ${url} ${comingSoon}`)
+
+  // Help text
+  lines.push('')
+  const helpText1 = options.color
+    ? pc.dim('To see this error in context, trigger it with relevant commands.')
+    : 'To see this error in context, trigger it with relevant commands.'
+  const helpText2 = options.color
+    ? `${pc.dim('For detailed debugging, add')} ${pc.cyan('--verbose')} ${pc.dim('to any command.')}`
+    : 'For detailed debugging, add --verbose to any command.'
+  lines.push(helpText1)
+  lines.push(helpText2)
+
+  return lines.join('\n')
 }
 
 /**

@@ -10,6 +10,7 @@ import { build as viteBuild, type InlineConfig } from 'vite'
 import { visualizer } from 'rollup-plugin-visualizer'
 import pc from 'picocolors'
 import { HooksRunner, HookError } from '@/hooks/index'
+import { BuildError, detectDisplayOptions } from '@/errors'
 
 export interface BuildOptions {
   analyze?: boolean
@@ -346,8 +347,23 @@ export async function build(options: BuildOptions = {}): Promise<void> {
       await runner.runPreBuild()
     } catch (error) {
       if (error instanceof HookError) {
-        console.error(`\n❌ ${error.message}`)
-        console.error('\nBuild stopped due to hook failure.\n')
+        const buildError = new BuildError({
+          code: 'IX_E204',
+          message: `Pre-build hook failed: ${error.message}`,
+          causes: [
+            'Hook script returned non-zero exit code',
+            'Hook script threw an error',
+            'Hook command not found',
+          ],
+          fixes: [
+            'Check hook script for errors',
+            'Ensure hook commands are executable',
+            'Run with `--verbose` for detailed output',
+          ],
+          originalError: error,
+        })
+        const displayOptions = detectDisplayOptions()
+        console.error(buildError.format(displayOptions))
         process.exit(1)
       }
       throw error
@@ -366,23 +382,45 @@ export async function build(options: BuildOptions = {}): Promise<void> {
       const distPath = join(projectRoot, 'dist')
       try {
         await runner.runPostBuild({ outputPath: distPath })
-      } catch (error) {
-        if (error instanceof HookError) {
-          console.error(`\n❌ ${error.message}`)
-          console.error('\nBuild completed but post-build hook failed.\n')
+      } catch (hookError) {
+        if (hookError instanceof HookError) {
+          const buildError = new BuildError({
+            code: 'IX_E204',
+            message: `Post-build hook failed: ${hookError.message}`,
+            causes: [
+              'Hook script returned non-zero exit code',
+              'Hook script threw an error',
+              'Build succeeded but hook failed',
+            ],
+            fixes: [
+              'Check hook script for errors',
+              'Ensure hook commands are executable',
+              'Note: Your build was successful',
+            ],
+            originalError: hookError,
+          })
+          const displayOptions = detectDisplayOptions()
+          console.error(buildError.format(displayOptions))
           process.exit(1)
         }
-        throw error
+        throw hookError
       }
     }
   } catch (error) {
-    console.error(`\n❌ Build failed:\n`)
-    if (error instanceof Error) {
-      console.error(error.message)
-    } else {
-      console.error('Unknown error occurred')
-    }
-    console.log('')
+    const buildError = new BuildError({
+      code: 'IX_E204',
+      message: 'Build process failed',
+      causes: [error instanceof Error ? error.message : 'Unknown error occurred'],
+      fixes: [
+        'Check the error message above for details',
+        'Run `pnpm typecheck` to check for type errors',
+        'Ensure all dependencies are installed: `pnpm install`',
+        'Try clearing cache: `rm -rf node_modules/.vite`',
+      ],
+      originalError: error instanceof Error ? error : undefined,
+    })
+    const displayOptions = detectDisplayOptions()
+    console.error(buildError.format(displayOptions))
     process.exit(1)
   }
 }

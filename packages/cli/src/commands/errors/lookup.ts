@@ -5,6 +5,7 @@
 
 import pc from 'picocolors'
 import { ERROR_CODES, getErrorMeta, getErrorDocsUrl } from '@/errors/codes'
+import { formatErrorCodeInfo, detectDisplayOptions } from '@/errors/formatter'
 import type { ErrorCategory } from '@/errors/types'
 
 /**
@@ -20,41 +21,20 @@ export function lookupErrorCode(code: string): void {
   }
 
   const docsUrl = getErrorDocsUrl(code)
+  const options = detectDisplayOptions()
 
-  const lines: string[] = []
-  lines.push('')
-  lines.push(`${pc.bold(code)}: ${meta.title}`)
-  lines.push('')
-  lines.push(`${pc.dim('Category:')} ${meta.category}`)
+  // Use shared formatting logic from formatter.ts
+  const output = formatErrorCodeInfo(
+    code,
+    meta.title,
+    meta.category,
+    meta.causes || [],
+    meta.fixes || [],
+    docsUrl,
+    options
+  )
 
-  // Show common causes
-  if (meta.causes && meta.causes.length > 0) {
-    lines.push('')
-    lines.push(pc.dim('Common causes:'))
-    meta.causes.forEach((cause, i) => {
-      lines.push(`  ${i + 1}. ${cause}`)
-    })
-  }
-
-  // Show quick fixes
-  if (meta.fixes && meta.fixes.length > 0) {
-    lines.push('')
-    lines.push(pc.dim('Quick fixes:'))
-    meta.fixes.forEach((fix) => {
-      // Highlight commands in backticks
-      const styledFix = fix.replace(/`([^`]+)`/g, (_, cmd) => pc.cyan(cmd))
-      lines.push(`  • ${styledFix}`)
-    })
-  }
-
-  lines.push('')
-  lines.push(`${pc.dim('Documentation:')} ${pc.cyan(docsUrl || 'N/A')} ${pc.dim('(coming soon)')}`)
-  lines.push('')
-  lines.push(`${pc.dim('To see this error in context, trigger it with relevant commands.')}`)
-  lines.push(`${pc.dim('For detailed debugging, add')} ${pc.cyan('--verbose')} ${pc.dim('to any command.')}`)
-  lines.push('')
-
-  console.log(lines.join('\n'))
+  console.log(`\n${output}\n`)
 }
 
 /**

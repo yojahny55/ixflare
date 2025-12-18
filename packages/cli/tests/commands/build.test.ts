@@ -134,7 +134,7 @@ describe('build command', () => {
 
       await build({})
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Build failed'))
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('IX_E204'))
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         expect.stringContaining('TypeScript compilation failed')
       )
@@ -294,7 +294,7 @@ describe('build command', () => {
 
       await build({})
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Build failed'))
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('IX_E204'))
       expect(mockExit).toHaveBeenCalledWith(1)
     })
 

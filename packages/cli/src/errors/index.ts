@@ -24,7 +24,13 @@ export { DatabaseError } from './database-error'
 export { AuthError } from './auth-error'
 
 // Formatting utilities
-export { formatError, detectDisplayOptions, formatAndExit } from './formatter'
+export {
+  formatError,
+  detectDisplayOptions,
+  formatAndExit,
+  formatErrorCodeInfo,
+  highlightCommands,
+} from './formatter'
 export { formatCodeSnippet, formatSourceLocation, extractCodeSnippet } from './code-snippet'
 
 // Error codes

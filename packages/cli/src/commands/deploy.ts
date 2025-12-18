@@ -116,8 +116,19 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
   const validation = await verifyDeploymentReadiness()
 
   if (!validation.ready) {
-    console.error(formatValidationIssues(validation.issues))
-    console.error('Cannot proceed with deployment. Please fix the errors above.\n')
+    const errorIssues = validation.issues.filter((i) => i.type === 'error')
+    const error = new DeployError({
+      code: 'IX_E303',
+      message: 'Deployment validation failed',
+      causes: errorIssues.map((i) => i.message),
+      fixes: [
+        'Fix the issues listed above',
+        'Run `pnpm build` to check for build errors',
+        'Verify wrangler.toml configuration',
+      ],
+    })
+    const displayOptions = detectDisplayOptions()
+    console.error(error.format(displayOptions))
     return { success: false, exitCode: 1 }
   }
 
@@ -132,8 +143,19 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
   const bundleIssue = await validateBundleSize()
   if (bundleIssue) {
     if (bundleIssue.type === 'error') {
-      console.error(formatValidationIssues([bundleIssue]))
-      console.error('Cannot proceed with deployment due to bundle size.\n')
+      const error = new DeployError({
+        code: 'IX_E305',
+        message: 'Worker script too large',
+        causes: [bundleIssue.message],
+        fixes: [
+          'Reduce bundle size by removing unused dependencies',
+          'Use tree-shaking: import only what you need',
+          'Move large assets to R2 or external CDN',
+          'Check for large dependencies with `pnpm why <pkg>`',
+        ],
+      })
+      const displayOptions = detectDisplayOptions()
+      console.error(error.format(displayOptions))
       return { success: false, exitCode: 1 }
     } else {
       console.log(formatValidationIssues([bundleIssue]))
@@ -225,9 +247,21 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
     })
 
     if (!result.success) {
-      console.error('\n❌ Deployment failed\n')
-      console.error('Wrangler output:\n')
-      console.error(result.stderr || result.stdout)
+      const error = new DeployError({
+        code: 'IX_E303',
+        message: 'Deployment to Cloudflare Workers failed',
+        causes: [
+          result.stderr || result.stdout || 'Unknown wrangler error',
+        ],
+        fixes: [
+          'Check the wrangler output above for details',
+          'Verify your Cloudflare credentials are valid',
+          'Run `wrangler whoami` to check authentication',
+          'Try `ix deploy --dry-run` to validate configuration',
+        ],
+      })
+      const displayOptions = detectDisplayOptions()
+      console.error(error.format(displayOptions))
       return { success: false, exitCode: result.exitCode }
     }
 
@@ -248,17 +282,45 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
     // Run post-deploy hooks
     try {
       await runner.runPostDeploy({ url: result.url || 'unknown' })
-    } catch (error) {
-      if (error instanceof HookError) {
-        console.error(`\n❌ ${error.message}`)
-        console.error('\nDeployment completed but post-deploy hook failed.\n')
+    } catch (hookError) {
+      if (hookError instanceof HookError) {
+        const deployError = new DeployError({
+          code: 'IX_E304',
+          message: `Post-deploy hook failed: ${hookError.message}`,
+          causes: [
+            'Hook script returned non-zero exit code',
+            'Hook script threw an error',
+            'Deployment succeeded but hook failed',
+          ],
+          fixes: [
+            'Check hook script for errors',
+            'Ensure hook commands are executable',
+            'Note: Your deployment was successful',
+          ],
+          originalError: hookError,
+        })
+        const displayOptions = detectDisplayOptions()
+        console.error(deployError.format(displayOptions))
         return { success: false, url: result.url, versionId: result.versionId, exitCode: 1 }
       }
     }
 
     return { success: true, url: result.url, versionId: result.versionId, exitCode: 0 }
   } catch (error) {
-    console.error('\n❌ Deployment error:', error instanceof Error ? error.message : error)
+    const deployError = new DeployError({
+      code: 'IX_E901',
+      message: 'Unexpected deployment error',
+      causes: [error instanceof Error ? error.message : String(error)],
+      fixes: [
+        'Run with `--verbose` for detailed output',
+        'Check your internet connection',
+        'Try again in a few moments',
+        'Report issue if it persists: https://github.com/ixflare/ixflare/issues',
+      ],
+      originalError: error instanceof Error ? error : undefined,
+    })
+    const displayOptions = detectDisplayOptions()
+    console.error(deployError.format(displayOptions))
     return { success: false, exitCode: 1 }
   }
 }

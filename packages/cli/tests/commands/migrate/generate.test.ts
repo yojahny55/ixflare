@@ -90,7 +90,7 @@ describe('generateMigration', () => {
     await generateMigration('', { cwd: testDir })
 
     expect(process.exit).toHaveBeenCalledWith(1)
-    expect(console.error).toHaveBeenCalledWith('Error: Migration name is required')
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('IX_E401'))
   })
 
   it('should fail with invalid migration name', async () => {
@@ -143,8 +143,8 @@ describe('generateMigration', () => {
   it('should show help text for --schema option', async () => {
     await generateMigration('', { cwd: testDir })
 
-    expect(console.error).toHaveBeenCalledWith('Error: Migration name is required')
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('--schema'))
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('IX_E401'))
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('migrate:generate'))
   })
 
   it('should handle --empty flag to skip schema detection', async () => {

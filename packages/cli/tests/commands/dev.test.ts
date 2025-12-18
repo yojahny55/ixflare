@@ -272,7 +272,7 @@ describe('dev command', () => {
       expect(consoleErrorSpy).toHaveBeenCalled()
       const output = consoleErrorSpy.mock.calls.map((call) => call[0]).join('\n')
 
-      expect(output).toContain('Port 3000 is in use')
+      expect(output).toContain('Port 3000 is already in use')
       expect(output).toContain('--port 3001')
       // Issue #6 fix: displayPortConflictMessage no longer calls process.exit
       // The caller (dev function) handles the exit
