@@ -11,6 +11,7 @@ import { visualizer } from 'rollup-plugin-visualizer'
 import pc from 'picocolors'
 import { HooksRunner, HookError } from '@/hooks/index'
 import { BuildError, detectDisplayOptions } from '@/errors'
+import { createMultiStepProgress, detectDisplayMode } from '@/progress'
 
 export interface BuildOptions {
   analyze?: boolean
@@ -370,18 +371,41 @@ export async function build(options: BuildOptions = {}): Promise<void> {
     }
   }
 
-  console.log('Building for production...')
-  console.log('')
+  // Create multi-step progress
+  const displayMode = detectDisplayMode(cliArgs)
+  const steps = ['Running pre-build hooks', 'Building for production', 'Running post-build hooks']
+  const progress = createMultiStepProgress(steps, cliArgs)
+
+  // Show progress in interactive mode, otherwise show traditional output
+  if (displayMode.interactive) {
+    console.log('')
+    progress.start()
+    if (hooksLoaded) {
+      progress.next()
+    } else {
+      progress.skip('No hooks configured')
+    }
+  } else {
+    console.log('Building for production...')
+    console.log('')
+  }
 
   // Execute Vite build
   try {
     await executeBuild(viteConfig, projectRoot, startTime)
+
+    if (displayMode.interactive) {
+      progress.next()
+    }
 
     // Execute post-build hook if hooks are loaded
     if (hooksLoaded) {
       const distPath = join(projectRoot, 'dist')
       try {
         await runner.runPostBuild({ outputPath: distPath })
+        if (displayMode.interactive) {
+          progress.complete()
+        }
       } catch (hookError) {
         if (hookError instanceof HookError) {
           const buildError = new BuildError({
@@ -405,6 +429,18 @@ export async function build(options: BuildOptions = {}): Promise<void> {
         }
         throw hookError
       }
+    } else {
+      // No hooks to run
+      if (displayMode.interactive) {
+        progress.skip('No hooks configured')
+      }
+    }
+
+    // Render final progress in interactive mode
+    if (displayMode.interactive) {
+      console.log('')
+      console.log(progress.render())
+      console.log('')
     }
   } catch (error) {
     const buildError = new BuildError({

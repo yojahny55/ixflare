@@ -13,6 +13,7 @@ import {
 } from './deploy/validation'
 import { showFirstTimeGuide } from './deploy/first-time-guide'
 import { DeployError, detectDisplayOptions } from '@/errors'
+import { detectDisplayMode, ProgressIndicator } from '@/progress'
 
 export interface DeployOptions {
   skipFirstTime?: boolean
@@ -111,9 +112,29 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
     }
   }
 
+  // Detect display mode for progress indicators
+  const displayMode = detectDisplayMode(cliArgs)
+
   // Verify deployment readiness
-  console.log('Checking deployment prerequisites...\n')
+  const verifySpinner = displayMode.spinner
+    ? new ProgressIndicator({ text: 'Checking deployment prerequisites' })
+    : null
+
+  if (verifySpinner) {
+    verifySpinner.start()
+  } else {
+    console.log('Checking deployment prerequisites...\n')
+  }
+
   const validation = await verifyDeploymentReadiness()
+
+  if (verifySpinner) {
+    if (validation.ready) {
+      verifySpinner.succeed('Deployment prerequisites verified')
+    } else {
+      verifySpinner.fail('Deployment validation failed')
+    }
+  }
 
   if (!validation.ready) {
     const errorIssues = validation.issues.filter((i) => i.type === 'error')
@@ -139,8 +160,25 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
   }
 
   // Validate bundle size
-  console.log('Validating bundle size...\n')
+  const bundleSpinner = displayMode.spinner
+    ? new ProgressIndicator({ text: 'Validating bundle size' })
+    : null
+
+  if (bundleSpinner) {
+    bundleSpinner.start()
+  } else {
+    console.log('Validating bundle size...\n')
+  }
+
   const bundleIssue = await validateBundleSize()
+
+  if (bundleSpinner) {
+    if (!bundleIssue || bundleIssue.type === 'warning') {
+      bundleSpinner.succeed('Bundle size validated')
+    } else {
+      bundleSpinner.fail('Bundle size exceeds limit')
+    }
+  }
   if (bundleIssue) {
     if (bundleIssue.type === 'error') {
       const error = new DeployError({
@@ -239,12 +277,29 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
     }
 
     // Execute wrangler deploy
-    console.log('Deploying to Cloudflare Workers...\n')
+    const deploySpinner = displayMode.spinner
+      ? new ProgressIndicator({ text: `Deploying to Cloudflare Workers (${environment})` })
+      : null
+
+    if (deploySpinner) {
+      deploySpinner.start()
+    } else {
+      console.log('Deploying to Cloudflare Workers...\n')
+    }
+
     const result = await executeWranglerDeploy({
       environment,
       minify: parsedOptions.minify,
       vars: parsedOptions.vars,
     })
+
+    if (deploySpinner) {
+      if (result.success) {
+        deploySpinner.succeed(`Deployed in ${deploySpinner.elapsedFormatted}`)
+      } else {
+        deploySpinner.fail('Deployment failed')
+      }
+    }
 
     if (!result.success) {
       const error = new DeployError({
