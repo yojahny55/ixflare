@@ -17,12 +17,7 @@ export { PB as ProgressBar }
 export { NP as NestedProgress }
 
 // Detection utilities
-export {
-  detectDisplayMode,
-  isCI,
-  isTTY,
-  shouldDisableColors,
-} from './detection'
+export { detectDisplayMode, isCI, isTTY, shouldDisableColors } from './detection'
 
 // Types
 export type {
@@ -41,10 +36,7 @@ export type {
 /**
  * Create a progress indicator with display mode detection
  */
-export function createProgressIndicator(
-  text?: string,
-  args: string[] = process.argv.slice(2)
-): PI {
+export function createProgressIndicator(text?: string, args: string[] = process.argv.slice(2)): PI {
   const mode = ddm(args)
   return new PI({
     text,

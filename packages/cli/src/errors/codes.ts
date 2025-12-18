@@ -134,11 +134,7 @@ export const ERROR_CODES: ErrorCodeRegistry = {
     category: 'build',
     title: 'Module Not Found',
     docsPath: '/errors/IX_E203',
-    causes: [
-      'Package not installed',
-      'Typo in import path',
-      'Path alias not configured',
-    ],
+    causes: ['Package not installed', 'Typo in import path', 'Path alias not configured'],
     fixes: [
       'Install missing package: `pnpm add <package>`',
       'Check import path for typos',
@@ -149,11 +145,7 @@ export const ERROR_CODES: ErrorCodeRegistry = {
     category: 'build',
     title: 'Build Process Failed',
     docsPath: '/errors/IX_E204',
-    causes: [
-      'Vite build error',
-      'Plugin configuration issue',
-      'Missing build dependencies',
-    ],
+    causes: ['Vite build error', 'Plugin configuration issue', 'Missing build dependencies'],
     fixes: [
       'Check build output for specific error',
       'Run `pnpm install` to ensure dependencies',
@@ -273,11 +265,7 @@ export const ERROR_CODES: ErrorCodeRegistry = {
     category: 'database',
     title: 'Schema Validation Failed',
     docsPath: '/errors/IX_E402',
-    causes: [
-      'Schema definition has errors',
-      'Invalid column type',
-      'Foreign key constraint issue',
-    ],
+    causes: ['Schema definition has errors', 'Invalid column type', 'Foreign key constraint issue'],
     fixes: [
       'Check schema file for TypeScript errors',
       'Verify column types are valid for D1/SQLite',
@@ -288,11 +276,7 @@ export const ERROR_CODES: ErrorCodeRegistry = {
     category: 'database',
     title: 'Migration Failed',
     docsPath: '/errors/IX_E403',
-    causes: [
-      'SQL syntax error in migration',
-      'Constraint violation',
-      'Table already exists',
-    ],
+    causes: ['SQL syntax error in migration', 'Constraint violation', 'Table already exists'],
     fixes: [
       'Review migration SQL for errors',
       'Check for data conflicts',
@@ -350,11 +334,7 @@ export const ERROR_CODES: ErrorCodeRegistry = {
     category: 'auth',
     title: 'Key Rotation Failed',
     docsPath: '/errors/IX_E502',
-    causes: [
-      'KV namespace not configured',
-      'Insufficient permissions',
-      'Key generation failed',
-    ],
+    causes: ['KV namespace not configured', 'Insufficient permissions', 'Key generation failed'],
     fixes: [
       'Configure KV namespace for key storage',
       'Check Cloudflare API permissions',
@@ -365,11 +345,7 @@ export const ERROR_CODES: ErrorCodeRegistry = {
     category: 'auth',
     title: 'Missing Authentication Secrets',
     docsPath: '/errors/IX_E503',
-    causes: [
-      'JWT_SECRET not set',
-      'Session secret missing',
-      'OAuth credentials not configured',
-    ],
+    causes: ['JWT_SECRET not set', 'Session secret missing', 'OAuth credentials not configured'],
     fixes: [
       'Set JWT_SECRET in environment or wrangler.toml',
       'Generate secret: `openssl rand -base64 32`',
@@ -382,11 +358,7 @@ export const ERROR_CODES: ErrorCodeRegistry = {
     category: 'internal',
     title: 'Unexpected Internal Error',
     docsPath: '/errors/IX_E901',
-    causes: [
-      'Bug in Ixflare CLI',
-      'Unexpected runtime condition',
-      'Corrupted state',
-    ],
+    causes: ['Bug in Ixflare CLI', 'Unexpected runtime condition', 'Corrupted state'],
     fixes: [
       'Run with --verbose for more details',
       'Report issue: https://github.com/ixflare/ixflare/issues',
@@ -397,11 +369,7 @@ export const ERROR_CODES: ErrorCodeRegistry = {
     category: 'internal',
     title: 'Invalid CLI Arguments',
     docsPath: '/errors/IX_E902',
-    causes: [
-      'Unknown command or flag',
-      'Missing required argument',
-      'Invalid argument value',
-    ],
+    causes: ['Unknown command or flag', 'Missing required argument', 'Invalid argument value'],
     fixes: [
       'Run `ix --help` for available commands',
       'Check command syntax: `ix <command> --help`',
@@ -412,11 +380,7 @@ export const ERROR_CODES: ErrorCodeRegistry = {
     category: 'internal',
     title: 'File System Error',
     docsPath: '/errors/IX_E903',
-    causes: [
-      'Permission denied',
-      'Disk full',
-      'File locked by another process',
-    ],
+    causes: ['Permission denied', 'Disk full', 'File locked by another process'],
     fixes: [
       'Check file/directory permissions',
       'Free up disk space',

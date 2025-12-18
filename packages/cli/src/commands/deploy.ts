@@ -307,9 +307,7 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
       const error = new DeployError({
         code: 'IX_E303',
         message: 'Deployment to Cloudflare Workers failed',
-        causes: [
-          result.stderr || result.stdout || 'Unknown wrangler error',
-        ],
+        causes: [result.stderr || result.stdout || 'Unknown wrangler error'],
         fixes: [
           'Check the wrangler output above for details',
           'Verify your Cloudflare credentials are valid',

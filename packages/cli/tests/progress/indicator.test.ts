@@ -167,10 +167,7 @@ describe('ProgressIndicator', () => {
   describe('chaining', () => {
     it('should support method chaining', () => {
       const indicator = new ProgressIndicator()
-      const result = indicator
-        .start('Step 1')
-        .update('Step 2')
-        .succeed('Done')
+      const result = indicator.start('Step 1').update('Step 2').succeed('Done')
 
       expect(result).toBe(indicator)
     })

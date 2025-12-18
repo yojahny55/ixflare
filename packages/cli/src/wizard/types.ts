@@ -29,6 +29,12 @@ export interface PreferencesData {
   cloudflareAccountId?: string
   /** Last updated timestamp (Unix ms) */
   updatedAt: number
+  /** Enable/disable update checking (default: true) */
+  updateCheck?: boolean
+  /** Unix timestamp of last update check */
+  lastUpdateCheck?: number
+  /** Cached latest version from npm registry */
+  cachedLatestVersion?: string
 }
 
 /**
@@ -42,12 +48,22 @@ export interface UserPreferencesInterface {
   readonly lastTemplate: string | undefined
   /** Get Cloudflare account ID */
   readonly cloudflareAccountId: string | undefined
+  /** Get update check preference (default: true) */
+  readonly updateCheck: boolean
+  /** Get last update check timestamp */
+  readonly lastUpdateCheck: number | undefined
+  /** Get cached latest version */
+  readonly cachedLatestVersion: string | undefined
   /** Set package manager preference */
   setPackageManager(pm: 'npm' | 'pnpm' | 'bun'): this
   /** Set last used template */
   setLastTemplate(template: string): this
   /** Set Cloudflare account ID */
   setCloudflareAccountId(accountId: string): this
+  /** Set update check preference */
+  setUpdateCheck(enabled: boolean): this
+  /** Cache version check result */
+  cacheVersionCheck(version: string): this
   /** Save preferences to disk */
   persist(): Promise<void>
 }

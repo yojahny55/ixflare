@@ -58,12 +58,7 @@ export interface DisplayMode {
 /**
  * Step status for multi-step progress
  */
-export type StepStatus =
-  | 'pending'
-  | 'in-progress'
-  | 'completed'
-  | 'failed'
-  | 'skipped'
+export type StepStatus = 'pending' | 'in-progress' | 'completed' | 'failed' | 'skipped'
 
 /**
  * Individual step in multi-step progress

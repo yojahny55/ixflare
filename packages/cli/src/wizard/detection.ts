@@ -24,11 +24,7 @@ export function detectInteractiveMode(args: string[]): InteractiveMode {
   }
 
   // Check CI environment variables
-  const isCI = !!(
-    process.env.CI ||
-    process.env.GITHUB_ACTIONS ||
-    process.env.GITLAB_CI
-  )
+  const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.GITLAB_CI)
 
   if (isCI) {
     return {

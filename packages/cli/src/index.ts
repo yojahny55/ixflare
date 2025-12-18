@@ -5,10 +5,24 @@
  * @node-only
  */
 
+import { readFileSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { loadCustomCommands, runCustomCommand } from './commands/custom'
+import { UserPreferences } from './wizard/preferences'
+import { detectInteractiveMode } from './wizard/detection'
+import { checkForUpdate, displayUpdateNotification } from './update-checker'
 
 const args = process.argv.slice(2)
 const command = args[0]
+
+// Get current CLI version from package.json
+const currentDirname = dirname(fileURLToPath(import.meta.url))
+const packageJsonPath = join(currentDirname, '../package.json')
+const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as {
+  version: string
+}
+const CURRENT_VERSION = packageJson.version
 
 const commands: Record<string, () => Promise<void>> = {
   init: () => import('./commands/init').then((m) => m.init()),
@@ -156,9 +170,33 @@ const commands: Record<string, () => Promise<void>> = {
     const m = await import('./commands/errors')
     await m.handleErrorsCommand()
   },
+  config: async () => {
+    const m = await import('./commands/config')
+    await m.config()
+  },
 }
 
 async function main(): Promise<void> {
+  // Start async update check (non-blocking)
+  // Skip for help/version commands to avoid interfering with output
+  let updateCheckPromise: Promise<Awaited<ReturnType<typeof checkForUpdate>> | null> =
+    Promise.resolve(null)
+
+  if (
+    command &&
+    command !== '--help' &&
+    command !== '-h' &&
+    command !== '--version' &&
+    command !== '-v'
+  ) {
+    const preferences = await UserPreferences.load()
+    const mode = detectInteractiveMode(args)
+
+    updateCheckPromise = checkForUpdate('ixflare', CURRENT_VERSION, preferences, mode).catch(
+      () => null
+    )
+  }
+
   if (!command || command === '--help' || command === '-h') {
     // Load custom commands for help display
     const { commands: customCommands } = await loadCustomCommands(process.cwd())
@@ -200,6 +238,7 @@ async function main(): Promise<void> {
     auth:rotate-keys    Manually rotate JWT signing keys
     security:audit      Scan dependencies for vulnerabilities
     errors              Error code reference and troubleshooting
+    config              Manage CLI configuration preferences
 
   Migration Options:
     --yes               Skip confirmation prompts
@@ -239,6 +278,13 @@ ${customCommandsList ? '\n  Custom Commands:\n' + customCommandsList : ''}
   const handler = commands[command]
   if (handler) {
     await handler()
+
+    // Display update notification after command completes (if available)
+    const updateResult = await updateCheckPromise
+    if (updateResult?.hasUpdate) {
+      const preferences = await UserPreferences.load()
+      displayUpdateNotification(updateResult, preferences.packageManager ?? 'pnpm')
+    }
     return
   }
 
@@ -246,6 +292,13 @@ ${customCommandsList ? '\n  Custom Commands:\n' + customCommandsList : ''}
   const { commands: customCommands, config } = await loadCustomCommands(process.cwd())
   if (customCommands.has(command) && config) {
     await runCustomCommand(command, config)
+
+    // Display update notification after command completes (if available)
+    const updateResult = await updateCheckPromise
+    if (updateResult?.hasUpdate) {
+      const preferences = await UserPreferences.load()
+      displayUpdateNotification(updateResult, preferences.packageManager ?? 'pnpm')
+    }
     return
   }
 

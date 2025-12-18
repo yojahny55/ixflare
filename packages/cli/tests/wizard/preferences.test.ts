@@ -81,9 +81,7 @@ describe('UserPreferences', () => {
 
     it('should chain setter calls', async () => {
       const prefs = await UserPreferences.load(testConfigDir)
-      const result = prefs
-        .setPackageManager('npm')
-        .setLastTemplate('api-backend')
+      const result = prefs.setPackageManager('npm').setLastTemplate('api-backend')
 
       expect(result).toBe(prefs)
       expect(prefs.packageManager).toBe('npm')
@@ -94,9 +92,7 @@ describe('UserPreferences', () => {
   describe('persist', () => {
     it('should save preferences to disk', async () => {
       const prefs = await UserPreferences.load(testConfigDir)
-      prefs
-        .setPackageManager('pnpm')
-        .setLastTemplate('fullstack-react')
+      prefs.setPackageManager('pnpm').setLastTemplate('fullstack-react')
 
       await prefs.persist()
 

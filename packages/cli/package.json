@@ -34,12 +34,14 @@
     "picocolors": "^1.1.1",
     "prompts": "^2.4.2",
     "rollup-plugin-visualizer": "^6.0.5",
+    "semver": "^7.6.3",
     "vite": "^6.4.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.19.1",
     "@types/prompts": "^2.4.9",
+    "@types/semver": "^7.7.1",
     "better-sqlite3": "^12.5.0",
     "drizzle-kit": "0.31.8",
     "drizzle-orm": "^0.45.0",

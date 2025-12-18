@@ -134,9 +134,13 @@ export async function initWizardFlow(
       template = (ctx.preferences?.lastTemplate as TemplateType) ?? 'minimal'
     } else {
       const initial = ctx.preferences?.lastTemplate as TemplateType | undefined
-      const selected = await ctx.select('What type of project are you building?', [...TEMPLATE_CHOICES], {
-        initial,
-      })
+      const selected = await ctx.select(
+        'What type of project are you building?',
+        [...TEMPLATE_CHOICES],
+        {
+          initial,
+        }
+      )
       if (!selected) {
         return null // Cancelled
       }
@@ -196,6 +200,8 @@ export function displayNextSteps(result: InitWizardResult): void {
   console.log(`${bold('Next steps:')}`)
   console.log('')
   console.log(`  ${dim('$')} cd ${result.projectName}`)
-  console.log(`  ${dim('$')} ${result.packageManager === 'npm' ? 'npm run' : result.packageManager} dev`)
+  console.log(
+    `  ${dim('$')} ${result.packageManager === 'npm' ? 'npm run' : result.packageManager} dev`
+  )
   console.log('')
 }

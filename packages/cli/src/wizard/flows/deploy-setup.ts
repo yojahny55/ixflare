@@ -83,7 +83,7 @@ export async function deploySetupWizardFlow(ctx: WizardContext): Promise<boolean
       return true // Already configured and working
     }
     // Credentials exist but are invalid, continue with setup
-    console.log(yellow('\nExisting credentials appear invalid. Let\'s set up new ones.\n'))
+    console.log(yellow("\nExisting credentials appear invalid. Let's set up new ones.\n"))
   }
 
   // Non-interactive mode requires environment variables

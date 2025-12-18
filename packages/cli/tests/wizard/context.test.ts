@@ -153,9 +153,7 @@ describe('WizardContext', () => {
 
     it('should return null in non-interactive mode', async () => {
       const ctx = await WizardContext.create(['--yes'])
-      const result = await ctx.select('Choose option:', [
-        { title: 'Option 1', value: 'option1' },
-      ])
+      const result = await ctx.select('Choose option:', [{ title: 'Option 1', value: 'option1' }])
 
       expect(result).toBeNull()
     })

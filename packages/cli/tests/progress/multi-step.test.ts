@@ -13,11 +13,7 @@ describe('MultiStepProgress', () => {
 
   describe('construction', () => {
     it('should create with array of step names', () => {
-      const progress = new MultiStepProgress([
-        'Step 1',
-        'Step 2',
-        'Step 3',
-      ])
+      const progress = new MultiStepProgress(['Step 1', 'Step 2', 'Step 3'])
       expect(progress).toBeDefined()
       const steps = progress.getSteps()
       expect(steps).toHaveLength(3)

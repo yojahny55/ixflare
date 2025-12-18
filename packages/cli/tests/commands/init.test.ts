@@ -283,11 +283,16 @@ describe('init command', () => {
 
     it('should work with all flags in non-interactive mode', async () => {
       process.argv = [
-        'node', 'ix', 'init',
-        '--name', 'full-test',
-        '--template', 'api-backend',
-        '--pm', 'npm',
-        '--yes'
+        'node',
+        'ix',
+        'init',
+        '--name',
+        'full-test',
+        '--template',
+        'api-backend',
+        '--pm',
+        'npm',
+        '--yes',
       ]
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

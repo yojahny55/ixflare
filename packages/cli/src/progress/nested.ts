@@ -40,11 +40,7 @@ export class NestedProgress {
    * @param status - Status of the child operation
    * @param duration - Optional duration in milliseconds
    */
-  addChild(
-    text: string,
-    status: StepStatus = 'in-progress',
-    duration?: number
-  ): this {
+  addChild(text: string, status: StepStatus = 'in-progress', duration?: number): this {
     this.children.push({ text, status, duration })
     return this
   }
@@ -109,9 +105,7 @@ export class NestedProgress {
     // Render children (indented)
     for (const child of this.children) {
       const childSymbol = this.getStatusSymbol(child.status)
-      const durationText = child.duration
-        ? ` ${dim(`(${formatDuration(child.duration)})`)}`
-        : ''
+      const durationText = child.duration ? ` ${dim(`(${formatDuration(child.duration)})`)}` : ''
       lines.push(`  ${childSymbol} ${child.text}${durationText}`)
     }
 

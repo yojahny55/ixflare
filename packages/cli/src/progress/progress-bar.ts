@@ -125,9 +125,10 @@ export class ProgressBar {
     const percentage = this.calculatePercentage()
     const bar = this.renderBar(percentage)
     const percentageText = this.options.showPercentage ? ` ${percentage}%` : ''
-    const etaText = this.options.showETA && this.estimatedTimeRemaining > 0
-      ? ` ${dim(`ETA: ${this.etaFormatted}`)}`
-      : ''
+    const etaText =
+      this.options.showETA && this.estimatedTimeRemaining > 0
+        ? ` ${dim(`ETA: ${this.etaFormatted}`)}`
+        : ''
     const text = this.options.text ? `${this.options.text}\n\n  ` : ''
 
     return `${text}${bar}${percentageText}${etaText}`

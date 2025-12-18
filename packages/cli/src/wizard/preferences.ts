@@ -42,11 +42,7 @@ export class UserPreferences {
    * Get full path to preferences file
    */
   private getPreferencesPath(): string {
-    return join(
-      this.configHome,
-      UserPreferences.CONFIG_DIR_NAME,
-      UserPreferences.FILENAME
-    )
+    return join(this.configHome, UserPreferences.CONFIG_DIR_NAME, UserPreferences.FILENAME)
   }
 
   /**
@@ -100,6 +96,27 @@ export class UserPreferences {
   }
 
   /**
+   * Get update check preference (default: true)
+   */
+  get updateCheck(): boolean {
+    return this.data.updateCheck ?? true
+  }
+
+  /**
+   * Get last update check timestamp
+   */
+  get lastUpdateCheck(): number | undefined {
+    return this.data.lastUpdateCheck
+  }
+
+  /**
+   * Get cached latest version
+   */
+  get cachedLatestVersion(): string | undefined {
+    return this.data.cachedLatestVersion
+  }
+
+  /**
    * Set package manager preference
    */
   setPackageManager(pm: 'npm' | 'pnpm' | 'bun'): this {
@@ -120,6 +137,24 @@ export class UserPreferences {
    */
   setCloudflareAccountId(accountId: string): this {
     this.data.cloudflareAccountId = accountId
+    return this
+  }
+
+  /**
+   * Set update check preference
+   */
+  setUpdateCheck(enabled: boolean): this {
+    this.data.updateCheck = enabled
+    return this
+  }
+
+  /**
+   * Cache version check result
+   * Updates both the cached version and last check timestamp
+   */
+  cacheVersionCheck(version: string): this {
+    this.data.cachedLatestVersion = version
+    this.data.lastUpdateCheck = Date.now()
     return this
   }
 
