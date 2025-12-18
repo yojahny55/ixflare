@@ -151,6 +151,10 @@ const commands: Record<string, () => Promise<void>> = {
     const m = await import('./commands/rescue')
     await m.deleteCheckpoint(checkpointId, restArgs)
   },
+  errors: async () => {
+    const m = await import('./commands/errors')
+    await m.handleErrorsCommand()
+  },
 }
 
 async function main(): Promise<void> {
@@ -193,6 +197,7 @@ async function main(): Promise<void> {
     generate:types      Generate TypeScript types for routes and models
     auth:rotate-keys    Manually rotate JWT signing keys
     security:audit      Scan dependencies for vulnerabilities
+    errors              Error code reference and troubleshooting
 
   Migration Options:
     --yes               Skip confirmation prompts
@@ -249,6 +254,14 @@ ${customCommandsList ? '\n  Custom Commands:\n' + customCommandsList : ''}
 }
 
 main().catch((err) => {
-  console.error(err)
-  process.exit(1)
+  // Import error handling dynamically to avoid circular dependency
+  import('./errors').then(({ isCLIError, detectDisplayOptions }) => {
+    if (isCLIError(err)) {
+      const options = detectDisplayOptions()
+      console.error(err.format(options))
+    } else {
+      console.error(err)
+    }
+    process.exit(1)
+  })
 })

@@ -32,8 +32,8 @@ function findLocalD1DatabasePath(cwd: string): string | null {
     return null
   }
 
-  const bindings = readdirSync(wranglerStateDir, { withFileTypes: true }).filter(
-    (entry: Dirent) => entry.isDirectory()
+  const bindings = readdirSync(wranglerStateDir, { withFileTypes: true }).filter((entry: Dirent) =>
+    entry.isDirectory()
   )
 
   // Use first D1 database found
@@ -172,7 +172,10 @@ ${pc.bold('GIT CONFLICTS')}
  * @param checkpointId Checkpoint identifier
  * @param args Command arguments
  */
-export async function restore(checkpointId: string | undefined, args: string[] = []): Promise<void> {
+export async function restore(
+  checkpointId: string | undefined,
+  args: string[] = []
+): Promise<void> {
   const cwd = process.cwd()
 
   // Parse arguments

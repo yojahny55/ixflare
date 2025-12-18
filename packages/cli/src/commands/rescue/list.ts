@@ -148,7 +148,10 @@ export async function list(args: string[] = []): Promise<void> {
         `${oldCheckpoints.length} checkpoint${oldCheckpoints.length > 1 ? 's' : ''} older than ${DEFAULT_RETENTION_DAYS} days`
       )
     )
-    console.log(pc.dim('Clean up with:'), pc.cyan(`ix rescue:delete --older-than ${DEFAULT_RETENTION_DAYS}`))
+    console.log(
+      pc.dim('Clean up with:'),
+      pc.cyan(`ix rescue:delete --older-than ${DEFAULT_RETENTION_DAYS}`)
+    )
   }
 
   console.log('')

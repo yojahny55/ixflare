@@ -111,7 +111,9 @@ export async function deleteCheckpoint(
 
     console.log('')
     console.log(
-      pc.yellow(`Found ${oldCheckpoints.length} checkpoint${oldCheckpoints.length > 1 ? 's' : ''} older than ${olderThanDays} days:`)
+      pc.yellow(
+        `Found ${oldCheckpoints.length} checkpoint${oldCheckpoints.length > 1 ? 's' : ''} older than ${olderThanDays} days:`
+      )
     )
     console.log('')
 
@@ -155,7 +157,9 @@ export async function deleteCheckpoint(
     }
 
     console.log('')
-    console.log(pc.green(`Successfully deleted ${deletedCount} checkpoint${deletedCount > 1 ? 's' : ''}`))
+    console.log(
+      pc.green(`Successfully deleted ${deletedCount} checkpoint${deletedCount > 1 ? 's' : ''}`)
+    )
     console.log('')
     return
   }
