@@ -178,6 +178,10 @@ const commands: Record<string, () => Promise<void>> = {
     const m = await import('./commands/typecheck')
     await m.typecheck()
   },
+  logs: async () => {
+    const m = await import('./commands/logs')
+    await m.logs()
+  },
 }
 
 async function main(): Promise<void> {
@@ -244,6 +248,7 @@ async function main(): Promise<void> {
     errors              Error code reference and troubleshooting
     config              Manage CLI configuration preferences
     typecheck           Run TypeScript type checking
+    logs                Stream real-time logs from deployed Workers
 
   Migration Options:
     --yes               Skip confirmation prompts
