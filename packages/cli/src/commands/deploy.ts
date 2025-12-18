@@ -12,6 +12,7 @@ import {
   formatValidationIssues,
 } from './deploy/validation'
 import { showFirstTimeGuide } from './deploy/first-time-guide'
+import { DeployError, detectDisplayOptions } from '@/errors'
 
 export interface DeployOptions {
   skipFirstTime?: boolean
@@ -89,7 +90,22 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
     if (authMethod === 'none') {
       const setupSuccess = await showFirstTimeGuide()
       if (!setupSuccess) {
-        // User needs to complete setup manually
+        // User needs to complete setup manually - show actionable error
+        const error = new DeployError({
+          code: 'IX_E301',
+          message: 'Missing Cloudflare credentials',
+          causes: [
+            'CLOUDFLARE_API_TOKEN environment variable not set',
+            'Not logged in to Wrangler CLI',
+          ],
+          fixes: [
+            'Run: `wrangler login`',
+            'Or set CLOUDFLARE_API_TOKEN in your environment',
+            'Get token at: https://dash.cloudflare.com/profile/api-tokens',
+          ],
+        })
+        const displayOptions = detectDisplayOptions()
+        console.error(error.format(displayOptions))
         return { success: false, exitCode: 0 }
       }
     }
@@ -175,8 +191,23 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
       await runner.runPreDeploy({ environment })
     } catch (error) {
       if (error instanceof HookError) {
-        console.error(`\n❌ ${error.message}`)
-        console.error('\nDeployment stopped due to hook failure.\n')
+        const deployError = new DeployError({
+          code: 'IX_E304',
+          message: `Pre-deploy hook failed: ${error.message}`,
+          causes: [
+            'Hook script returned non-zero exit code',
+            'Hook script threw an error',
+            'Hook command not found',
+          ],
+          fixes: [
+            'Check hook script for errors',
+            'Ensure hook commands are executable',
+            'Run with `--verbose` for detailed output',
+          ],
+          originalError: error,
+        })
+        const displayOptions = detectDisplayOptions()
+        console.error(deployError.format(displayOptions))
         return { success: false, exitCode: 1 }
       }
       // If no config file, continue without hooks

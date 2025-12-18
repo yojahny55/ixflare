@@ -21,6 +21,7 @@ export { ConfigError } from './config-error'
 export { BuildError } from './build-error'
 export { DeployError } from './deploy-error'
 export { DatabaseError } from './database-error'
+export { AuthError } from './auth-error'
 
 // Formatting utilities
 export { formatError, detectDisplayOptions, formatAndExit } from './formatter'

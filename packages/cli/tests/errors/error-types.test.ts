@@ -7,6 +7,7 @@ import { ConfigError } from '@/errors/config-error'
 import { BuildError } from '@/errors/build-error'
 import { DeployError } from '@/errors/deploy-error'
 import { DatabaseError } from '@/errors/database-error'
+import { AuthError } from '@/errors/auth-error'
 
 describe('ConfigError', () => {
   it('should create config error with docs URL', () => {
@@ -109,6 +110,31 @@ describe('DatabaseError', () => {
     })
 
     expect(error.causes).toContain('Table users has invalid column type')
+    expect(error.fixes).toHaveLength(2)
+  })
+})
+
+describe('AuthError', () => {
+  it('should create auth error with docs URL', () => {
+    const error = new AuthError({
+      code: 'IX_E501',
+      message: 'Invalid JWT configuration',
+    })
+
+    expect(error.name).toBe('AuthError')
+    expect(error.code).toBe('IX_E501')
+    expect(error.docsUrl).toBe('https://ixflare.dev/errors/IX_E501')
+  })
+
+  it('should create auth error with security details', () => {
+    const error = new AuthError({
+      code: 'IX_E503',
+      message: 'Missing authentication secrets',
+      causes: ['JWT_SECRET not set', 'Session secret missing'],
+      fixes: ['Set JWT_SECRET in environment', 'Generate secret with openssl'],
+    })
+
+    expect(error.causes).toContain('JWT_SECRET not set')
     expect(error.fixes).toHaveLength(2)
   })
 })

@@ -2,9 +2,9 @@
  * Tests for error formatting
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { CLIError } from '@/errors/cli-error'
-import { formatError, detectDisplayOptions } from '@/errors/formatter'
+import { formatError, detectDisplayOptions, formatAndExit } from '@/errors/formatter'
 import type { FormatOptions } from '@/errors/types'
 
 describe('formatError', () => {
@@ -180,5 +180,69 @@ describe('detectDisplayOptions', () => {
     expect(options).toHaveProperty('color')
     expect(options).toHaveProperty('verbose')
     expect(options).toHaveProperty('interactive')
+  })
+})
+
+describe('formatAndExit', () => {
+  let mockExit: ReturnType<typeof vi.spyOn>
+  let mockConsoleError: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    mockExit = vi.spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('process.exit called')
+    })
+    mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    mockExit.mockRestore()
+    mockConsoleError.mockRestore()
+  })
+
+  it('should format error and call process.exit with default exit code', () => {
+    const error = new CLIError({
+      code: 'IX_E101',
+      message: 'Test error',
+    })
+
+    expect(() => formatAndExit(error)).toThrow('process.exit called')
+
+    expect(mockConsoleError).toHaveBeenCalled()
+    expect(mockExit).toHaveBeenCalledWith(1)
+
+    // Verify the error was formatted
+    const output = mockConsoleError.mock.calls[0][0]
+    expect(output).toContain('IX_E101')
+    expect(output).toContain('Test error')
+  })
+
+  it('should use custom exit code', () => {
+    const error = new CLIError({
+      code: 'IX_E102',
+      message: 'Another error',
+    })
+
+    expect(() => formatAndExit(error, 42)).toThrow('process.exit called')
+
+    expect(mockExit).toHaveBeenCalledWith(42)
+  })
+
+  it('should format error with all fields', () => {
+    const error = new CLIError({
+      code: 'IX_E103',
+      message: 'Full error',
+      causes: ['Cause 1', 'Cause 2'],
+      fixes: ['Fix 1', 'Fix 2'],
+      docsUrl: 'https://example.com/docs',
+    })
+
+    expect(() => formatAndExit(error)).toThrow('process.exit called')
+
+    const output = mockConsoleError.mock.calls[0][0]
+    expect(output).toContain('IX_E103')
+    expect(output).toContain('Full error')
+    expect(output).toContain('Cause 1')
+    expect(output).toContain('Fix 1')
+    expect(output).toContain('example.com/docs')
   })
 })

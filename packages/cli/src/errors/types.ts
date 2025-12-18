@@ -79,6 +79,10 @@ export interface ErrorCodeMeta {
   title: string
   /** Path to documentation (relative to base URL) */
   docsPath: string
+  /** Common causes for this error */
+  causes?: string[]
+  /** Quick fixes for this error */
+  fixes?: string[]
 }
 
 /**
