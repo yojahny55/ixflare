@@ -8,7 +8,7 @@ import { deploy, parseDeployArgs } from '../../src/commands/deploy'
 import * as wrangler from '../../src/utils/wrangler'
 import * as wranglerExec from '../../src/utils/wrangler-exec'
 import * as validation from '../../src/commands/deploy/validation'
-import * as firstTimeGuide from '../../src/commands/deploy/first-time-guide'
+import * as wizard from '../../src/wizard'
 
 vi.mock('../../src/utils/wrangler', () => ({
   detectAuthMethod: vi.fn(),
@@ -22,7 +22,12 @@ vi.mock('../../src/utils/wrangler', () => ({
 }))
 vi.mock('../../src/utils/wrangler-exec')
 vi.mock('../../src/commands/deploy/validation')
-vi.mock('../../src/commands/deploy/first-time-guide')
+vi.mock('../../src/wizard', () => ({
+  WizardContext: {
+    create: vi.fn().mockResolvedValue({}),
+  },
+  deploySetupWizardFlow: vi.fn(),
+}))
 
 // Store mock methods at module level for access in tests
 const mockLoadConfig = vi.fn()
@@ -75,22 +80,22 @@ describe('deploy command', () => {
   describe('first-time detection', () => {
     it('should show first-time guide when not authenticated', async () => {
       vi.mocked(wrangler.detectAuthMethod).mockReturnValue('none')
-      vi.mocked(firstTimeGuide.showFirstTimeGuide).mockResolvedValue(false)
+      vi.mocked(wizard.deploySetupWizardFlow).mockResolvedValue(false)
 
       const result = await deploy()
 
-      expect(firstTimeGuide.showFirstTimeGuide).toHaveBeenCalled()
+      expect(wizard.deploySetupWizardFlow).toHaveBeenCalled()
       expect(result.success).toBe(false)
       expect(result.exitCode).toBe(0)
     })
 
     it('should continue after successful first-time setup', async () => {
       vi.mocked(wrangler.detectAuthMethod).mockReturnValue('none')
-      vi.mocked(firstTimeGuide.showFirstTimeGuide).mockResolvedValue(true)
+      vi.mocked(wizard.deploySetupWizardFlow).mockResolvedValue(true)
 
       const result = await deploy()
 
-      expect(firstTimeGuide.showFirstTimeGuide).toHaveBeenCalled()
+      expect(wizard.deploySetupWizardFlow).toHaveBeenCalled()
       expect(result.success).toBe(true)
     })
 
@@ -99,7 +104,7 @@ describe('deploy command', () => {
 
       await deploy({ skipFirstTime: true })
 
-      expect(firstTimeGuide.showFirstTimeGuide).not.toHaveBeenCalled()
+      expect(wizard.deploySetupWizardFlow).not.toHaveBeenCalled()
     })
 
     it('should skip first-time guide when already authenticated', async () => {
@@ -107,7 +112,7 @@ describe('deploy command', () => {
 
       await deploy()
 
-      expect(firstTimeGuide.showFirstTimeGuide).not.toHaveBeenCalled()
+      expect(wizard.deploySetupWizardFlow).not.toHaveBeenCalled()
     })
   })
 

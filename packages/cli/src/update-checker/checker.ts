@@ -60,8 +60,16 @@ export function getUpdateInfo(current: string, latest: string): UpdateCheckResul
     return null
   }
 
-  // Determine update type
-  const updateType = diff(current, latest) as 'major' | 'minor' | 'patch' | 'prerelease' | null
+  // Determine update type (semver.diff returns various types including pre* variants)
+  const updateType = diff(current, latest) as
+    | 'major'
+    | 'minor'
+    | 'patch'
+    | 'premajor'
+    | 'preminor'
+    | 'prepatch'
+    | 'prerelease'
+    | null
 
   return {
     hasUpdate: true,

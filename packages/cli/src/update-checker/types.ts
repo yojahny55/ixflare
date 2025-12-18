@@ -13,8 +13,16 @@ export interface UpdateCheckResult {
   currentVersion: string
   /** Latest available version */
   latestVersion: string
-  /** Type of update (major/minor/patch) */
-  updateType: 'major' | 'minor' | 'patch' | 'prerelease' | null
+  /** Type of update as returned by semver.diff() */
+  updateType:
+    | 'major'
+    | 'minor'
+    | 'patch'
+    | 'premajor'
+    | 'preminor'
+    | 'prepatch'
+    | 'prerelease'
+    | null
   /** URL to changelog */
   changelogUrl: string
   /** URL to migration guide (for major updates) */

@@ -27,8 +27,12 @@ const BOX = {
  */
 function padLine(text: string, width: number): string {
   // Remove ANSI codes to measure visible length
+  // Matches all ANSI escape sequences including:
+  // - Basic colors: \x1B[31m
+  // - Multiple params: \x1B[38;5;196m (256-color)
+  // - RGB colors: \x1B[38;2;255;128;0m (true color)
   // eslint-disable-next-line no-control-regex
-  const visible = text.replace(/\u001B\[\d+m/g, '')
+  const visible = text.replace(/\u001B\[[0-9;]*m/g, '')
   const padding = width - visible.length
   return text + ' '.repeat(Math.max(0, padding))
 }
@@ -51,7 +55,7 @@ export function formatUpdateNotification(
   // Top border
   lines.push(BOX.topLeft + BOX.horizontal.repeat(width) + BOX.topRight)
 
-  if (result.updateType === 'major') {
+  if (result.updateType === 'major' || result.updateType === 'premajor') {
     // Major version warning
     const versionLine = `${yellow('⚠️  Major update available:')} ${dim(result.currentVersion)} → ${bold(result.latestVersion)}`
     lines.push(`${BOX.vertical} ${padLine(versionLine, width - 2)} ${BOX.vertical}`)
