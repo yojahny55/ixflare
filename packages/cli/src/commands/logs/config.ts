@@ -16,7 +16,8 @@ export function resolveWorkerName(cwd: string = process.cwd()): string {
 	if (existsSync(wranglerPath)) {
 		try {
 			const content = readFileSync(wranglerPath, 'utf-8')
-			const nameMatch = content.match(/name\s*=\s*"([^"]+)"/)
+			// Support both double and single quoted names in TOML
+			const nameMatch = content.match(/name\s*=\s*["']([^"']+)["']/)
 			if (nameMatch && nameMatch[1]) {
 				return nameMatch[1]
 			}

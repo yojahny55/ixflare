@@ -5,7 +5,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createInterface, type Interface } from 'node:readline'
 import { EventEmitter } from 'node:events'
-import type { LogsOptions, LogEntry } from './types.js'
+import type { LogsOptions } from './types.js'
 import { tryParseLogLine } from './parser.js'
 
 /**
@@ -20,6 +20,8 @@ export class WranglerTailBridge extends EventEmitter {
 	private isStopped = false
 	private workerName: string = ''
 	private options: LogsOptions = {}
+	private isReconnecting = false
+	private hasReceivedOutput = false
 
 	/**
 	 * Starts the wrangler tail subprocess
@@ -38,6 +40,7 @@ export class WranglerTailBridge extends EventEmitter {
 	 */
 	private startProcess(): void {
 		const args = this.buildArgs(this.workerName, this.options)
+		this.hasReceivedOutput = false
 
 		// Spawn wrangler tail
 		this.process = spawn('npx', ['wrangler', 'tail', ...args], {
@@ -65,7 +68,7 @@ export class WranglerTailBridge extends EventEmitter {
 			})
 
 			stderrReadline.on('line', (line: string) => {
-				this.emit('status', line)
+				this.handleOutput(line, 'status')
 			})
 		}
 
@@ -87,18 +90,34 @@ export class WranglerTailBridge extends EventEmitter {
 	}
 
 	/**
-	 * Handles a line of output from wrangler
+	 * Handles a line of output from wrangler stdout
 	 */
 	private handleLine(line: string): void {
 		// Try to parse as JSON log entry
 		const entry = tryParseLogLine(line)
 
 		if (entry) {
-			this.emit('log', entry)
+			this.handleOutput(entry, 'log')
 		} else {
 			// Non-JSON output (status messages)
-			this.emit('status', line)
+			this.handleOutput(line, 'status')
 		}
+	}
+
+	/**
+	 * Handles output and confirms reconnection on first output
+	 */
+	private handleOutput(data: unknown, eventType: 'log' | 'status'): void {
+		// On first output after reconnection, confirm the reconnection succeeded
+		if (this.isReconnecting && !this.hasReceivedOutput) {
+			this.hasReceivedOutput = true
+			this.isReconnecting = false
+			this.reconnectAttempts = 0 // Reset attempts on successful reconnect
+			this.reconnectDelay = 1000
+			this.emit('reconnected')
+		}
+
+		this.emit(eventType, data)
 	}
 
 	/**
@@ -139,6 +158,7 @@ export class WranglerTailBridge extends EventEmitter {
 	 */
 	private attemptReconnect(): void {
 		this.reconnectAttempts++
+		this.isReconnecting = true
 
 		this.emit('reconnecting')
 
@@ -147,11 +167,8 @@ export class WranglerTailBridge extends EventEmitter {
 		setTimeout(() => {
 			if (!this.isStopped) {
 				this.startProcess()
-
-				this.emit('reconnected')
-
-				// Reset delay on successful reconnect
-				this.reconnectDelay = 1000
+				// Note: 'reconnected' event is emitted in handleOutput() when first output is received
+				// This ensures we only confirm reconnection after the process is actually working
 			}
 		}, delay)
 	}

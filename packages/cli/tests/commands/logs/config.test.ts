@@ -108,16 +108,10 @@ main = "src/index.ts"
 			const wranglerToml = `name = 'single-quote-worker'`
 			writeFileSync(join(testDir, 'wrangler.toml'), wranglerToml)
 
-			// Note: Our regex only matches double quotes, so this should fail
-			// and fall back to package.json
-			const packageJson = {
-				name: 'fallback-worker',
-			}
-			writeFileSync(join(testDir, 'package.json'), JSON.stringify(packageJson))
-
 			const result = resolveWorkerName(testDir)
 
-			expect(result).toBe('fallback-worker')
+			// Should now correctly parse single-quoted names
+			expect(result).toBe('single-quote-worker')
 		})
 	})
 

@@ -197,6 +197,83 @@ describe('Log Parser', () => {
 			expect(resultCanceled.status).toBe(499)
 		})
 
+		it('should extract status code from "status: XXX" pattern', () => {
+			const raw: WranglerLogOutput = {
+				outcome: 'ok',
+				scriptName: 'test-worker',
+				exceptions: [],
+				logs: [
+					{
+						message: ['Response status: 404'],
+						level: 'log',
+						timestamp: 1733322601000,
+					},
+				],
+				eventTimestamp: 1733322601000,
+			}
+
+			const result = parseLogEntry(raw)
+			expect(result.status).toBe(404)
+		})
+
+		it('should extract status code from "HTTP XXX" pattern', () => {
+			const raw: WranglerLogOutput = {
+				outcome: 'ok',
+				scriptName: 'test-worker',
+				exceptions: [],
+				logs: [
+					{
+						message: ['HTTP/1.1 201 Created'],
+						level: 'log',
+						timestamp: 1733322601000,
+					},
+				],
+				eventTimestamp: 1733322601000,
+			}
+
+			const result = parseLogEntry(raw)
+			expect(result.status).toBe(201)
+		})
+
+		it('should extract status code from "[XXX]" pattern', () => {
+			const raw: WranglerLogOutput = {
+				outcome: 'ok',
+				scriptName: 'test-worker',
+				exceptions: [],
+				logs: [
+					{
+						message: ['GET /api/users [302] 15ms'],
+						level: 'log',
+						timestamp: 1733322601000,
+					},
+				],
+				eventTimestamp: 1733322601000,
+			}
+
+			const result = parseLogEntry(raw)
+			expect(result.status).toBe(302)
+		})
+
+		it('should NOT extract arbitrary 3-digit numbers as status codes', () => {
+			const raw: WranglerLogOutput = {
+				outcome: 'ok',
+				scriptName: 'test-worker',
+				exceptions: [],
+				logs: [
+					{
+						message: ['User ID: 12345 processed successfully'],
+						level: 'log',
+						timestamp: 1733322601000,
+					},
+				],
+				eventTimestamp: 1733322601000,
+			}
+
+			const result = parseLogEntry(raw)
+			// Should fall back to outcome-based status (200 for 'ok'), not extract "123"
+			expect(result.status).toBe(200)
+		})
+
 		it('should handle missing event data gracefully', () => {
 			const raw: WranglerLogOutput = {
 				outcome: 'ok',

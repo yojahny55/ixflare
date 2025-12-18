@@ -72,8 +72,8 @@ ${pc.bold('Options:')}
   --ip <address>        Filter by client IP (use "self" for your IP)
   --format <format>     Output format: pretty (default), json
   --sampling-rate <n>   Percentage of requests to show (0-100)
-  --since <time>        Show logs since time (e.g., 1h, 30m, 2d)
-  --until <time>        Show logs until time (e.g., 30m, 1h)
+  --since <time>        ${pc.dim('(Not supported)')} Historical start time
+  --until <time>        ${pc.dim('(Not supported)')} Historical end time
   --help, -h            Show this help message
 
 ${pc.bold('Examples:')}
@@ -88,9 +88,21 @@ ${pc.bold('Examples:')}
 ${pc.bold('Notes:')}
   ${pc.dim('•')} Maximum 10 concurrent log streams per worker
   ${pc.dim('•')} High-traffic workers may automatically enter sampling mode
-  ${pc.dim('•')} Historical logs (--since/--until) may have limited availability
+  ${pc.dim('•')} Historical logs require Cloudflare Dashboard (wrangler tail is real-time only)
   ${pc.dim('•')} Press Ctrl+C to stop streaming
 `)
+}
+
+/**
+ * Validates options and warns about unsupported features
+ */
+function validateOptions(options: LogsOptions): void {
+	// --since and --until are not supported by wrangler tail
+	if (options.since || options.until) {
+		console.log(pc.yellow('\n⚠️  Historical log retrieval (--since/--until) is not supported by wrangler tail.'))
+		console.log(pc.dim('   Real-time logs do not persist. Use Cloudflare Dashboard for historical logs.'))
+		console.log(pc.dim('   These flags will be ignored.\n'))
+	}
 }
 
 /**
@@ -133,6 +145,9 @@ export async function logs(): Promise<void> {
 	}
 
 	try {
+		// Validate options and warn about unsupported features
+		validateOptions(options)
+
 		// Resolve worker name
 		const workerName = options.worker || resolveWorkerName()
 		validateWorkerName(workerName)

@@ -28,15 +28,34 @@ export function parseLogEntry(raw: WranglerLogOutput): LogEntry {
  * Extracts HTTP status code from log messages or defaults to outcome-based code
  */
 function extractStatusCode(raw: WranglerLogOutput): number {
-	// Try to find status in log messages
+	// Try to find status in log messages using specific patterns
+	// to avoid false positives with arbitrary 3-digit numbers (like user IDs)
 	for (const log of raw.logs) {
 		const messages = Array.isArray(log.message) ? log.message : [log.message]
 		for (const msg of messages) {
 			if (typeof msg === 'string') {
-				// Look for "status: 200" or "200" patterns
-				const statusMatch = msg.match(/\b(\d{3})\b/)
+				// Pattern 1: "status: 200" or "status=200" or "status 200"
+				const statusMatch = msg.match(/\bstatus[:\s=]+(\d{3})\b/i)
 				if (statusMatch) {
 					const code = parseInt(statusMatch[1], 10)
+					if (code >= 100 && code < 600) {
+						return code
+					}
+				}
+
+				// Pattern 2: "HTTP 200" or "HTTP/1.1 200"
+				const httpMatch = msg.match(/\bHTTP(?:\/[\d.]+)?\s+(\d{3})\b/i)
+				if (httpMatch) {
+					const code = parseInt(httpMatch[1], 10)
+					if (code >= 100 && code < 600) {
+						return code
+					}
+				}
+
+				// Pattern 3: "[200]" - common log format
+				const bracketMatch = msg.match(/\[(\d{3})\]/)
+				if (bracketMatch) {
+					const code = parseInt(bracketMatch[1], 10)
 					if (code >= 100 && code < 600) {
 						return code
 					}
