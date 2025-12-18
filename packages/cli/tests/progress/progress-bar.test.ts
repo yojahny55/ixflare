@@ -15,11 +15,20 @@ describe('ProgressBar', () => {
     it('should create with total', () => {
       const bar = new ProgressBar({ total: 100 })
       expect(bar).toBeDefined()
+      expect(bar.isComplete()).toBe(false)
+      expect(bar.isFailed()).toBe(false)
+      const render = bar.render()
+      expect(render).toContain('0%')
     })
 
     it('should create with custom width', () => {
       const bar = new ProgressBar({ total: 100, width: 40 })
       expect(bar).toBeDefined()
+      bar.update(50)
+      const render = bar.render()
+      expect(render).toContain('50%')
+      // Bar should have 40 characters (20 filled, 20 empty at 50%)
+      expect(render).toMatch(/█{20}░{20}/)
     })
 
     it('should create with options', () => {
@@ -31,6 +40,9 @@ describe('ProgressBar', () => {
         text: 'Loading...',
       })
       expect(bar).toBeDefined()
+      const render = bar.render()
+      expect(render).toContain('Loading')
+      expect(render).toContain('0%')
     })
   })
 

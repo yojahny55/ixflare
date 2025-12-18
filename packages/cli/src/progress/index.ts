@@ -54,27 +54,29 @@ export function createProgressIndicator(
 
 /**
  * Create multi-step progress with display mode detection
+ * Note: Display mode detection available via detectDisplayMode() for callers
+ * who need to conditionally use progress indicators
  */
 export function createMultiStepProgress(
   steps: string[],
-  args: string[] = process.argv.slice(2)
+  _args: string[] = process.argv.slice(2)
 ): MSP {
   // MultiStepProgress uses picocolors which respects NO_COLOR automatically
-  // Mode detection is reserved for future use
-  ddm(args)
+  // Callers should use detectDisplayMode() to decide whether to show progress
   return new MSP(steps)
 }
 
 /**
  * Create a progress bar with display mode detection
+ * Note: Display mode detection available via detectDisplayMode() for callers
+ * who need to conditionally use progress indicators
  */
 export function createProgressBar(
   total: number,
   options?: Partial<PBO>,
-  args: string[] = process.argv.slice(2)
+  _args: string[] = process.argv.slice(2)
 ): PB {
-  // Mode detection is reserved for future use
-  ddm(args)
+  // Callers should use detectDisplayMode() to decide whether to show progress
   return new PB({
     total,
     ...options,
@@ -83,12 +85,13 @@ export function createProgressBar(
 
 /**
  * Create nested progress with display mode detection
+ * Note: Display mode detection available via detectDisplayMode() for callers
+ * who need to conditionally use progress indicators
  */
 export function createNestedProgress(
   parentText: string,
-  args: string[] = process.argv.slice(2)
+  _args: string[] = process.argv.slice(2)
 ): NP {
-  // Mode detection is reserved for future use
-  ddm(args)
+  // Callers should use detectDisplayMode() to decide whether to show progress
   return new NP(parentText)
 }

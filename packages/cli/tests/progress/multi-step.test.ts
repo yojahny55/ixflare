@@ -19,10 +19,18 @@ describe('MultiStepProgress', () => {
         'Step 3',
       ])
       expect(progress).toBeDefined()
+      const steps = progress.getSteps()
+      expect(steps).toHaveLength(3)
+      expect(steps[0].text).toBe('Step 1')
+      expect(steps[1].text).toBe('Step 2')
+      expect(steps[2].text).toBe('Step 3')
     })
 
     it('should initialize all steps as pending', () => {
       const progress = new MultiStepProgress(['Step 1', 'Step 2'])
+      const steps = progress.getSteps()
+      expect(steps[0].status).toBe('pending')
+      expect(steps[1].status).toBe('pending')
       const render = progress.render()
       // All steps should show as pending (○)
       expect(render).toContain('○')

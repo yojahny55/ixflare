@@ -15,6 +15,10 @@ describe('NestedProgress', () => {
     it('should create with parent text', () => {
       const progress = new NestedProgress('Running migrations...')
       expect(progress).toBeDefined()
+      expect(progress.isStarted()).toBe(false)
+      expect(progress.isComplete()).toBe(false)
+      expect(progress.isFailed()).toBe(false)
+      expect(progress.totalDuration).toBe(0)
     })
   })
 

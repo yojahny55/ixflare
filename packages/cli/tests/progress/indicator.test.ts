@@ -29,16 +29,22 @@ describe('ProgressIndicator', () => {
     it('should create indicator with default options', () => {
       const indicator = new ProgressIndicator()
       expect(indicator).toBeDefined()
+      expect(indicator.isRunning()).toBe(false)
+      expect(indicator.elapsed).toBe(0)
     })
 
     it('should create indicator with custom text', () => {
       const indicator = new ProgressIndicator({ text: 'Loading...' })
       expect(indicator).toBeDefined()
+      indicator.start()
+      expect(indicator.isRunning()).toBe(true)
     })
 
     it('should create indicator with custom color', () => {
       const indicator = new ProgressIndicator({ color: 'green' })
       expect(indicator).toBeDefined()
+      indicator.start('Testing green')
+      expect(indicator.isRunning()).toBe(true)
     })
   })
 
@@ -170,21 +176,33 @@ describe('ProgressIndicator', () => {
     })
   })
 
-  describe('quiet mode', () => {
-    it('should not create spinner in quiet mode', () => {
+  describe('operations without start', () => {
+    it('should handle update without start gracefully', () => {
       const indicator = new ProgressIndicator({ text: 'Test' })
-      indicator.start()
-      // In quiet mode, spinner should not be created
-      // This will be properly implemented with detection.ts
+      // Should not throw when update called without start
+      indicator.update('New text')
+      expect(indicator.isRunning()).toBe(false)
     })
-  })
 
-  describe('CI mode', () => {
-    it('should use non-interactive output in CI mode', () => {
-      // Will be properly tested with detection.ts integration
-      const indicator = new ProgressIndicator()
-      indicator.start('Testing')
-      expect(indicator).toBeDefined()
+    it('should handle succeed without start gracefully', () => {
+      const indicator = new ProgressIndicator({ text: 'Test' })
+      // Should not throw when succeed called without start
+      indicator.succeed('Done')
+      expect(indicator.isRunning()).toBe(false)
+    })
+
+    it('should handle fail without start gracefully', () => {
+      const indicator = new ProgressIndicator({ text: 'Test' })
+      // Should not throw when fail called without start
+      indicator.fail('Error')
+      expect(indicator.isRunning()).toBe(false)
+    })
+
+    it('should handle stop without start gracefully', () => {
+      const indicator = new ProgressIndicator({ text: 'Test' })
+      // Should not throw when stop called without start
+      indicator.stop()
+      expect(indicator.isRunning()).toBe(false)
     })
   })
 })
