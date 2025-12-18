@@ -155,6 +155,7 @@ export class WranglerTailBridge extends EventEmitter {
 
 	/**
 	 * Attempts to reconnect with exponential backoff
+	 * First attempt is immediate (100ms for UI update), then exponential backoff kicks in
 	 */
 	private attemptReconnect(): void {
 		this.reconnectAttempts++
@@ -162,7 +163,12 @@ export class WranglerTailBridge extends EventEmitter {
 
 		this.emit('reconnecting')
 
-		const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
+		// First attempt: immediate (100ms for UI to show "reconnecting" message)
+		// Subsequent attempts: exponential backoff (1s, 2s, 4s, 8s, 16s)
+		const delay =
+			this.reconnectAttempts === 1
+				? 100 // Immediate retry on first failure
+				: this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 2)
 
 		setTimeout(() => {
 			if (!this.isStopped) {

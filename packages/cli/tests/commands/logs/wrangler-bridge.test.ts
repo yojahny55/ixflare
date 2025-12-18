@@ -372,30 +372,38 @@ describe('WranglerTailBridge', () => {
 		it('should use exponential backoff for reconnection delays', () => {
 			vi.useFakeTimers()
 
-			const mocks = Array.from({ length: 3 }, () => createMockProcess())
+			const mocks = Array.from({ length: 4 }, () => createMockProcess())
 			mocks.forEach((m) => {
 				mockSpawn.mockReturnValueOnce(m.process as ChildProcess)
 			})
 
 			bridge.start('my-worker', {})
 
-			// First exit - should reconnect after 1s (1000 * 2^0)
+			// First exit - should reconnect almost immediately (100ms for UI update)
 			mocks[0].processEmitter.emit('exit', 1)
 			expect(mockSpawn).toHaveBeenCalledTimes(1)
 
-			vi.advanceTimersByTime(999)
+			vi.advanceTimersByTime(99)
 			expect(mockSpawn).toHaveBeenCalledTimes(1)
 
 			vi.advanceTimersByTime(1)
 			expect(mockSpawn).toHaveBeenCalledTimes(2)
 
-			// Second exit - should reconnect after 2s (1000 * 2^1)
+			// Second exit - should reconnect after 1s (1000 * 2^0)
 			mocks[1].processEmitter.emit('exit', 1)
-			vi.advanceTimersByTime(1999)
+			vi.advanceTimersByTime(999)
 			expect(mockSpawn).toHaveBeenCalledTimes(2)
 
 			vi.advanceTimersByTime(1)
 			expect(mockSpawn).toHaveBeenCalledTimes(3)
+
+			// Third exit - should reconnect after 2s (1000 * 2^1)
+			mocks[2].processEmitter.emit('exit', 1)
+			vi.advanceTimersByTime(1999)
+			expect(mockSpawn).toHaveBeenCalledTimes(3)
+
+			vi.advanceTimersByTime(1)
+			expect(mockSpawn).toHaveBeenCalledTimes(4)
 
 			vi.useRealTimers()
 		})
@@ -411,9 +419,9 @@ describe('WranglerTailBridge', () => {
 			bridge.on('reconnected', reconnectedHandler)
 			bridge.start('my-worker', {})
 
-			// Simulate exit and reconnection attempt
+			// Simulate exit and reconnection attempt (100ms for first attempt)
 			processEmitter.emit('exit', 1)
-			vi.advanceTimersByTime(1000)
+			vi.advanceTimersByTime(100)
 
 			// reconnected should NOT be emitted yet (no output received)
 			expect(reconnectedHandler).not.toHaveBeenCalled()
@@ -439,9 +447,9 @@ describe('WranglerTailBridge', () => {
 
 			bridge.start('my-worker', {})
 
-			// First disconnect
+			// First disconnect - immediate retry (100ms)
 			mocks[0].processEmitter.emit('exit', 1)
-			vi.advanceTimersByTime(1000)
+			vi.advanceTimersByTime(100)
 
 			vi.useRealTimers()
 
@@ -451,11 +459,11 @@ describe('WranglerTailBridge', () => {
 
 			vi.useFakeTimers()
 
-			// Second disconnect - should start over from attempt 1
+			// Second disconnect - should start over from attempt 1 (100ms immediate retry)
 			mocks[1].processEmitter.emit('exit', 1)
 
-			// Should use 1 second delay again (reset to 1000ms)
-			vi.advanceTimersByTime(999)
+			// Should use 100ms delay again (reset, first attempt is immediate)
+			vi.advanceTimersByTime(99)
 			expect(mockSpawn).toHaveBeenCalledTimes(2)
 
 			vi.advanceTimersByTime(1)
