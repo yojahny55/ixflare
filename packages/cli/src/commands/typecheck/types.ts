@@ -11,19 +11,25 @@ export interface TypeCheckOptions {
 	noClear?: boolean
 	/** Show help message */
 	help?: boolean
+	/** Path to tsconfig.json (overrides automatic detection) */
+	project?: string
 }
 
 export interface TypeCheckResult {
 	/** Whether type checking succeeded (no errors) */
 	success: boolean
-	/** Total number of type errors found */
+	/** Number of type errors found */
 	errorCount: number
+	/** Number of warnings found */
+	warningCount: number
 	/** Number of files type checked */
 	fileCount: number
 	/** Time taken in milliseconds */
 	duration: number
-	/** Raw TypeScript diagnostics */
+	/** Raw TypeScript diagnostics (errors only) */
 	diagnostics: readonly ts.Diagnostic[]
+	/** Raw TypeScript warnings */
+	warnings: readonly ts.Diagnostic[]
 	/** Path to tsconfig.json used */
 	configPath: string
 }

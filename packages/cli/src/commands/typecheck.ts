@@ -16,17 +16,19 @@ ${picocolors.bold('Description:')}
   Run TypeScript type checking on your project.
 
 ${picocolors.bold('Options:')}
-  --watch, -w     Watch for file changes and re-check
-  --ci            CI mode (plain output, appropriate exit code)
-  --verbose       Show detailed diagnostic information
-  --no-clear      Don't clear screen between watch checks
-  --help, -h      Show this help message
+  --watch, -w        Watch for file changes and re-check
+  --ci               CI mode (plain output, appropriate exit code)
+  --verbose          Show detailed diagnostic information
+  --no-clear         Don't clear screen between watch checks
+  --project, -p <p>  Path to tsconfig.json (default: auto-detect)
+  --help, -h         Show this help message
 
 ${picocolors.bold('Examples:')}
-  ix typecheck              Run type check once
-  ix typecheck --watch      Watch mode with live updates
-  ix typecheck --ci         Run in CI with exit codes
-  ix typecheck --verbose    Show detailed information
+  ix typecheck                        Run type check once
+  ix typecheck --watch                Watch mode with live updates
+  ix typecheck --ci                   Run in CI with exit codes
+  ix typecheck --verbose              Show detailed information
+  ix typecheck -p tsconfig.build.json Use specific tsconfig
 `)
 }
 
@@ -57,25 +59,52 @@ function displayResult(result: TypeCheckResult, options: TypeCheckOptions): void
 		displayVerboseInfo(result)
 	}
 
-	// Display diagnostics
+	// Display error diagnostics
 	if (result.errorCount > 0) {
 		const formatted = formatDiagnostics(result.diagnostics, options.ci ?? false)
 		console.error(formatted)
+	}
 
-		// Show error summary
+	// Display warning diagnostics (only in verbose mode or if no errors)
+	if (result.warningCount > 0 && (options.verbose || result.errorCount === 0)) {
+		const formattedWarnings = formatDiagnostics(result.warnings, options.ci ?? false)
+		if (formattedWarnings) {
+			console.warn(formattedWarnings)
+		}
+	}
+
+	// Show summary
+	if (result.errorCount > 0) {
+		// Error summary
+		const warningText = result.warningCount > 0
+			? `, ${result.warningCount} warning${result.warningCount === 1 ? '' : 's'}`
+			: ''
 		if (options.ci) {
 			console.error(
-				`\n${result.errorCount} error${result.errorCount === 1 ? '' : 's'} found`,
+				`\n${result.errorCount} error${result.errorCount === 1 ? '' : 's'}${warningText} found`,
 			)
 		} else {
 			console.error(
 				picocolors.red(
-					`\nFound ${result.errorCount} error${result.errorCount === 1 ? '' : 's'} in ${result.fileCount} file${result.fileCount === 1 ? '' : 's'}.`,
+					`\nFound ${result.errorCount} error${result.errorCount === 1 ? '' : 's'}${warningText} in ${result.fileCount} file${result.fileCount === 1 ? '' : 's'}.`,
+				),
+			)
+		}
+	} else if (result.warningCount > 0) {
+		// Warnings only (success with warnings)
+		if (options.ci) {
+			console.log(`\n✓ No type errors found! (${result.warningCount} warning${result.warningCount === 1 ? '' : 's'})`)
+			console.log(`\nType checked ${result.fileCount} files in ${(result.duration / 1000).toFixed(1)}s`)
+		} else {
+			console.log(picocolors.green(`\n✓ No type errors found!`) + picocolors.yellow(` (${result.warningCount} warning${result.warningCount === 1 ? '' : 's'})`))
+			console.log(
+				picocolors.dim(
+					`\nType checked ${result.fileCount} files in ${(result.duration / 1000).toFixed(1)}s`,
 				),
 			)
 		}
 	} else {
-		// Success case
+		// Complete success
 		if (options.ci) {
 			console.log(`\n✓ No type errors found!`)
 			console.log(`\nType checked ${result.fileCount} files in ${(result.duration / 1000).toFixed(1)}s`)
@@ -91,6 +120,19 @@ function displayResult(result: TypeCheckResult, options: TypeCheckOptions): void
 }
 
 /**
+ * Get the value following a flag in the args array.
+ */
+function getArgValue(args: string[], ...flags: string[]): string | undefined {
+	for (const flag of flags) {
+		const index = args.indexOf(flag)
+		if (index !== -1 && args[index + 1] && !args[index + 1].startsWith('-')) {
+			return args[index + 1]
+		}
+	}
+	return undefined
+}
+
+/**
  * Parse command line arguments into TypeCheckOptions.
  */
 function parseArgs(args: string[]): TypeCheckOptions {
@@ -100,6 +142,7 @@ function parseArgs(args: string[]): TypeCheckOptions {
 		verbose: args.includes('--verbose'),
 		noClear: args.includes('--no-clear'),
 		help: args.includes('--help') || args.includes('-h'),
+		project: getArgValue(args, '--project', '-p'),
 	}
 }
 

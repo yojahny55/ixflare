@@ -44,6 +44,7 @@ describe('typecheck integration', () => {
 			expect(result).toMatchObject({
 				success: true,
 				errorCount: 0,
+				warningCount: 0,
 				fileCount: 3,
 				configPath: mockConfigPath,
 			})
@@ -92,6 +93,7 @@ describe('typecheck integration', () => {
 
 			expect(result.success).toBe(false)
 			expect(result.errorCount).toBe(1)
+			expect(result.warningCount).toBe(0)
 			expect(result.diagnostics).toHaveLength(1)
 			expect(result.diagnostics[0].code).toBe(2322)
 		})
@@ -157,8 +159,49 @@ describe('typecheck integration', () => {
 
 			expect(result.success).toBe(false)
 			expect(result.errorCount).toBe(2)
+			expect(result.warningCount).toBe(0)
 			expect(result.fileCount).toBe(2)
 			expect(result.diagnostics).toHaveLength(2)
+		})
+
+		it('should separate warnings from errors in results', () => {
+			const mockConfigPath = '/project/tsconfig.json'
+			const mockParsedConfig: ts.ParsedCommandLine = {
+				options: { strict: true },
+				fileNames: ['src/index.ts'],
+				errors: [],
+			}
+
+			const mockError: ts.Diagnostic = {
+				category: ts.DiagnosticCategory.Error,
+				code: 2322,
+				messageText: 'Type error',
+				file: undefined,
+				start: undefined,
+				length: undefined,
+			}
+
+			const mockWarning: ts.Diagnostic = {
+				category: ts.DiagnosticCategory.Warning,
+				code: 6133,
+				messageText: 'Unused variable',
+				file: undefined,
+				start: undefined,
+				length: undefined,
+			}
+
+			vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
+			vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
+			vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
+			vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue([mockError, mockWarning])
+
+			const result = typeCheck({})
+
+			expect(result.success).toBe(false)
+			expect(result.errorCount).toBe(1)
+			expect(result.warningCount).toBe(1)
+			expect(result.diagnostics).toHaveLength(1)
+			expect(result.warnings).toHaveLength(1)
 		})
 
 		it('should measure execution time accurately', () => {
@@ -203,6 +246,35 @@ describe('typecheck integration', () => {
 			expect(result.success).toBe(true)
 		})
 
+		it('should indicate success with only warnings (exit code 0)', () => {
+			const mockConfigPath = '/project/tsconfig.json'
+			const mockParsedConfig: ts.ParsedCommandLine = {
+				options: {},
+				fileNames: ['src/index.ts'],
+				errors: [],
+			}
+
+			const mockWarning: ts.Diagnostic = {
+				category: ts.DiagnosticCategory.Warning,
+				code: 6133,
+				messageText: 'Unused variable',
+				file: undefined,
+				start: undefined,
+				length: undefined,
+			}
+
+			vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
+			vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
+			vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
+			vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue([mockWarning])
+
+			const result = typeCheck({})
+
+			// Warnings only - success is true, would exit with 0
+			expect(result.success).toBe(true)
+			expect(result.warningCount).toBe(1)
+		})
+
 		it('should indicate failure with errors present', () => {
 			const mockConfigPath = '/project/tsconfig.json'
 			const mockParsedConfig: ts.ParsedCommandLine = {
@@ -231,6 +303,27 @@ describe('typecheck integration', () => {
 
 			// Error case - would exit with 1
 			expect(result.success).toBe(false)
+		})
+	})
+
+	describe('project option', () => {
+		it('should use custom tsconfig path when project option provided', () => {
+			const customConfigPath = '/project/tsconfig.build.json'
+			const mockParsedConfig: ts.ParsedCommandLine = {
+				options: {},
+				fileNames: ['src/index.ts'],
+				errors: [],
+			}
+
+			vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
+			vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
+			vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue([])
+
+			const result = typeCheck({ project: customConfigPath })
+
+			expect(config.findTsConfig).not.toHaveBeenCalled()
+			expect(config.loadTsConfig).toHaveBeenCalledWith(customConfigPath)
+			expect(result.configPath).toBe(customConfigPath)
 		})
 	})
 })

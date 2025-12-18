@@ -15,14 +15,29 @@ function formatTime(): string {
 }
 
 /**
+ * Extract file path from TypeScript's file change message.
+ * TypeScript sends messages like "File '/path/to/file.ts' has changed."
+ */
+function extractChangedFilePath(message: string): string | null {
+	// Match file path in single quotes from TypeScript's message
+	const match = message.match(/File '([^']+)' has changed/)
+	if (match) {
+		return match[1]
+	}
+	return null
+}
+
+/**
  * Start watching for file changes and run type checking incrementally.
  * Uses TypeScript's built-in watch mode with semantic diagnostics builder
  * for efficient incremental compilation.
  *
  * @param options - Type checking options
+ * @returns Cleanup function to stop watching
  */
-export function typeCheckWatch(options: TypeCheckOptions): void {
-	const configPath = findTsConfig(process.cwd())
+export function typeCheckWatch(options: TypeCheckOptions): () => void {
+	// Find config path (use project option if provided)
+	const configPath = options.project ?? findTsConfig(process.cwd())
 
 	// Track if this is the first build
 	let isFirstBuild = true
@@ -42,7 +57,7 @@ export function typeCheckWatch(options: TypeCheckOptions): void {
 	host.createProgram = (
 		rootNames,
 		compilerOptions,
-		host,
+		hostArg,
 		oldProgram,
 		configFileParsingDiagnostics,
 		projectReferences,
@@ -55,7 +70,7 @@ export function typeCheckWatch(options: TypeCheckOptions): void {
 		return origCreateProgram(
 			rootNames,
 			compilerOptions,
-			host,
+			hostArg,
 			oldProgram,
 			configFileParsingDiagnostics,
 			projectReferences,
@@ -64,6 +79,10 @@ export function typeCheckWatch(options: TypeCheckOptions): void {
 
 	// Report individual diagnostics
 	function reportDiagnostic(diagnostic: ts.Diagnostic) {
+		// Only report errors, not warnings in watch mode output
+		if (diagnostic.category !== ts.DiagnosticCategory.Error) {
+			return
+		}
 		const message = ts.formatDiagnosticsWithColorAndContext([diagnostic], {
 			getCurrentDirectory: () => process.cwd(),
 			getCanonicalFileName: (fileName) => fileName,
@@ -104,12 +123,17 @@ export function typeCheckWatch(options: TypeCheckOptions): void {
 			return
 		}
 
-		// File change detected
+		// File change detected (code 6032)
 		if (diagnostic.code === 6032) {
-			// "File change detected. Starting incremental compilation..."
-			const fileMatch = message.match(/File change detected\. Starting/)
-			if (fileMatch) {
-				console.log(picocolors.dim(`[${formatTime()}] File changed, re-checking...`))
+			console.log(picocolors.dim(`[${formatTime()}] File changed, re-checking...`))
+			return
+		}
+
+		// Specific file changed (code 6157: "File '/path/to/file.ts' has changed.")
+		if (diagnostic.code === 6157) {
+			const filePath = extractChangedFilePath(message)
+			if (filePath) {
+				console.log(picocolors.dim(`[${formatTime()}] File changed: ${picocolors.cyan(filePath)}`))
 			}
 			return
 		}
@@ -124,11 +148,20 @@ export function typeCheckWatch(options: TypeCheckOptions): void {
 	console.log(picocolors.bold('Watching for file changes...'))
 	console.log(picocolors.dim('Press Ctrl+C to stop.\n'))
 
-	ts.createWatchProgram(host)
+	const watchProgram = ts.createWatchProgram(host)
 
-	// Handle graceful shutdown
-	process.on('SIGINT', () => {
+	// SIGINT handler for graceful shutdown
+	const sigintHandler = () => {
 		console.log('\n' + picocolors.dim('Type checking stopped.'))
 		process.exit(0)
-	})
+	}
+
+	// Use 'once' to avoid handler accumulation
+	process.once('SIGINT', sigintHandler)
+
+	// Return cleanup function
+	return () => {
+		watchProgram.close()
+		process.off('SIGINT', sigintHandler)
+	}
 }
