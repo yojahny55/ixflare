@@ -11,7 +11,7 @@ import {
   validateBundleSize,
   formatValidationIssues,
 } from './deploy/validation'
-import { showFirstTimeGuide } from './deploy/first-time-guide'
+import { WizardContext, deploySetupWizardFlow } from '@/wizard'
 import { DeployError, detectDisplayOptions } from '@/errors'
 import { detectDisplayMode, ProgressIndicator } from '@/progress'
 
@@ -89,7 +89,9 @@ export async function deploy(options: DeployOptions = {}): Promise<DeployResult>
   if (!parsedOptions.skipFirstTime) {
     const authMethod = detectAuthMethod()
     if (authMethod === 'none') {
-      const setupSuccess = await showFirstTimeGuide()
+      // Create wizard context with current args
+      const ctx = await WizardContext.create(cliArgs)
+      const setupSuccess = await deploySetupWizardFlow(ctx)
       if (!setupSuccess) {
         // User needs to complete setup manually - show actionable error
         const error = new DeployError({

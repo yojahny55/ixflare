@@ -3,8 +3,8 @@
  * Manages interactive/non-interactive mode and user preferences
  */
 
-import prompts from 'prompts'
-import type { WizardState, Choice } from './types'
+import prompts, { type PromptObject, type Answers } from 'prompts'
+import type { WizardState, Choice, UserPreferencesInterface } from './types'
 import { WizardCancelledError } from './types'
 import { detectInteractiveMode } from './detection'
 import { UserPreferences } from './preferences'
@@ -38,7 +38,7 @@ export class WizardContext {
       isInteractive: mode.isInteractive,
       isTTY: mode.isTTY,
       isCI: mode.isCI,
-      preferences: preferences as unknown,
+      preferences,
     }
 
     return new WizardContext(state)
@@ -68,8 +68,8 @@ export class WizardContext {
   /**
    * Get user preferences
    */
-  get preferences(): UserPreferences | null {
-    return this.state.preferences as UserPreferences | null
+  get preferences(): UserPreferencesInterface | null {
+    return this.state.preferences
   }
 
   /**
@@ -83,16 +83,25 @@ export class WizardContext {
     type: string
     name: string
     message: string
-    initial?: T
+    initial?: T | number
     validate?: (value: T) => boolean | string
-    choices?: Array<{ title: string; value: T }>
+    choices?: Array<{ title: string; value: T; description?: string }>
   }): Promise<T | null> {
     if (!this.isInteractive) {
       return null
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = await prompts(config as any, {
+    // Build prompts-compatible configuration
+    const promptConfig: PromptObject<string> = {
+      type: config.type as PromptObject['type'],
+      name: config.name,
+      message: config.message,
+      initial: config.initial as PromptObject['initial'],
+      validate: config.validate as PromptObject['validate'],
+      choices: config.choices as PromptObject['choices'],
+    }
+
+    const response: Answers<string> = await prompts(promptConfig, {
       onCancel: () => {
         console.log(yellow('\nOperation cancelled'))
         // Throw error to be caught by wizard flow

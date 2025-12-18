@@ -1,14 +1,21 @@
 /**
  * @module commands/init
  * @description ix init command - Interactive project initialization wizard
- * Integrates with create-ixflare for project scaffolding
+ * Delegates to wizard/flows/init.ts for the actual wizard flow
  */
 
-import { resolve } from 'node:path'
-import { WizardContext, WizardCancelledError } from '@/wizard'
+import {
+  WizardContext,
+  WizardCancelledError,
+  initWizardFlow,
+  validateProjectName,
+  displayNextSteps,
+  type TemplateType,
+  type PackageManagerType,
+} from '@/wizard'
 import picocolors from 'picocolors'
 
-const { bold, green, red, cyan, dim } = picocolors
+const { bold, red, dim } = picocolors
 
 /**
  * Display help for init command
@@ -50,12 +57,36 @@ function extractFlag(args: string[], ...flags: string[]): string | undefined {
 }
 
 /**
+ * Valid template options
+ */
+const VALID_TEMPLATES = ['minimal', 'fullstack-react', 'api-backend'] as const
+
+/**
+ * Valid package manager options
+ */
+const VALID_PACKAGE_MANAGERS = ['npm', 'pnpm', 'bun'] as const
+
+/**
+ * Check if a value is a valid template
+ */
+function isValidTemplate(value: string): value is TemplateType {
+  return VALID_TEMPLATES.includes(value as TemplateType)
+}
+
+/**
+ * Check if a value is a valid package manager
+ */
+function isValidPackageManager(value: string): value is PackageManagerType {
+  return VALID_PACKAGE_MANAGERS.includes(value as PackageManagerType)
+}
+
+/**
  * Parse init command arguments
  */
 interface InitOptions {
   name?: string
-  template?: 'minimal' | 'fullstack-react' | 'api-backend'
-  packageManager?: 'npm' | 'pnpm' | 'bun'
+  template?: TemplateType
+  packageManager?: PackageManagerType
   yes?: boolean
   help?: boolean
 }
@@ -76,83 +107,34 @@ function parseInitArgs(args: string[]): InitOptions {
   const nameFlag = extractFlag(args, '--name')
   if (nameFlag) options.name = nameFlag
 
+  // Extract and validate template flag
   const templateFlag = extractFlag(args, '--template', '-t')
   if (templateFlag) {
-    options.template = templateFlag as 'minimal' | 'fullstack-react' | 'api-backend'
+    if (!isValidTemplate(templateFlag)) {
+      console.error(red(`Error: Invalid template "${templateFlag}"`))
+      console.error(`Valid templates: ${VALID_TEMPLATES.join(', ')}`)
+      process.exit(1)
+    }
+    options.template = templateFlag
   }
 
+  // Extract and validate package manager flag
   const pmFlag = extractFlag(args, '--pm', '--package-manager')
   if (pmFlag) {
-    options.packageManager = pmFlag as 'npm' | 'pnpm' | 'bun'
+    if (!isValidPackageManager(pmFlag)) {
+      console.error(red(`Error: Invalid package manager "${pmFlag}"`))
+      console.error(`Valid package managers: ${VALID_PACKAGE_MANAGERS.join(', ')}`)
+      process.exit(1)
+    }
+    options.packageManager = pmFlag
   }
 
   return options
 }
 
 /**
- * Validate project name
- */
-function validateProjectName(name: string): boolean | string {
-  if (!name || name.trim().length === 0) {
-    return 'Project name cannot be empty'
-  }
-
-  if (!/^[a-z0-9-]+$/.test(name)) {
-    return 'Project name can only contain lowercase letters, numbers, and hyphens'
-  }
-
-  if (name.startsWith('-') || name.endsWith('-')) {
-    return 'Project name cannot start or end with a hyphen'
-  }
-
-  if (name.length < 2) {
-    return 'Project name must be at least 2 characters'
-  }
-
-  return true
-}
-
-/**
- * Template choices for wizard
- */
-const TEMPLATE_CHOICES = [
-  {
-    title: `${green('minimal')} ${dim('- Bare minimum setup')}`,
-    value: 'minimal' as const,
-    description: 'Basic example route, EdgeRecord model, and tests',
-  },
-  {
-    title: `${green('fullstack-react')} ${dim('- React + API with SSR')}`,
-    value: 'fullstack-react' as const,
-    description: 'React components, API routes, Tailwind CSS',
-  },
-  {
-    title: `${green('api-backend')} ${dim('- API-only backend')}`,
-    value: 'api-backend' as const,
-    description: 'API routes and models, no frontend',
-  },
-]
-
-/**
- * Package manager choices
- */
-const PM_CHOICES = [
-  {
-    title: `${cyan('npm')} ${dim('- Node Package Manager')}`,
-    value: 'npm' as const,
-  },
-  {
-    title: `${cyan('pnpm')} ${dim('- Fast, disk space efficient (recommended)')}`,
-    value: 'pnpm' as const,
-  },
-  {
-    title: `${cyan('bun')} ${dim('- All-in-one JavaScript runtime')}`,
-    value: 'bun' as const,
-  },
-]
-
-/**
- * Run init wizard flow
+ * Run init command
+ * Parses arguments and delegates to wizard flow
  */
 export async function init(): Promise<void> {
   try {
@@ -165,104 +147,39 @@ export async function init(): Promise<void> {
       return
     }
 
-    // Create wizard context
-    const ctx = await WizardContext.create(args)
-
-    // Display welcome message in interactive mode
-    if (ctx.isInteractive) {
-      console.log('')
-      console.log(`${bold('Welcome to Ixflare!')} Let's set up your project.`)
-      console.log('')
-    }
-
-    // Step 1: Get project name
-    let projectName = options.name
-
-    if (!projectName) {
-      if (!ctx.isInteractive) {
-        console.error(red('Error: Project name is required in non-interactive mode'))
-        console.error('Usage: ix init <project-name> --yes')
-        process.exit(1)
-      }
-
-      const prompted = await ctx.text('Project name:', { validate: validateProjectName })
-      if (!prompted) {
-        process.exit(0)
-      }
-      projectName = prompted
-    } else {
-      // Validate provided name
-      const validation = validateProjectName(projectName)
+    // Validate provided name before creating context
+    if (options.name) {
+      const validation = validateProjectName(options.name)
       if (validation !== true) {
         console.error(red(`Error: ${validation}`))
         process.exit(1)
       }
     }
 
-    // Step 2: Get template selection
-    let template = options.template
+    // Create wizard context
+    const ctx = await WizardContext.create(args)
 
-    if (!template) {
-      if (!ctx.isInteractive) {
-        template = (ctx.preferences?.lastTemplate as typeof template) ?? 'minimal'
-      } else {
-        const initial = ctx.preferences?.lastTemplate as typeof template | undefined
-        const selected = await ctx.select('What type of project are you building?', TEMPLATE_CHOICES, {
-          initial,
-        })
-        if (!selected) {
-          process.exit(0)
-        }
-        template = selected
-      }
+    // Check for required name in non-interactive mode
+    if (!options.name && !ctx.isInteractive) {
+      console.error(red('Error: Project name is required in non-interactive mode'))
+      console.error('Usage: ix init <project-name> --yes')
+      process.exit(1)
     }
 
-    // Step 3: Get package manager
-    let packageManager = options.packageManager
+    // Run the wizard flow
+    const result = await initWizardFlow(ctx, {
+      name: options.name,
+      template: options.template,
+      packageManager: options.packageManager,
+    })
 
-    if (!packageManager) {
-      if (!ctx.isInteractive) {
-        packageManager = ctx.preferences?.packageManager ?? 'pnpm'
-      } else {
-        const initial = ctx.preferences?.packageManager
-        const selected = await ctx.select('Which package manager do you prefer?', PM_CHOICES, {
-          initial,
-        })
-        if (!selected) {
-          process.exit(0)
-        }
-        packageManager = selected
-      }
+    if (!result) {
+      // User cancelled or flow returned null
+      process.exit(0)
     }
 
-    // Save preferences for next time
-    await ctx.savePreference('packageManager', packageManager)
-    await ctx.savePreference('lastTemplate', template)
-
-    // Execute scaffolding via create-ixflare
-    const targetDir = resolve(process.cwd(), projectName)
-
-    console.log('')
-    console.log(`${green('✓')} Configuration complete`)
-    console.log('')
-    console.log(`Creating project at ${cyan(targetDir)}...`)
-    console.log('')
-
-    // Note: Full scaffold integration would call create-ixflare's scaffold function
-    // For this implementation, we demonstrate the wizard integration
-    console.log(`${dim('Template:')} ${template}`)
-    console.log(`${dim('Package Manager:')} ${packageManager}`)
-    console.log('')
-
-    // In production, this would call:
-    // import { scaffold } from 'create-ixflare/src/scaffold'
-    // await scaffold({ projectName, template, packageManager, targetDir })
-
-    console.log(`${bold('Next steps:')}`)
-    console.log('')
-    console.log(`  ${dim('$')} cd ${projectName}`)
-    console.log(`  ${dim('$')} ${packageManager === 'npm' ? 'npm run' : packageManager} dev`)
-    console.log('')
+    // Display next steps
+    displayNextSteps(result)
   } catch (error) {
     if (error instanceof WizardCancelledError) {
       // User cancelled - exit gracefully

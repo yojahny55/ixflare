@@ -32,8 +32,28 @@ export interface PreferencesData {
 }
 
 /**
+ * Interface describing UserPreferences public API
+ * Used to avoid circular dependency with preferences.ts
+ */
+export interface UserPreferencesInterface {
+  /** Get preferred package manager */
+  readonly packageManager: 'npm' | 'pnpm' | 'bun' | undefined
+  /** Get last used template */
+  readonly lastTemplate: string | undefined
+  /** Get Cloudflare account ID */
+  readonly cloudflareAccountId: string | undefined
+  /** Set package manager preference */
+  setPackageManager(pm: 'npm' | 'pnpm' | 'bun'): this
+  /** Set last used template */
+  setLastTemplate(template: string): this
+  /** Set Cloudflare account ID */
+  setCloudflareAccountId(accountId: string): this
+  /** Save preferences to disk */
+  persist(): Promise<void>
+}
+
+/**
  * Wizard state for context management
- * Note: preferences type will be resolved at runtime to avoid circular dependency
  */
 export interface WizardState {
   /** Is interactive mode enabled */
@@ -42,8 +62,8 @@ export interface WizardState {
   isTTY: boolean
   /** Running in CI */
   isCI: boolean
-  /** User preferences loaded from disk (UserPreferences instance) */
-  preferences: unknown
+  /** User preferences loaded from disk */
+  preferences: UserPreferencesInterface | null
 }
 
 /**

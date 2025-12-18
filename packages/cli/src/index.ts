@@ -178,6 +178,7 @@ async function main(): Promise<void> {
   Usage: ix <command>
 
   Commands:
+    init                Initialize a new Ixflare project
     dev                 Start development server
     build               Build for production
     preview             Preview production build locally
