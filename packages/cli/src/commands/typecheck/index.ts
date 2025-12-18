@@ -7,15 +7,11 @@ export { findTsConfig, loadTsConfig } from './config.js'
 
 // Formatting
 export {
-	formatDiagnostics,
-	formatDiagnosticsPretty,
-	formatDiagnosticsCI,
-	createFormatHost,
+  formatDiagnostics,
+  formatDiagnosticsPretty,
+  formatDiagnosticsCI,
+  createFormatHost,
 } from './formatter.js'
 
 // Types
-export type {
-	TypeCheckOptions,
-	TypeCheckResult,
-	FormatDiagnosticsHost,
-} from './types.js'
+export type { TypeCheckOptions, TypeCheckResult, FormatDiagnosticsHost } from './types.js'

@@ -14,36 +14,32 @@ import { findTsConfig, loadTsConfig } from './config.js'
  * @returns Type check results including diagnostics and timing
  */
 export function typeCheck(options: TypeCheckOptions = {}): TypeCheckResult {
-	const startTime = Date.now()
+  const startTime = Date.now()
 
-	// Find and load tsconfig.json (use project option if provided)
-	const configPath = options.project ?? findTsConfig(process.cwd())
-	const config = loadTsConfig(configPath)
+  // Find and load tsconfig.json (use project option if provided)
+  const configPath = options.project ?? findTsConfig(process.cwd())
+  const config = loadTsConfig(configPath)
 
-	// Create TypeScript program
-	const program = ts.createProgram(config.fileNames, config.options)
+  // Create TypeScript program
+  const program = ts.createProgram(config.fileNames, config.options)
 
-	// Get pre-emit diagnostics (type errors and warnings)
-	const allDiagnostics = ts.getPreEmitDiagnostics(program)
+  // Get pre-emit diagnostics (type errors and warnings)
+  const allDiagnostics = ts.getPreEmitDiagnostics(program)
 
-	// Separate errors from warnings
-	const errors = allDiagnostics.filter(
-		(d) => d.category === ts.DiagnosticCategory.Error,
-	)
-	const warnings = allDiagnostics.filter(
-		(d) => d.category === ts.DiagnosticCategory.Warning,
-	)
+  // Separate errors from warnings
+  const errors = allDiagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error)
+  const warnings = allDiagnostics.filter((d) => d.category === ts.DiagnosticCategory.Warning)
 
-	const duration = Date.now() - startTime
+  const duration = Date.now() - startTime
 
-	return {
-		success: errors.length === 0,
-		errorCount: errors.length,
-		warningCount: warnings.length,
-		fileCount: config.fileNames.length,
-		duration,
-		diagnostics: errors,
-		warnings,
-		configPath,
-	}
+  return {
+    success: errors.length === 0,
+    errorCount: errors.length,
+    warningCount: warnings.length,
+    fileCount: config.fileNames.length,
+    duration,
+    diagnostics: errors,
+    warnings,
+    configPath,
+  }
 }

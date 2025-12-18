@@ -7,323 +7,323 @@ import * as ts from 'typescript'
 // Mock dependencies
 vi.mock('../../../src/commands/typecheck/config')
 vi.mock('typescript', async () => {
-	const actual = await vi.importActual<typeof import('typescript')>('typescript')
-	return {
-		...actual,
-		createProgram: vi.fn(),
-		getPreEmitDiagnostics: vi.fn(),
-	}
+  const actual = await vi.importActual<typeof import('typescript')>('typescript')
+  return {
+    ...actual,
+    createProgram: vi.fn(),
+    getPreEmitDiagnostics: vi.fn(),
+  }
 })
 
 describe('typecheck integration', () => {
-	beforeEach(() => {
-		vi.clearAllMocks()
-	})
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
-	describe('full type checking workflow', () => {
-		it('should complete full workflow successfully with no errors', () => {
-			const mockConfigPath = '/project/tsconfig.json'
-			const mockParsedConfig: ts.ParsedCommandLine = {
-				options: {
-					strict: true,
-					target: ts.ScriptTarget.ES2020,
-					module: ts.ModuleKind.ESNext,
-				},
-				fileNames: ['src/index.ts', 'src/utils.ts', 'src/types.ts'],
-				errors: [],
-			}
+  describe('full type checking workflow', () => {
+    it('should complete full workflow successfully with no errors', () => {
+      const mockConfigPath = '/project/tsconfig.json'
+      const mockParsedConfig: ts.ParsedCommandLine = {
+        options: {
+          strict: true,
+          target: ts.ScriptTarget.ES2020,
+          module: ts.ModuleKind.ESNext,
+        },
+        fileNames: ['src/index.ts', 'src/utils.ts', 'src/types.ts'],
+        errors: [],
+      }
 
-			vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
-			vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
-			vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
-			vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue([])
+      vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
+      vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
+      vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
+      vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue([])
 
-			const result = typeCheck({ verbose: true })
+      const result = typeCheck({ verbose: true })
 
-			// Verify result structure
-			expect(result).toMatchObject({
-				success: true,
-				errorCount: 0,
-				warningCount: 0,
-				fileCount: 3,
-				configPath: mockConfigPath,
-			})
+      // Verify result structure
+      expect(result).toMatchObject({
+        success: true,
+        errorCount: 0,
+        warningCount: 0,
+        fileCount: 3,
+        configPath: mockConfigPath,
+      })
 
-			// Verify all functions were called in correct order
-			expect(config.findTsConfig).toHaveBeenCalledTimes(1)
-			expect(config.loadTsConfig).toHaveBeenCalledWith(mockConfigPath)
-			expect(ts.createProgram).toHaveBeenCalledWith(
-				mockParsedConfig.fileNames,
-				mockParsedConfig.options,
-			)
-			expect(ts.getPreEmitDiagnostics).toHaveBeenCalledTimes(1)
-		})
+      // Verify all functions were called in correct order
+      expect(config.findTsConfig).toHaveBeenCalledTimes(1)
+      expect(config.loadTsConfig).toHaveBeenCalledWith(mockConfigPath)
+      expect(ts.createProgram).toHaveBeenCalledWith(
+        mockParsedConfig.fileNames,
+        mockParsedConfig.options
+      )
+      expect(ts.getPreEmitDiagnostics).toHaveBeenCalledTimes(1)
+    })
 
-		it('should handle type errors and return detailed diagnostics', () => {
-			const mockConfigPath = '/project/tsconfig.json'
-			const mockFile = ts.createSourceFile(
-				'src/user.ts',
-				'const userId: number = "123"',
-				ts.ScriptTarget.Latest,
-			)
+    it('should handle type errors and return detailed diagnostics', () => {
+      const mockConfigPath = '/project/tsconfig.json'
+      const mockFile = ts.createSourceFile(
+        'src/user.ts',
+        'const userId: number = "123"',
+        ts.ScriptTarget.Latest
+      )
 
-			const mockParsedConfig: ts.ParsedCommandLine = {
-				options: { strict: true },
-				fileNames: ['src/user.ts'],
-				errors: [],
-			}
+      const mockParsedConfig: ts.ParsedCommandLine = {
+        options: { strict: true },
+        fileNames: ['src/user.ts'],
+        errors: [],
+      }
 
-			const mockDiagnostics: ts.Diagnostic[] = [
-				{
-					category: ts.DiagnosticCategory.Error,
-					code: 2322,
-					messageText: "Type 'string' is not assignable to type 'number'.",
-					file: mockFile,
-					start: 23,
-					length: 5,
-				},
-			]
+      const mockDiagnostics: ts.Diagnostic[] = [
+        {
+          category: ts.DiagnosticCategory.Error,
+          code: 2322,
+          messageText: "Type 'string' is not assignable to type 'number'.",
+          file: mockFile,
+          start: 23,
+          length: 5,
+        },
+      ]
 
-			vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
-			vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
-			vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
-			vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue(mockDiagnostics)
+      vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
+      vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
+      vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
+      vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue(mockDiagnostics)
 
-			const result = typeCheck({ ci: true })
+      const result = typeCheck({ ci: true })
 
-			expect(result.success).toBe(false)
-			expect(result.errorCount).toBe(1)
-			expect(result.warningCount).toBe(0)
-			expect(result.diagnostics).toHaveLength(1)
-			expect(result.diagnostics[0].code).toBe(2322)
-		})
+      expect(result.success).toBe(false)
+      expect(result.errorCount).toBe(1)
+      expect(result.warningCount).toBe(0)
+      expect(result.diagnostics).toHaveLength(1)
+      expect(result.diagnostics[0].code).toBe(2322)
+    })
 
-		it('should propagate config errors', () => {
-			vi.mocked(config.findTsConfig).mockImplementation(() => {
-				throw new CLIError({
-					code: 'CONFIG.NOT_FOUND',
-					message: 'No tsconfig.json found',
-				})
-			})
+    it('should propagate config errors', () => {
+      vi.mocked(config.findTsConfig).mockImplementation(() => {
+        throw new CLIError({
+          code: 'CONFIG.NOT_FOUND',
+          message: 'No tsconfig.json found',
+        })
+      })
 
-			expect(() => typeCheck({})).toThrow(CLIError)
-			expect(() => typeCheck({})).toThrow('No tsconfig.json found')
-		})
+      expect(() => typeCheck({})).toThrow(CLIError)
+      expect(() => typeCheck({})).toThrow('No tsconfig.json found')
+    })
 
-		it('should handle multiple type errors across different files', () => {
-			const mockConfigPath = '/project/tsconfig.json'
+    it('should handle multiple type errors across different files', () => {
+      const mockConfigPath = '/project/tsconfig.json'
 
-			const mockFile1 = ts.createSourceFile(
-				'src/user.ts',
-				'const userId: number = "123"',
-				ts.ScriptTarget.Latest,
-			)
+      const mockFile1 = ts.createSourceFile(
+        'src/user.ts',
+        'const userId: number = "123"',
+        ts.ScriptTarget.Latest
+      )
 
-			const mockFile2 = ts.createSourceFile(
-				'src/post.ts',
-				'const postId: string = 456',
-				ts.ScriptTarget.Latest,
-			)
+      const mockFile2 = ts.createSourceFile(
+        'src/post.ts',
+        'const postId: string = 456',
+        ts.ScriptTarget.Latest
+      )
 
-			const mockParsedConfig: ts.ParsedCommandLine = {
-				options: { strict: true },
-				fileNames: ['src/user.ts', 'src/post.ts'],
-				errors: [],
-			}
+      const mockParsedConfig: ts.ParsedCommandLine = {
+        options: { strict: true },
+        fileNames: ['src/user.ts', 'src/post.ts'],
+        errors: [],
+      }
 
-			const mockDiagnostics: ts.Diagnostic[] = [
-				{
-					category: ts.DiagnosticCategory.Error,
-					code: 2322,
-					messageText: "Type 'string' is not assignable to type 'number'.",
-					file: mockFile1,
-					start: 23,
-					length: 5,
-				},
-				{
-					category: ts.DiagnosticCategory.Error,
-					code: 2322,
-					messageText: "Type 'number' is not assignable to type 'string'.",
-					file: mockFile2,
-					start: 23,
-					length: 3,
-				},
-			]
+      const mockDiagnostics: ts.Diagnostic[] = [
+        {
+          category: ts.DiagnosticCategory.Error,
+          code: 2322,
+          messageText: "Type 'string' is not assignable to type 'number'.",
+          file: mockFile1,
+          start: 23,
+          length: 5,
+        },
+        {
+          category: ts.DiagnosticCategory.Error,
+          code: 2322,
+          messageText: "Type 'number' is not assignable to type 'string'.",
+          file: mockFile2,
+          start: 23,
+          length: 3,
+        },
+      ]
 
-			vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
-			vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
-			vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
-			vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue(mockDiagnostics)
+      vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
+      vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
+      vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
+      vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue(mockDiagnostics)
 
-			const result = typeCheck({})
+      const result = typeCheck({})
 
-			expect(result.success).toBe(false)
-			expect(result.errorCount).toBe(2)
-			expect(result.warningCount).toBe(0)
-			expect(result.fileCount).toBe(2)
-			expect(result.diagnostics).toHaveLength(2)
-		})
+      expect(result.success).toBe(false)
+      expect(result.errorCount).toBe(2)
+      expect(result.warningCount).toBe(0)
+      expect(result.fileCount).toBe(2)
+      expect(result.diagnostics).toHaveLength(2)
+    })
 
-		it('should separate warnings from errors in results', () => {
-			const mockConfigPath = '/project/tsconfig.json'
-			const mockParsedConfig: ts.ParsedCommandLine = {
-				options: { strict: true },
-				fileNames: ['src/index.ts'],
-				errors: [],
-			}
+    it('should separate warnings from errors in results', () => {
+      const mockConfigPath = '/project/tsconfig.json'
+      const mockParsedConfig: ts.ParsedCommandLine = {
+        options: { strict: true },
+        fileNames: ['src/index.ts'],
+        errors: [],
+      }
 
-			const mockError: ts.Diagnostic = {
-				category: ts.DiagnosticCategory.Error,
-				code: 2322,
-				messageText: 'Type error',
-				file: undefined,
-				start: undefined,
-				length: undefined,
-			}
+      const mockError: ts.Diagnostic = {
+        category: ts.DiagnosticCategory.Error,
+        code: 2322,
+        messageText: 'Type error',
+        file: undefined,
+        start: undefined,
+        length: undefined,
+      }
 
-			const mockWarning: ts.Diagnostic = {
-				category: ts.DiagnosticCategory.Warning,
-				code: 6133,
-				messageText: 'Unused variable',
-				file: undefined,
-				start: undefined,
-				length: undefined,
-			}
+      const mockWarning: ts.Diagnostic = {
+        category: ts.DiagnosticCategory.Warning,
+        code: 6133,
+        messageText: 'Unused variable',
+        file: undefined,
+        start: undefined,
+        length: undefined,
+      }
 
-			vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
-			vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
-			vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
-			vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue([mockError, mockWarning])
+      vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
+      vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
+      vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
+      vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue([mockError, mockWarning])
 
-			const result = typeCheck({})
+      const result = typeCheck({})
 
-			expect(result.success).toBe(false)
-			expect(result.errorCount).toBe(1)
-			expect(result.warningCount).toBe(1)
-			expect(result.diagnostics).toHaveLength(1)
-			expect(result.warnings).toHaveLength(1)
-		})
+      expect(result.success).toBe(false)
+      expect(result.errorCount).toBe(1)
+      expect(result.warningCount).toBe(1)
+      expect(result.diagnostics).toHaveLength(1)
+      expect(result.warnings).toHaveLength(1)
+    })
 
-		it('should measure execution time accurately', () => {
-			const mockConfigPath = '/project/tsconfig.json'
-			const mockParsedConfig: ts.ParsedCommandLine = {
-				options: {},
-				fileNames: ['src/index.ts'],
-				errors: [],
-			}
+    it('should measure execution time accurately', () => {
+      const mockConfigPath = '/project/tsconfig.json'
+      const mockParsedConfig: ts.ParsedCommandLine = {
+        options: {},
+        fileNames: ['src/index.ts'],
+        errors: [],
+      }
 
-			vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
-			vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
-			vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
-			vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue([])
+      vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
+      vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
+      vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
+      vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue([])
 
-			const startTime = Date.now()
-			const result = typeCheck({})
-			const endTime = Date.now()
+      const startTime = Date.now()
+      const result = typeCheck({})
+      const endTime = Date.now()
 
-			expect(result.duration).toBeGreaterThanOrEqual(0)
-			expect(result.duration).toBeLessThanOrEqual(endTime - startTime + 10) // Allow 10ms margin
-		})
-	})
+      expect(result.duration).toBeGreaterThanOrEqual(0)
+      expect(result.duration).toBeLessThanOrEqual(endTime - startTime + 10) // Allow 10ms margin
+    })
+  })
 
-	describe('exit code behavior', () => {
-		it('should indicate success with zero errors', () => {
-			const mockConfigPath = '/project/tsconfig.json'
-			const mockParsedConfig: ts.ParsedCommandLine = {
-				options: {},
-				fileNames: ['src/index.ts'],
-				errors: [],
-			}
+  describe('exit code behavior', () => {
+    it('should indicate success with zero errors', () => {
+      const mockConfigPath = '/project/tsconfig.json'
+      const mockParsedConfig: ts.ParsedCommandLine = {
+        options: {},
+        fileNames: ['src/index.ts'],
+        errors: [],
+      }
 
-			vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
-			vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
-			vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
-			vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue([])
+      vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
+      vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
+      vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
+      vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue([])
 
-			const result = typeCheck({})
+      const result = typeCheck({})
 
-			// Success case - would exit with 0
-			expect(result.success).toBe(true)
-		})
+      // Success case - would exit with 0
+      expect(result.success).toBe(true)
+    })
 
-		it('should indicate success with only warnings (exit code 0)', () => {
-			const mockConfigPath = '/project/tsconfig.json'
-			const mockParsedConfig: ts.ParsedCommandLine = {
-				options: {},
-				fileNames: ['src/index.ts'],
-				errors: [],
-			}
+    it('should indicate success with only warnings (exit code 0)', () => {
+      const mockConfigPath = '/project/tsconfig.json'
+      const mockParsedConfig: ts.ParsedCommandLine = {
+        options: {},
+        fileNames: ['src/index.ts'],
+        errors: [],
+      }
 
-			const mockWarning: ts.Diagnostic = {
-				category: ts.DiagnosticCategory.Warning,
-				code: 6133,
-				messageText: 'Unused variable',
-				file: undefined,
-				start: undefined,
-				length: undefined,
-			}
+      const mockWarning: ts.Diagnostic = {
+        category: ts.DiagnosticCategory.Warning,
+        code: 6133,
+        messageText: 'Unused variable',
+        file: undefined,
+        start: undefined,
+        length: undefined,
+      }
 
-			vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
-			vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
-			vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
-			vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue([mockWarning])
+      vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
+      vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
+      vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
+      vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue([mockWarning])
 
-			const result = typeCheck({})
+      const result = typeCheck({})
 
-			// Warnings only - success is true, would exit with 0
-			expect(result.success).toBe(true)
-			expect(result.warningCount).toBe(1)
-		})
+      // Warnings only - success is true, would exit with 0
+      expect(result.success).toBe(true)
+      expect(result.warningCount).toBe(1)
+    })
 
-		it('should indicate failure with errors present', () => {
-			const mockConfigPath = '/project/tsconfig.json'
-			const mockParsedConfig: ts.ParsedCommandLine = {
-				options: {},
-				fileNames: ['src/index.ts'],
-				errors: [],
-			}
+    it('should indicate failure with errors present', () => {
+      const mockConfigPath = '/project/tsconfig.json'
+      const mockParsedConfig: ts.ParsedCommandLine = {
+        options: {},
+        fileNames: ['src/index.ts'],
+        errors: [],
+      }
 
-			const mockDiagnostics: ts.Diagnostic[] = [
-				{
-					category: ts.DiagnosticCategory.Error,
-					code: 2322,
-					messageText: 'Type error',
-					file: undefined,
-					start: undefined,
-					length: undefined,
-				},
-			]
+      const mockDiagnostics: ts.Diagnostic[] = [
+        {
+          category: ts.DiagnosticCategory.Error,
+          code: 2322,
+          messageText: 'Type error',
+          file: undefined,
+          start: undefined,
+          length: undefined,
+        },
+      ]
 
-			vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
-			vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
-			vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
-			vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue(mockDiagnostics)
+      vi.mocked(config.findTsConfig).mockReturnValue(mockConfigPath)
+      vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
+      vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
+      vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue(mockDiagnostics)
 
-			const result = typeCheck({})
+      const result = typeCheck({})
 
-			// Error case - would exit with 1
-			expect(result.success).toBe(false)
-		})
-	})
+      // Error case - would exit with 1
+      expect(result.success).toBe(false)
+    })
+  })
 
-	describe('project option', () => {
-		it('should use custom tsconfig path when project option provided', () => {
-			const customConfigPath = '/project/tsconfig.build.json'
-			const mockParsedConfig: ts.ParsedCommandLine = {
-				options: {},
-				fileNames: ['src/index.ts'],
-				errors: [],
-			}
+  describe('project option', () => {
+    it('should use custom tsconfig path when project option provided', () => {
+      const customConfigPath = '/project/tsconfig.build.json'
+      const mockParsedConfig: ts.ParsedCommandLine = {
+        options: {},
+        fileNames: ['src/index.ts'],
+        errors: [],
+      }
 
-			vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
-			vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
-			vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue([])
+      vi.mocked(config.loadTsConfig).mockReturnValue(mockParsedConfig)
+      vi.mocked(ts.createProgram).mockReturnValue({} as ts.Program)
+      vi.mocked(ts.getPreEmitDiagnostics).mockReturnValue([])
 
-			const result = typeCheck({ project: customConfigPath })
+      const result = typeCheck({ project: customConfigPath })
 
-			expect(config.findTsConfig).not.toHaveBeenCalled()
-			expect(config.loadTsConfig).toHaveBeenCalledWith(customConfigPath)
-			expect(result.configPath).toBe(customConfigPath)
-		})
-	})
+      expect(config.findTsConfig).not.toHaveBeenCalled()
+      expect(config.loadTsConfig).toHaveBeenCalledWith(customConfigPath)
+      expect(result.configPath).toBe(customConfigPath)
+    })
+  })
 })
