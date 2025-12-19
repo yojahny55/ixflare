@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { defineModel } from '@/edge-record/schema/define-model'
 import { field } from '@/edge-record/schema/field'
 import { CacheLayer } from '@/edge-record/storage/cache-layer'
+import { WriteThroughPartialError } from '@/edge-record/crud/errors'
 import { MockKVNamespace } from './mock-kv'
 
 /**
@@ -410,6 +411,182 @@ describe('CacheLayer', () => {
       const query = prepareSpy.mock.calls[0][0]
       // Table name should be quoted/escaped
       expect(query).toMatch(/FROM\s+["'`]products["'`]\s+WHERE/)
+    })
+  })
+
+  describe('Write-through partial failure handling', () => {
+    it('should succeed when both D1 and KV succeed', async () => {
+      const Product = defineModel('products_partial_test_1', {
+        id: field.id(),
+        name: field.string(),
+        price: field.integer(),
+      })
+
+      const mockDb = {
+        prepare: vi.fn().mockReturnValue({
+          bind: vi.fn().mockReturnThis(),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        }),
+      } as unknown as D1Database
+
+      const cache = new CacheLayer(Product, kv, mockDb, {
+        enabled: true,
+        tier: 'kv',
+        populateFrom: 'd1',
+      })
+
+      await expect(cache.writeThrough(1, { name: 'Widget', price: 100 })).resolves.not.toThrow()
+
+      // Verify KV was populated
+      expect(kv.getRaw('products_partial_test_1:1')).toBeTruthy()
+    })
+
+    it('should throw WriteThroughPartialError when KV fails after D1 succeeds', async () => {
+      const Product = defineModel('products_partial_test_2', {
+        id: field.id(),
+        name: field.string(),
+        price: field.integer(),
+      })
+
+      const mockDb = {
+        prepare: vi.fn().mockReturnValue({
+          bind: vi.fn().mockReturnThis(),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        }),
+      } as unknown as D1Database
+
+      // Create a failing KV mock
+      const failingKv = {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockRejectedValue(new Error('KV write failed')),
+        delete: vi.fn().mockResolvedValue(undefined),
+        list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      } as unknown as KVNamespace
+
+      const cache = new CacheLayer(Product, failingKv, mockDb, {
+        enabled: true,
+        tier: 'kv',
+        populateFrom: 'd1',
+      })
+
+      await expect(cache.writeThrough(1, { name: 'Widget', price: 100 })).rejects.toThrow(
+        WriteThroughPartialError
+      )
+
+      // Verify D1 was called (succeeded)
+      expect(mockDb.prepare).toHaveBeenCalled()
+
+      // Verify KV delete was attempted (cache invalidation)
+      expect(failingKv.delete).toHaveBeenCalledWith('products_partial_test_2:1')
+    })
+
+    it('should not attempt KV write when D1 fails', async () => {
+      const Product = defineModel('products_partial_test_3', {
+        id: field.id(),
+        name: field.string(),
+        price: field.integer(),
+      })
+
+      const mockDb = {
+        prepare: vi.fn().mockReturnValue({
+          bind: vi.fn().mockReturnThis(),
+          run: vi.fn().mockRejectedValue(new Error('D1 write failed')),
+        }),
+      } as unknown as D1Database
+
+      const kvPutSpy = vi.fn()
+      const mockKv = {
+        get: vi.fn().mockResolvedValue(null),
+        put: kvPutSpy,
+        delete: vi.fn().mockResolvedValue(undefined),
+        list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      } as unknown as KVNamespace
+
+      const cache = new CacheLayer(Product, mockKv, mockDb, {
+        enabled: true,
+        tier: 'kv',
+        populateFrom: 'd1',
+      })
+
+      await expect(cache.writeThrough(1, { name: 'Widget', price: 100 })).rejects.toThrow(
+        'D1 write failed'
+      )
+
+      // Verify KV put was NOT called
+      expect(kvPutSpy).not.toHaveBeenCalled()
+    })
+
+    it('should invalidate cache even if delete fails silently', async () => {
+      const Product = defineModel('products_partial_test_4', {
+        id: field.id(),
+        name: field.string(),
+        price: field.integer(),
+      })
+
+      const mockDb = {
+        prepare: vi.fn().mockReturnValue({
+          bind: vi.fn().mockReturnThis(),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        }),
+      } as unknown as D1Database
+
+      // KV put fails, and delete also fails
+      const failingKv = {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockRejectedValue(new Error('KV write failed')),
+        delete: vi.fn().mockRejectedValue(new Error('KV delete also failed')),
+        list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      } as unknown as KVNamespace
+
+      const cache = new CacheLayer(Product, failingKv, mockDb, {
+        enabled: true,
+        tier: 'kv',
+        populateFrom: 'd1',
+      })
+
+      // Should still throw WriteThroughPartialError (delete error silently ignored)
+      await expect(cache.writeThrough(1, { name: 'Widget', price: 100 })).rejects.toThrow(
+        WriteThroughPartialError
+      )
+    })
+
+    it('should include record ID and original KV error in WriteThroughPartialError', async () => {
+      const Product = defineModel('products_partial_test_5', {
+        id: field.id(),
+        name: field.string(),
+      })
+
+      const mockDb = {
+        prepare: vi.fn().mockReturnValue({
+          bind: vi.fn().mockReturnThis(),
+          run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+        }),
+      } as unknown as D1Database
+
+      const kvError = new Error('Network timeout')
+      const failingKv = {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockRejectedValue(kvError),
+        delete: vi.fn().mockResolvedValue(undefined),
+        list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      } as unknown as KVNamespace
+
+      const cache = new CacheLayer(Product, failingKv, mockDb, {
+        enabled: true,
+        tier: 'kv',
+        populateFrom: 'd1',
+      })
+
+      try {
+        await cache.writeThrough(123, { name: 'Test' })
+        expect.fail('Should have thrown')
+      } catch (error) {
+        expect(error).toBeInstanceOf(WriteThroughPartialError)
+        const partialError = error as WriteThroughPartialError
+        expect(partialError.recordId).toBe('123')
+        expect(partialError.kvError.message).toBe('Network timeout')
+        expect(partialError.code).toBe('WRITE_THROUGH.PARTIAL_FAILURE')
+      }
     })
   })
 })

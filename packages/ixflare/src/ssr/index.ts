@@ -43,6 +43,8 @@ export {
   IslandRegistry,
 } from './islands'
 export { renderLayoutChain, renderWithoutLayouts } from './layout-renderer'
+export { renderPage, createPageHandler } from './page-renderer'
+export type { PageComponent, PageRenderOptions } from './page-renderer'
 export { useLayoutData, LayoutContextProvider } from '@/core/layout'
 export {
   createStreamingResponse,

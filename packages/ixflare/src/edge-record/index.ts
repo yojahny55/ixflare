@@ -50,7 +50,13 @@ export type {
 export { create, find, findOrFail, upsert, upsertAtomic, createMany } from './crud/crud-operations'
 export type { CreateInput, UpdateInput } from './crud/crud-operations'
 export { createModelProxy, type ModelCrudMethods, type ModelWithCrud } from './crud/model-proxy'
-export { EdgeRecordError, NotFoundError, ValidationError, ConflictError } from './crud/errors'
+export {
+  EdgeRecordError,
+  NotFoundError,
+  ValidationError,
+  ConflictError,
+  WriteThroughPartialError,
+} from './crud/errors'
 export {
   toCamelCase,
   toSnakeCase,

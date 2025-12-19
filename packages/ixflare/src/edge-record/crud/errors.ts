@@ -91,3 +91,25 @@ export class TransactionRollbackError extends TransactionError {
     this.name = 'TransactionRollbackError'
   }
 }
+
+/**
+ * Error thrown when write-through succeeds in D1 but fails in KV
+ *
+ * This indicates a partial success state where:
+ * - D1 (source of truth) has been successfully updated
+ * - KV cache write failed
+ * - KV cache entry has been invalidated to force cache miss
+ *
+ * The data is consistent in D1, and the next read will
+ * re-populate the cache from D1.
+ */
+export class WriteThroughPartialError extends EdgeRecordError {
+  constructor(
+    message: string,
+    public readonly recordId: string,
+    public readonly kvError: Error
+  ) {
+    super('WRITE_THROUGH.PARTIAL_FAILURE', message, 500)
+    this.name = 'WriteThroughPartialError'
+  }
+}

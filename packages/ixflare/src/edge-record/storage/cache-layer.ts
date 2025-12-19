@@ -3,6 +3,7 @@ import type { CacheOptions } from './types'
 import { KVAdapter } from './kv-adapter'
 import { transformKeysToCamelCase } from '@/edge-record/crud/case-transform'
 import { escapeIdentifier } from '@/edge-record/schema/type-mapping'
+import { WriteThroughPartialError } from '@/edge-record/crud/errors'
 
 /** Default TTL values by strategy */
 const STRATEGY_TTL: Record<'read-heavy' | 'write-heavy' | 'balanced', number> = {
@@ -97,13 +98,21 @@ export class CacheLayer<T extends SchemaDefinition> {
   }
 
   /**
-   * Write-through: Update both D1 and KV simultaneously
+   * Write-through: Update both D1 and KV with partial failure handling
    *
    * Ensures cache is immediately populated after write.
    * Used when writeThrough option is enabled.
    *
+   * Partial Failure Strategy:
+   * 1. D1 is the source of truth - write to D1 first
+   * 2. If D1 succeeds, write to KV
+   * 3. If KV fails after D1 success, invalidate KV entry to force cache miss
+   *    (next read will re-populate from D1)
+   *
    * @param id Record ID
    * @param data Partial data to update
+   * @throws Error if D1 write fails (KV never attempted)
+   * @throws WriteThroughPartialError if D1 succeeds but KV fails (data consistent in D1, cache invalidated)
    */
   async writeThrough(id: string | number, data: Partial<InferSchema<T>>): Promise<void> {
     const dbData = this.transformToDbFormat(data)
@@ -114,14 +123,33 @@ export class CacheLayer<T extends SchemaDefinition> {
     const setClause = fields.map((f) => `${escapeIdentifier(f)} = ?`).join(', ')
     const sql = `UPDATE ${this.escapedTableName} SET ${setClause} WHERE id = ?`
 
-    // Write to both D1 and KV simultaneously
-    await Promise.all([
-      this.sourceDb
-        .prepare(sql)
-        .bind(...values, id)
-        .run(),
-      this.kvAdapter.put(String(id), data),
-    ])
+    // Step 1: Write to D1 first (source of truth)
+    await this.sourceDb
+      .prepare(sql)
+      .bind(...values, id)
+      .run()
+
+    // Step 2: Write to KV cache
+    try {
+      await this.kvAdapter.put(String(id), data)
+    } catch (kvError) {
+      // D1 succeeded but KV failed
+      // Invalidate KV entry to prevent serving stale data
+      // This ensures next read will fetch fresh data from D1
+      try {
+        await this.kvAdapter.delete(String(id))
+      } catch {
+        // Ignore invalidation errors - KV will eventually expire
+      }
+
+      // Throw a specific error so callers know data is consistent in D1
+      // but cache may be temporarily unavailable
+      throw new WriteThroughPartialError(
+        `Write-through partial failure: D1 update succeeded for ${this.escapedTableName}:${id}, but KV cache write failed. Cache invalidated.`,
+        String(id),
+        kvError instanceof Error ? kvError : new Error(String(kvError))
+      )
+    }
   }
 
   /**
