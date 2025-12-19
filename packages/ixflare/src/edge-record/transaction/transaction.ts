@@ -220,7 +220,20 @@ export async function transaction<T>(
         }
 
         // Invalidate cache AFTER successful commit
-        await invalidateCache(ctx.getModifiedRecords())
+        // IMPORTANT: Cache invalidation failures should NOT fail the transaction
+        // because D1 (source of truth) has already committed successfully.
+        // Stale cache entries will eventually expire or be overwritten.
+        try {
+          await invalidateCache(ctx.getModifiedRecords())
+        } catch (cacheError) {
+          // Log warning but don't throw - transaction already committed successfully
+          // D1 is consistent, cache may be temporarily stale
+          console.warn(
+            '[EdgeRecord] Transaction committed but cache invalidation failed. ' +
+              'Cache may contain stale data until TTL expires or next write. ' +
+              `Error: ${cacheError instanceof Error ? cacheError.message : String(cacheError)}`
+          )
+        }
       }
     }
 

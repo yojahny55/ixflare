@@ -105,7 +105,9 @@ export function generateWranglerToml(config: EdgeConfig): string {
       lines.push('# ⚠️  SECURITY WARNING: The following variables may contain sensitive data:')
       lines.push(`#    ${potentialSecrets.join(', ')}`)
       lines.push('#')
-      lines.push('#    Values in [vars] are stored in plain text and may be exposed in version control.')
+      lines.push(
+        '#    Values in [vars] are stored in plain text and may be exposed in version control.'
+      )
       lines.push('#    For sensitive values, use `wrangler secret put <NAME>` instead.')
       lines.push('#    See: https://developers.cloudflare.com/workers/configuration/secrets/')
       lines.push('')

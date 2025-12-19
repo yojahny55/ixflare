@@ -431,4 +431,93 @@ describe('Transaction', () => {
       }
     })
   })
+
+  describe('Cache Invalidation Failure Handling', () => {
+    it('should succeed even when cache invalidation fails after D1 commit', async () => {
+      // Create a model with cache enabled that will fail on delete
+      const failingKv = {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockRejectedValue(new Error('KV delete failed')),
+        list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      } as unknown as KVNamespace
+
+      const CachedAccount = defineModel(
+        'cached_accounts',
+        {
+          id: field.id(),
+          userId: field.integer(),
+          balance: field.decimal({ precision: 10, scale: 2 }),
+          ...timestamps(),
+        },
+        {
+          cache: {
+            enabled: true,
+            kv: failingKv,
+            tier: 'kv',
+          },
+        }
+      )
+
+      // Spy on console.warn to verify warning was logged
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      // Transaction should complete successfully despite cache invalidation failure
+      const result = await transaction(db, async (tx) => {
+        const account = await tx.create(CachedAccount, { userId: 1, balance: 1000 })
+        return account
+      })
+
+      // Transaction returned successfully
+      expect(result.get('id')).toBe(1)
+      expect(result.get('userId')).toBe(1)
+      expect(result.get('balance')).toBe(1000)
+
+      // Warning was logged about cache invalidation failure
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[EdgeRecord] Transaction committed but cache invalidation failed')
+      )
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('KV delete failed'))
+
+      warnSpy.mockRestore()
+    })
+
+    it('should not throw when updating cached records and cache invalidation fails', async () => {
+      const failingKv = {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockRejectedValue(new Error('Network timeout')),
+        list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      } as unknown as KVNamespace
+
+      const CachedAccount = defineModel(
+        'cached_accounts_update',
+        {
+          id: field.id(),
+          userId: field.integer(),
+          balance: field.decimal({ precision: 10, scale: 2 }),
+          ...timestamps(),
+        },
+        {
+          cache: {
+            enabled: true,
+            kv: failingKv,
+            tier: 'kv',
+          },
+        }
+      )
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      // Transaction with update should complete successfully
+      await transaction(db, async (tx) => {
+        await tx.update(CachedAccount, 1, { balance: { increment: 100 } })
+      })
+
+      // Warning was logged
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('cache invalidation failed'))
+
+      warnSpy.mockRestore()
+    })
+  })
 })

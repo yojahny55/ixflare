@@ -13,7 +13,9 @@ import type { EdgeConfig } from './types.js'
  * Try to load tsx from various possible locations
  * Returns the tsImport function if found, null otherwise
  */
-async function tryLoadTsx(projectRoot: string): Promise<((specifier: string, parentUrl: string) => Promise<{ default: unknown }>) | null> {
+async function tryLoadTsx(
+  projectRoot: string
+): Promise<((specifier: string, parentUrl: string) => Promise<{ default: unknown }>) | null> {
   // Common tsx paths to try (handles different package manager layouts)
   const possiblePaths = [
     join(projectRoot, 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs'),

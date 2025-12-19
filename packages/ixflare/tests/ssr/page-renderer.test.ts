@@ -130,7 +130,13 @@ describe('Page Renderer', () => {
         userId: string
       }
 
-      function ParamsPage({ data, params }: { data: ParamsPageData; params?: Record<string, string> }) {
+      function ParamsPage({
+        data,
+        params,
+      }: {
+        data: ParamsPageData
+        params?: Record<string, string>
+      }) {
         return React.createElement('div', {}, [
           React.createElement('p', { key: 'data' }, `Data userId: ${data.userId}`),
           React.createElement('p', { key: 'params' }, `Params id: ${params?.id ?? 'none'}`),
