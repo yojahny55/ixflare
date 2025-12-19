@@ -32,9 +32,13 @@ export function generateViteConfig(config: EdgeConfig): string {
   const buildConfig = config.vite?.build || {}
   const buildLines: string[] = []
 
+  // Use JSON.stringify for string values to properly escape quotes and special characters
+  const outDir = JSON.stringify(buildConfig.outDir || 'dist')
+  const target = JSON.stringify(buildConfig.target || 'esnext')
+
   buildLines.push('  build: {')
-  buildLines.push(`    outDir: '${buildConfig.outDir || 'dist'}',`)
-  buildLines.push(`    target: '${buildConfig.target || 'esnext'}',`)
+  buildLines.push(`    outDir: ${outDir},`)
+  buildLines.push(`    target: ${target},`)
   buildLines.push(`    minify: ${buildConfig.minify ?? true},`)
   buildLines.push(`    sourcemap: ${buildConfig.sourcemap ?? true},`)
   buildLines.push('  },')

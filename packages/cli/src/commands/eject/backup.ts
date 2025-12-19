@@ -19,7 +19,8 @@ export async function backupExistingFiles(
   options: EjectOptions
 ): Promise<BackupResult[]> {
   const backups: BackupResult[] = []
-  const timestamp = Math.floor(Date.now() / 1000)
+  // Use milliseconds for better uniqueness in rapid successive calls
+  const timestamp = Date.now()
 
   const filesToBackup: string[] = []
 

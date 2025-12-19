@@ -222,4 +222,230 @@ describe('generateWranglerToml', () => {
 
     expect(toml.endsWith('\n')).toBe(true)
   })
+
+  // Security: Name validation tests
+  describe('worker name validation', () => {
+    it('should reject empty name', () => {
+      const config: EdgeConfig = {
+        name: '',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+      }
+
+      expect(() => generateWranglerToml(config)).toThrow('Worker name is required')
+    })
+
+    it('should reject name starting with hyphen', () => {
+      const config: EdgeConfig = {
+        name: '-invalid-name',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+      }
+
+      expect(() => generateWranglerToml(config)).toThrow('Invalid worker name')
+    })
+
+    it('should reject name with special characters', () => {
+      const config: EdgeConfig = {
+        name: 'my_app@v1',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+      }
+
+      expect(() => generateWranglerToml(config)).toThrow('Invalid worker name')
+    })
+
+    it('should reject name exceeding 255 characters', () => {
+      const config: EdgeConfig = {
+        name: 'a'.repeat(256),
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+      }
+
+      expect(() => generateWranglerToml(config)).toThrow('exceeds 255 character limit')
+    })
+
+    it('should accept valid name with hyphens', () => {
+      const config: EdgeConfig = {
+        name: 'my-valid-app-name-123',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+      }
+
+      expect(() => generateWranglerToml(config)).not.toThrow()
+    })
+  })
+
+  // Security: TOML escaping tests
+  describe('TOML string escaping', () => {
+    it('should escape double quotes in env values', () => {
+      const config: EdgeConfig = {
+        name: 'my-app',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+        env: {
+          MESSAGE: 'He said "hello"',
+        },
+      }
+
+      const toml = generateWranglerToml(config)
+
+      expect(toml).toContain('MESSAGE = "He said \\"hello\\""')
+    })
+
+    it('should escape backslashes in env values', () => {
+      const config: EdgeConfig = {
+        name: 'my-app',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+        env: {
+          PATH: 'C:\\Users\\test',
+        },
+      }
+
+      const toml = generateWranglerToml(config)
+
+      expect(toml).toContain('PATH = "C:\\\\Users\\\\test"')
+    })
+
+    it('should escape newlines in env values', () => {
+      const config: EdgeConfig = {
+        name: 'my-app',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+        env: {
+          MULTILINE: 'line1\nline2',
+        },
+      }
+
+      const toml = generateWranglerToml(config)
+
+      expect(toml).toContain('MULTILINE = "line1\\nline2"')
+    })
+
+    it('should handle complex malicious env value', () => {
+      const config: EdgeConfig = {
+        name: 'my-app',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+        env: {
+          EVIL: 'foo"\nname = "hacked"',
+        },
+      }
+
+      const toml = generateWranglerToml(config)
+
+      // Should be escaped, not allow injection
+      expect(toml).toContain('EVIL = "foo\\"\\nname = \\"hacked\\""')
+      // Should only have one name = line (the real one)
+      expect(toml.match(/^name = /gm)?.length).toBe(1)
+    })
+  })
+
+  // Security: Secrets warning tests
+  describe('secrets warning', () => {
+    it('should warn about variables with SECRET in name', () => {
+      const config: EdgeConfig = {
+        name: 'my-app',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+        env: {
+          APP_SECRET: 'some-value',
+          NORMAL_VAR: 'safe',
+        },
+      }
+
+      const toml = generateWranglerToml(config)
+
+      expect(toml).toContain('SECURITY WARNING')
+      expect(toml).toContain('APP_SECRET')
+      expect(toml).toContain('wrangler secret put')
+    })
+
+    it('should warn about variables with API_KEY in name', () => {
+      const config: EdgeConfig = {
+        name: 'my-app',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+        env: {
+          STRIPE_API_KEY: 'sk_test_xxx',
+        },
+      }
+
+      const toml = generateWranglerToml(config)
+
+      expect(toml).toContain('SECURITY WARNING')
+      expect(toml).toContain('STRIPE_API_KEY')
+    })
+
+    it('should warn about variables with TOKEN in name', () => {
+      const config: EdgeConfig = {
+        name: 'my-app',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+        env: {
+          AUTH_TOKEN: 'bearer-xxx',
+          ACCESS_TOKEN: 'xxx',
+        },
+      }
+
+      const toml = generateWranglerToml(config)
+
+      expect(toml).toContain('SECURITY WARNING')
+      expect(toml).toContain('AUTH_TOKEN')
+      expect(toml).toContain('ACCESS_TOKEN')
+    })
+
+    it('should warn about variables with PASSWORD in name', () => {
+      const config: EdgeConfig = {
+        name: 'my-app',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+        env: {
+          DB_PASSWORD: 'secret123',
+        },
+      }
+
+      const toml = generateWranglerToml(config)
+
+      expect(toml).toContain('SECURITY WARNING')
+      expect(toml).toContain('DB_PASSWORD')
+    })
+
+    it('should not warn about non-sensitive variable names', () => {
+      const config: EdgeConfig = {
+        name: 'my-app',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+        env: {
+          APP_NAME: 'my-app',
+          DEBUG: true,
+          PORT: 3000,
+        },
+      }
+
+      const toml = generateWranglerToml(config)
+
+      expect(toml).not.toContain('SECURITY WARNING')
+    })
+
+    it('should list multiple potential secrets', () => {
+      const config: EdgeConfig = {
+        name: 'my-app',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+        env: {
+          API_KEY: 'key1',
+          SECRET_TOKEN: 'token1',
+          PASSWORD: 'pass1',
+        },
+      }
+
+      const toml = generateWranglerToml(config)
+
+      expect(toml).toContain('API_KEY')
+      expect(toml).toContain('SECRET_TOKEN')
+      expect(toml).toContain('PASSWORD')
+    })
+  })
 })

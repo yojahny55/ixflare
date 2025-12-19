@@ -72,8 +72,9 @@ describe('generateViteConfig', () => {
 
     const viteConfig = generateViteConfig(config)
 
-    expect(viteConfig).toContain("outDir: 'dist'")
-    expect(viteConfig).toContain("target: 'esnext'")
+    // JSON.stringify produces double quotes
+    expect(viteConfig).toContain('outDir: "dist"')
+    expect(viteConfig).toContain('target: "esnext"')
     expect(viteConfig).toContain('minify: true')
     expect(viteConfig).toContain('sourcemap: true')
   })
@@ -87,8 +88,9 @@ describe('generateViteConfig', () => {
 
     const viteConfig = generateViteConfig(config)
 
-    expect(viteConfig).toContain("outDir: 'dist'")
-    expect(viteConfig).toContain("target: 'esnext'")
+    // JSON.stringify produces double quotes
+    expect(viteConfig).toContain('outDir: "dist"')
+    expect(viteConfig).toContain('target: "esnext"')
     expect(viteConfig).toContain('minify: true')
     expect(viteConfig).toContain('sourcemap: true')
   })
@@ -175,5 +177,84 @@ describe('generateViteConfig', () => {
     expect(viteConfig).toContain('WARNING: Custom commands')
     expect(viteConfig).toContain('WARNING: Global middleware')
     expect(viteConfig).toContain('WARNING: Security configuration')
+  })
+
+  // Security: Build config string escaping tests
+  describe('build config string escaping', () => {
+    it('should escape single quotes in outDir', () => {
+      const config: EdgeConfig = {
+        name: 'my-app',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+        vite: {
+          build: {
+            outDir: "user's-build",
+          },
+        },
+      }
+
+      const viteConfig = generateViteConfig(config)
+
+      // Should use JSON.stringify which produces double quotes with escaped content
+      expect(viteConfig).toContain('outDir: "user\'s-build"')
+      // Should be valid JavaScript syntax
+      expect(viteConfig).not.toContain("outDir: 'user's-build'")
+    })
+
+    it('should escape double quotes in target', () => {
+      const config: EdgeConfig = {
+        name: 'my-app',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+        vite: {
+          build: {
+            target: 'es"next',
+          },
+        },
+      }
+
+      const viteConfig = generateViteConfig(config)
+
+      // JSON.stringify escapes double quotes
+      expect(viteConfig).toContain('target: "es\\"next"')
+    })
+
+    it('should prevent code injection via outDir', () => {
+      const config: EdgeConfig = {
+        name: 'my-app',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+        vite: {
+          build: {
+            outDir: "dist', dangerous: true, '",
+          },
+        },
+      }
+
+      const viteConfig = generateViteConfig(config)
+
+      // Should be safely escaped, not allow injection
+      expect(viteConfig).toContain('outDir: "dist\', dangerous: true, \'"')
+      // Should not have multiple outDir entries
+      expect(viteConfig.match(/outDir:/g)?.length).toBe(1)
+    })
+
+    it('should handle backslashes in build paths', () => {
+      const config: EdgeConfig = {
+        name: 'my-app',
+        compatibilityDate: '2025-01-01',
+        bindings: {},
+        vite: {
+          build: {
+            outDir: 'C:\\Users\\build\\dist',
+          },
+        },
+      }
+
+      const viteConfig = generateViteConfig(config)
+
+      // JSON.stringify escapes backslashes
+      expect(viteConfig).toContain('outDir: "C:\\\\Users\\\\build\\\\dist"')
+    })
   })
 })

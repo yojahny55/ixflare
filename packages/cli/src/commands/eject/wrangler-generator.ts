@@ -5,9 +5,74 @@
 import type { EdgeConfig } from './types.js'
 
 /**
+ * Validate worker name per Cloudflare requirements
+ * - Must start with alphanumeric
+ * - Can contain alphanumeric and hyphens
+ * - Max 255 characters
+ */
+function validateWorkerName(name: string): void {
+  if (!name || typeof name !== 'string') {
+    throw new Error('Worker name is required')
+  }
+  if (name.length > 255) {
+    throw new Error(`Worker name "${name}" exceeds 255 character limit`)
+  }
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9-]*$/.test(name)) {
+    throw new Error(
+      `Invalid worker name "${name}". Names must start with alphanumeric and contain only alphanumeric characters and hyphens.`
+    )
+  }
+}
+
+/**
+ * Escape a string value for TOML format
+ * Handles quotes, backslashes, and newlines
+ */
+function escapeTOMLString(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\t/g, '\\t')
+}
+
+/**
+ * Common patterns that indicate a variable might contain sensitive data
+ */
+const SECRET_KEY_PATTERNS = [
+  /secret/i,
+  /password/i,
+  /passwd/i,
+  /token/i,
+  /api[_-]?key/i,
+  /auth[_-]?key/i,
+  /private[_-]?key/i,
+  /credential/i,
+  /access[_-]?key/i,
+]
+
+/**
+ * Check if a key name looks like it might contain sensitive data
+ */
+function isPotentialSecret(key: string): boolean {
+  return SECRET_KEY_PATTERNS.some((pattern) => pattern.test(key))
+}
+
+/**
+ * Find environment variable keys that look like they might be secrets
+ */
+function findPotentialSecrets(env: Record<string, unknown>): string[] {
+  return Object.keys(env).filter(isPotentialSecret)
+}
+
+/**
  * Generate wrangler.toml content from EdgeConfig
  */
 export function generateWranglerToml(config: EdgeConfig): string {
+  // Validate worker name before generating
+  validateWorkerName(config.name)
+
   const lines: string[] = []
 
   // Header comment
@@ -33,9 +98,22 @@ export function generateWranglerToml(config: EdgeConfig): string {
   if (config.env && Object.keys(config.env).length > 0) {
     lines.push('')
     lines.push('[vars]')
+
+    // Check for potential secrets and add warning
+    const potentialSecrets = findPotentialSecrets(config.env)
+    if (potentialSecrets.length > 0) {
+      lines.push('# ⚠️  SECURITY WARNING: The following variables may contain sensitive data:')
+      lines.push(`#    ${potentialSecrets.join(', ')}`)
+      lines.push('#')
+      lines.push('#    Values in [vars] are stored in plain text and may be exposed in version control.')
+      lines.push('#    For sensitive values, use `wrangler secret put <NAME>` instead.')
+      lines.push('#    See: https://developers.cloudflare.com/workers/configuration/secrets/')
+      lines.push('')
+    }
+
     for (const [key, value] of Object.entries(config.env)) {
       if (typeof value === 'string') {
-        lines.push(`${key} = "${value}"`)
+        lines.push(`${key} = "${escapeTOMLString(value)}"`)
       } else if (typeof value === 'number') {
         lines.push(`${key} = ${value}`)
       } else if (typeof value === 'boolean') {

@@ -28,7 +28,8 @@ describe('backupExistingFiles', () => {
 
     expect(backups).toHaveLength(1)
     expect(backups[0].original).toBe('wrangler.toml')
-    expect(backups[0].backup).toMatch(/^wrangler\.toml\.backup-\d+$/)
+    // Timestamp should now be milliseconds (13+ digits) instead of seconds (10 digits)
+    expect(backups[0].backup).toMatch(/^wrangler\.toml\.backup-\d{13,}$/)
     expect(existsSync(join(testDir, backups[0].backup))).toBe(true)
   })
 
@@ -65,12 +66,15 @@ describe('backupExistingFiles', () => {
     writeFileSync(join(testDir, 'wrangler.toml'), 'name = "test"')
 
     const backups1 = await backupExistingFiles(testDir, {})
+    // Small delay to ensure different millisecond timestamp
+    await new Promise((resolve) => setTimeout(resolve, 5))
     const backups2 = await backupExistingFiles(testDir, {})
 
-    // Timestamps might be the same if tests run very fast
-    // But filenames should be created
-    expect(backups1[0].backup).toMatch(/^wrangler\.toml\.backup-\d+$/)
-    expect(backups2[0].backup).toMatch(/^wrangler\.toml\.backup-\d+$/)
+    // With millisecond timestamps, backups should have unique names
+    expect(backups1[0].backup).toMatch(/^wrangler\.toml\.backup-\d{13,}$/)
+    expect(backups2[0].backup).toMatch(/^wrangler\.toml\.backup-\d{13,}$/)
+    // Verify they're actually different (milliseconds should differ)
+    expect(backups1[0].backup).not.toBe(backups2[0].backup)
   })
 })
 

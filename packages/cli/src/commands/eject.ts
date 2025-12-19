@@ -2,7 +2,7 @@
  * Eject command - Convert from managed Ixflare config to raw Wrangler/Vite config
  */
 
-import { writeFileSync } from 'node:fs'
+import { writeFileSync, unlinkSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import pc from 'picocolors'
 import prompts from 'prompts'
@@ -117,6 +117,7 @@ export async function eject(): Promise<void> {
   console.log()
 
   let backups: Array<{ original: string; backup: string }> = []
+  const generatedFiles: string[] = [] // Track files we generate for rollback cleanup
 
   try {
     // Read edge.config.ts
@@ -134,12 +135,14 @@ export async function eject(): Promise<void> {
     // Generate wrangler.toml
     const wranglerContent = generateWranglerToml(config)
     writeFileSync(join(projectRoot, 'wrangler.toml'), wranglerContent, 'utf-8')
+    generatedFiles.push('wrangler.toml')
     console.log(pc.green('Generated: wrangler.toml'))
 
     // Generate vite.config.ts (unless --config-only)
     if (!options.configOnly) {
       const viteContent = generateViteConfig(config)
       writeFileSync(join(projectRoot, 'vite.config.ts'), viteContent, 'utf-8')
+      generatedFiles.push('vite.config.ts')
       console.log(pc.green('Generated: vite.config.ts'))
 
       // Update package.json
@@ -162,7 +165,7 @@ export async function eject(): Promise<void> {
     console.error(pc.red('\nEjection failed:'))
     console.error(error instanceof Error ? error.message : String(error))
 
-    // Attempt rollback
+    // Attempt rollback: first restore backups, then clean up generated files
     if (backups.length > 0) {
       console.log(pc.yellow('\nAttempting to restore backups...'))
       try {
@@ -174,6 +177,21 @@ export async function eject(): Promise<void> {
             `Failed to restore backups: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`
           )
         )
+      }
+    }
+
+    // Clean up any generated files that weren't backed up (new files)
+    for (const file of generatedFiles) {
+      const filePath = join(projectRoot, file)
+      // Only delete if this file wasn't restored from backup
+      const wasBackedUp = backups.some((b) => b.original === file)
+      if (!wasBackedUp && existsSync(filePath)) {
+        try {
+          unlinkSync(filePath)
+          console.log(pc.dim(`Cleaned up: ${file}`))
+        } catch {
+          // Ignore cleanup errors
+        }
       }
     }
 

@@ -75,4 +75,17 @@ describe('detectProjectState', () => {
     expect(state.hasViteConfig).toBe(false)
     expect(state.isEjected).toBe(false)
   })
+
+  it('should detect fully ejected project with wrangler.toml and vite.config.ts', async () => {
+    // A fully ejected project has wrangler.toml and vite.config.ts but no edge.config.ts
+    writeFileSync(join(testDir, 'wrangler.toml'), 'name = "test"')
+    writeFileSync(join(testDir, 'vite.config.ts'), 'export default {}')
+
+    const state = await detectProjectState(testDir)
+
+    expect(state.hasEdgeConfig).toBe(false)
+    expect(state.hasWranglerToml).toBe(true)
+    expect(state.hasViteConfig).toBe(true)
+    expect(state.isEjected).toBe(true)
+  })
 })
