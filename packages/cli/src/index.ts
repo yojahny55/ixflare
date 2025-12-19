@@ -182,6 +182,10 @@ const commands: Record<string, () => Promise<void>> = {
     const m = await import('./commands/logs')
     await m.logs()
   },
+  eject: async () => {
+    const m = await import('./commands/eject')
+    await m.eject()
+  },
 }
 
 async function main(): Promise<void> {
@@ -249,6 +253,7 @@ async function main(): Promise<void> {
     config              Manage CLI configuration preferences
     typecheck           Run TypeScript type checking
     logs                Stream real-time logs from deployed Workers
+    eject               Eject to raw Wrangler/Vite configuration
 
   Migration Options:
     --yes               Skip confirmation prompts
